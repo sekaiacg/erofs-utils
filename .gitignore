@@ -27,7 +27,8 @@ configure.scan
 libtool
 stamp-h
 stamp-h1
-/mkfs/mkfs.erofs
-/fuse/erofsfuse
-/dump/dump.erofs
-/fsck/fsck.erofs
+*.erofs
+*.bak
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
