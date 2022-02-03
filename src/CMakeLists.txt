@@ -1,0 +1,7 @@
+include(libbase.cmake)
+include(libext2_uuid.cmake)
+include(liblog.cmake)
+include(libcutils.cmake)
+include(libselinux.cmake)
+include(liberofs.cmake)
+include(libpcre.cmake)
