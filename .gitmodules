@@ -1,0 +1,21 @@
+[submodule "src/pcre"]
+	path = src/pcre
+	url = https://android.googlesource.com/platform/external/pcre.git
+[submodule "src/logging"]
+	path = src/logging
+	url = https://android.googlesource.com/platform/system/logging.git
+[submodule "src/lz4"]
+	path = src/lz4
+	url = https://android.googlesource.com/platform/external/lz4
+[submodule "src/e2fsprogs"]
+	path = src/e2fsprogs
+	url = https://android.googlesource.com/platform/external/e2fsprogs.git
+[submodule "src/libbase"]
+	path = src/libbase
+	url = https://android.googlesource.com/platform/system/libbase
+[submodule "src/core"]
+	path = src/core
+	url = https://android.googlesource.com/platform/system/core.git
+[submodule "src/selinux"]
+	path = src/selinux
+	url = https://github.com/SELinuxProject/selinux
