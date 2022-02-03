@@ -27,7 +27,7 @@ void erofs_init_configure(void)
 	memset(&cfg, 0, sizeof(cfg));
 
 	cfg.c_dbg_lvl  = EROFS_WARN;
-	cfg.c_version  = PACKAGE_VERSION;
+	cfg.c_version  = "1.4";
 	cfg.c_dry_run  = false;
 	cfg.c_unix_timestamp = -1;
 	cfg.c_max_decompressed_extent_bytes = -1;
