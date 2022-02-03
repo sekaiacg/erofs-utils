@@ -38,3 +38,8 @@ stamp-h1
 /fsck/fsck.erofs
 /mount/mount.erofs
 /contrib/stress
+*.erofs
+*.bak
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
