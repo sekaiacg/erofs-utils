@@ -32,3 +32,4 @@ stamp-h1
 CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
+out/
