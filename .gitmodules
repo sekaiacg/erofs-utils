@@ -18,4 +18,4 @@
 	url = https://android.googlesource.com/platform/system/core.git
 [submodule "src/selinux"]
 	path = src/selinux
-	url = https://github.com/SELinuxProject/selinux
+	url = https://android.googlesource.com/platform/external/selinux
