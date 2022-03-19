@@ -16,6 +16,7 @@ set(EROFS_UTILS_DEFAULTS_CFLAGS
     "-DLZ4HC_ENABLED"
     "-DWITH_ANDROID"
     "-DHAVE_MEMRCHR"
+    -include ${PROJECT_SOURCE_DIR}/erofs-utils-version.h
     CACHE INTERNAL "erofs_utils_defaults_cflags"
 )
 
