@@ -33,3 +33,4 @@ CMakeCache.txt
 CMakeFiles
 cmake_install.cmake
 out/
+erofs-utils-version.h
