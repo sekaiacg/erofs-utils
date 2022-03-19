@@ -1,0 +1,6 @@
+#ifndef __EROFS_UTILS_VERSION_H
+#define __EROFS_UTILS_VERSION_H
+
+#define PACKAGE_VERSION "@PROJECT_VERSION@"
+
+#endif
