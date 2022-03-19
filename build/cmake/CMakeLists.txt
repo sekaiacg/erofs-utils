@@ -21,6 +21,13 @@ endif()
 set(MODULES_SRC "${PROJECT_SOURCE_DIR}/../../src")
 set(PROJECT_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../..")
 
+execute_process(COMMAND sh "${PROJECT_SOURCE_DIR}/scripts/get-version-number" OUTPUT_VARIABLE PROJECT_VERSION)
+string(REGEX REPLACE "\n$" "" PROJECT_VERSION "${PROJECT_VERSION}")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/erofs-utils-version.in"
+    "${PROJECT_SOURCE_DIR}/erofs-utils-version.h"
+)
+
 # git clone submodule
 execute_process(COMMAND git submodule init)
 execute_process(COMMAND git submodule update)
