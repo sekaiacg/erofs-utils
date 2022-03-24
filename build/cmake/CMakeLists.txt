@@ -4,6 +4,12 @@ project(erofs-utils)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    add_compile_options (-fdiagnostics-color=always)
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    add_compile_options (-fcolor-diagnostics)
+endif()
+
 if(DEFINED EROFS_C_FLAGS)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EROFS_C_FLAGS}")
 endif()
