@@ -19,3 +19,6 @@
 [submodule "src/selinux"]
 	path = src/selinux
 	url = https://android.googlesource.com/platform/external/selinux
+[submodule "src/xz"]
+	path = src/xz
+	url = https://github.com/sekaiacg/xz
