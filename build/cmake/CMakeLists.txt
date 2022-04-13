@@ -40,12 +40,14 @@ execute_process(COMMAND git submodule update)
 
 # thrid part library
 add_subdirectory("${MODULES_SRC}/lz4/build/cmake" "modules/lz4")
+add_subdirectory("${MODULES_SRC}/xz" "modules/xz")
 
 # header
 include_directories(
     "${PROJECT_SOURCE_DIR}/lib"
     "${PROJECT_SOURCE_DIR}/include"
     "${PROJECT_SOURCE_DIR}/src/lz4/lib"
+    "${PROJECT_SOURCE_DIR}/src/xz/src/liblzma/api"
     "${MODULES_SRC}/core/libcutils/include"
     "${MODULES_SRC}/e2fsprogs/lib"
     "${MODULES_SRC}/e2fsprogs/lib/uuid"
