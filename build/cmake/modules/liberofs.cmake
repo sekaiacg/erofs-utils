@@ -14,6 +14,7 @@ set(EROFS_UTILS_DEFAULTS_CFLAGS
     "-DHAVE_LIBUUID"
     "-DLZ4_ENABLED"
     "-DLZ4HC_ENABLED"
+    "-DHAVE_LIBLZMA"
     "-DWITH_ANDROID"
     "-DHAVE_MEMRCHR"
     -include ${PROJECT_SOURCE_DIR}/erofs-utils-version.h
@@ -42,6 +43,7 @@ set(LIBEROFS_SRCS
     "${TARGET_SRC_DIR}/block_list.c"
     "${TARGET_SRC_DIR}/compressor_lz4.c"
     "${TARGET_SRC_DIR}/compressor_lz4hc.c"
+    "${TARGET_SRC_DIR}/compressor_liblzma.c"
 )
 
 add_library(${TARGET} STATIC ${LIBEROFS_SRCS})
@@ -54,5 +56,6 @@ target_link_libraries(${TARGET}
     ext2_uuid
     log
     lz4_static
+    liblzma
     selinux
 )
