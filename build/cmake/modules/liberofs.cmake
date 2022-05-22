@@ -17,6 +17,8 @@ set(EROFS_UTILS_DEFAULTS_CFLAGS
     "-DHAVE_LIBLZMA"
     "-DWITH_ANDROID"
     "-DHAVE_MEMRCHR"
+    "-DHAVE_SYS_IOCTL_H"
+    "-DGWINSZ_IN_SYS_IOCTL"
     -include ${PROJECT_SOURCE_DIR}/erofs-utils-version.h
     CACHE INTERNAL "erofs_utils_defaults_cflags"
 )
