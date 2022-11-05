@@ -40,6 +40,9 @@ execute_process(COMMAND git submodule update)
 
 # thrid part library
 add_subdirectory("${MODULES_SRC}/lz4/build/cmake" "modules/lz4")
+set(BUILD_TESTING OFF)
+set(CREATE_XZ_SYMLINKS OFF)
+set(CREATE_LZMA_SYMLINKS OFF)
 add_subdirectory("${MODULES_SRC}/xz" "modules/xz")
 
 # header
