@@ -10,6 +10,9 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options (-fcolor-diagnostics)
 endif()
 
+add_definitions(-D_LARGEFILE_SOURCE)
+add_definitions(-D_FILE_OFFSET_BITS=64)
+
 if(DEFINED EROFS_C_FLAGS)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EROFS_C_FLAGS}")
 endif()
