@@ -1,25 +1,76 @@
-name: Build Erofs utils
+name: Build erofs-utils
 on:
   push:
     branches: [ "dev" ]
+    tags: [ v* ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_MAXSIZE: "50M"
+      CCACHE_HARDLINK: "true"
     steps:
-    - uses: actions/checkout@v3
-    - uses: nttld/setup-ndk@v1
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+    - name: Update system and install dependencies
+      run: sudo apt update -y && sudo apt install llvm lld g++-multilib ninja-build -y
+    - name: Install NDK
+      uses: nttld/setup-ndk@v1
       with:
         ndk-version: r25b
         local-cache: true
-    - name: Build with NDK
+    - name: Set up ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ runner.os }}
+        restore-keys: ${{ runner.os }}
+    - name: Build erofs-utils
       run: |
-         sudo apt update -y && sudo apt install llvm lld g++-multilib ninja-build -y
-         chmod a+x build.sh
-         ./build.sh
-    - name: Upload a Build Artifact
+        chmod a+x build.sh
+        ./build.sh
+    - name: Prepare artifact
+      if: success()
+      id: prepareArtifact
+      run: |
+        androidArm64v8aName=`ls -d target/Android_arm64-v8a/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidArm64v8aName=$androidArm64v8aName" >> $GITHUB_OUTPUT
+        androidArmeabiv7aName=`ls -d target/Android_armeabi-v7a/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidArmeabiv7aName=$androidArmeabiv7aName" >> $GITHUB_OUTPUT
+        androidX86x64Name=`ls -d target/Android_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86x64Name=$androidX86x64Name" >> $GITHUB_OUTPUT
+        androidX86Name=`ls -d target/Android_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86Name=$androidX86Name" >> $GITHUB_OUTPUT
+        linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
+        linuxX86Name=`ls -d target/Linux_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86Name=$linuxX86Name" >> $GITHUB_OUTPUT
+    - name: Upload erofs-utils Android_arm64-v8a release
       uses: actions/upload-artifact@v3
       with:
-        name: erofs-utils
-        path: ./*.zip
-      
+        name: ${{ steps.prepareArtifact.outputs.androidArm64v8aName }}
+        path: './target/Android_arm64-v8a/${{ steps.prepareArtifact.outputs.androidArm64v8aName }}/*'
+    - name: Upload erofs-utils Android_armeabi-v7a release
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.prepareArtifact.outputs.androidArmeabiv7aName }}
+        path: './target/Android_armeabi-v7a/${{ steps.prepareArtifact.outputs.androidArmeabiv7aName }}/*'
+    - name: Upload erofs-utils Android_x86_64 release
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.prepareArtifact.outputs.androidX86x64Name }}
+        path: './target/Android_x86_64/${{ steps.prepareArtifact.outputs.androidX86x64Name }}/*'
+    - name: Upload erofs-utils Android_x86 release
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.prepareArtifact.outputs.androidX86Name }}
+        path: './target/Android_x86/${{ steps.prepareArtifact.outputs.androidX86Name }}/*'
+    - name: Upload erofs-utils Linux_x86_64 release
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.prepareArtifact.outputs.linuxX86x64Name }}
+        path: './target/Linux_x86_64/${{ steps.prepareArtifact.outputs.linuxX86x64Name }}/*'
+    - name: Upload erofs-utils Linux_x86 release
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.prepareArtifact.outputs.linuxX86Name }}
+        path: './target/Linux_x86/${{ steps.prepareArtifact.outputs.linuxX86Name }}/*'
