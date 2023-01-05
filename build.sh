@@ -1,7 +1,6 @@
-export EROFS_VERSION=$(. scripts/get-version-number)
 OUT="./out"
 BUILD_DIR="./build/cmake"
-rm *[.zip] > /dev/null 2>&1
+EROFS_VERSION="v$(. scripts/get-version-number)"
 
 cmake_build()
 {
@@ -22,6 +21,7 @@ cmake_build()
 	if [[ $TARGET == "Android" ]]; then
 		local ANDROID_PLATFORM=$4
 		cmake -S ${BUILD_DIR} -B $OUT ${BUILD_METHOD} \
+			-DNDK_CCACHE="ccache" \
 			-DCMAKE_BUILD_TYPE="Release" \
 			-DANDROID_PLATFORM="$ANDROID_PLATFORM" \
 			-DANDROID_ABI="$ABI" \
@@ -39,7 +39,9 @@ cmake_build()
 		fi
 		##指定第三方clang 路径：CLANG_PATH=""
 		local LFLAGS="-fuse-ld=lld -Wl,--build-id=sha1 -Wl,--fatal-warnings -Wl,--gc-sections -Qunused-arguments -Wl,--no-undefined -Wl,--gc-sections -static -s"
-		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+		cmake -S ${BUILD_DIR} -B $OUT ${BUILD_METHOD} \
+			-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
+			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
 			-DCMAKE_CXX_COMPILER="clang++" \
 			-DCMAKE_C_FLAGS="-m${LINUX_BIT} ${FLAGS}" \
@@ -71,12 +73,13 @@ build()
 	local DUMP_BIN="$BUILD/dump.erofs"
 	local FSCK_BIN="$BUILD/fsck.erofs"
 	local MKFS_BIN="$BUILD/mkfs.erofs"
-	
+	local TARGET_DIR="./target/${TARGET}_${ABI}/erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
+
 	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$MKFS_BIN" ]; then
 		echo "打包中..."
-		zip -9 -jy "erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(date +%y%m%d).zip" $DUMP_BIN $FSCK_BIN $MKFS_BIN > /dev/null 2>&1
+		[[ ! -d "$TARGET_DIR" ]] && mkdir -p ${TARGET_DIR}
+		cp -af $BUILD/*.erofs ${TARGET_DIR}
 		echo "打包完成！"
-		#clear
 	else
 		echo "error"
 		exit -1
@@ -89,3 +92,5 @@ build "Android" "x86_64" "android-31"
 build "Android" "x86" "android-31"
 build "Linux" "x86_64"
 build "Linux" "x86"
+
+exit 0
