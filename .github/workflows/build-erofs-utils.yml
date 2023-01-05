@@ -1,0 +1,25 @@
+name: Build Erofs utils
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25b
+        local-cache: true
+    - name: Build with NDK
+      run: |
+         sudo apt update -y && sudo apt install llvm lld g++-multilib ninja-build -y
+         chmod a+x build.sh
+         ./build.sh
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: erofs-utils
+        path: ./*.zip
+      
