@@ -30,8 +30,12 @@ static int erofsfuse_fill_dentries(struct erofs_dir_context *ctx)
 
 	strncpy(dname, ctx->dname, ctx->de_namelen);
 	dname[ctx->de_namelen] = '\0';
-	st.st_mode = erofs_ftype_to_dtype(ctx->de_ftype) << 12;
+	st.st_mode = erofs_ftype_to_dtype(ctx->de_ftype) << 12;	
+#if FUSE_USE_VERSION < 30
 	fusectx->filler(fusectx->buf, dname, &st, 0);
+#else
+	fusectx->filler(fusectx->buf, dname, &st, 0, FUSE_FILL_DIR_PLUS);
+#endif
 	return 0;
 }
 
