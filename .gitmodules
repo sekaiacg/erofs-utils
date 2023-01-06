@@ -22,3 +22,7 @@
 [submodule "src/xz"]
 	path = src/xz
 	url = https://github.com/sekaiacg/xz
+[submodule "src/libfuse"]
+	path = src/libfuse
+	url = https://github.com/libfuse/libfuse
+	branch = master
