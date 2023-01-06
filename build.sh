@@ -72,10 +72,11 @@ build()
 	local BUILD="$OUT/erofs-tools"
 	local DUMP_BIN="$BUILD/dump.erofs"
 	local FSCK_BIN="$BUILD/fsck.erofs"
+	local FUSE_BIN="$BUILD/fuse.erofs"
 	local MKFS_BIN="$BUILD/mkfs.erofs"
 	local TARGET_DIR="./target/${TARGET}_${ABI}/erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
 
-	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$MKFS_BIN" ]; then
+	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$FUSE_BIN" -a -f "$MKFS_BIN" ]; then
 		echo "打包中..."
 		[[ ! -d "$TARGET_DIR" ]] && mkdir -p ${TARGET_DIR}
 		cp -af $BUILD/*.erofs ${TARGET_DIR}
