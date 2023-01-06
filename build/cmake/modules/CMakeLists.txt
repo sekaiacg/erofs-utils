@@ -5,6 +5,7 @@ include(libcutils.cmake)
 include(libselinux.cmake)
 include(liberofs.cmake)
 include(libpcre2.cmake)
+include(libfuse/libfuse.cmake)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Android")
     include(libpackagelistparser.cmake)
