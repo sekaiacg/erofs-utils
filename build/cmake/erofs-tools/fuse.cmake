@@ -1,13 +1,16 @@
+set(TARGET fuse.erofs)
 
-file(GLOB SRCS "${PROJECT_SOURCE_DIR}/fuse/*.c") 
-add_executable(erofs.fuse ${SRCS})
-target_link_libraries(erofs.fuse 
-    libbase
-    libutils
-    liblog
-    )
+file(GLOB FUSE_SRCS "${PROJECT_SOURCE_DIR}/fuse/*.c")
 
-include_directories(
-    ${PROJECT_SOURCE_DIR}/lib
-    ${PROJECT_SOURCE_DIR}/include
-    )
+add_executable(${TARGET} ${FUSE_SRCS})
+
+target_compile_options(${TARGET} PRIVATE
+    ${EROFS_UTILS_DEFAULTS_CFLAGS}
+    ${LIBFUSE_DEFAULTS_CFLAGS}
+)
+
+target_include_directories(${TARGET} PRIVATE
+    "${MODULES_SRC}/libfuse/include"
+)
+
+target_link_libraries(${TARGET} erofs fuse)
