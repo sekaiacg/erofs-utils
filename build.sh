@@ -16,8 +16,6 @@ cmake_build()
 		local MAKE_CMD="time -p make -C $OUT -j$(nproc)"
 	fi;
 
-	local FLAGS="-O3 -fdata-sections -ffunction-sections -funwind-tables -fstack-protector-strong -no-canonical-prefixes -D_FORTIFY_SOURCE=2 -Wformat -Werror=format-security -fvisibility=hidden -fvisibility-inlines-hidden -fno-exceptions"
-
 	if [[ $TARGET == "Android" ]]; then
 		local ANDROID_PLATFORM=$4
 		cmake -S ${BUILD_DIR} -B $OUT ${BUILD_METHOD} \
@@ -27,26 +25,13 @@ cmake_build()
 			-DANDROID_ABI="$ABI" \
 			-DANDROID_STL="c++_static" \
 			-DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
-			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF" \
-			-DCMAKE_C_FLAGS="-DANDROID ${FLAGS} -mllvm -polly" \
-			-DCMAKE_CXX_FLAGS="-DANDROID ${FLAGS} -mllvm -polly -fno-rtti" \
-			-DEROFS_LINKER_FLAGS="-static -s"
+			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF"
 	elif [[ $TARGET == "Linux" ]]; then
-		if [[ $ABI == "x86_64" ]]; then
-			LINUX_BIT=64
-		elif [[ $ABI == "x86" ]]; then
-			LINUX_BIT=32
-		fi
-		##指定第三方clang 路径：CLANG_PATH=""
-		local LFLAGS="-fuse-ld=lld -Wl,--build-id=sha1 -Wl,--fatal-warnings -Wl,--gc-sections -Qunused-arguments -Wl,--no-undefined -Wl,--gc-sections -static -s"
-		cmake -S ${BUILD_DIR} -B $OUT ${BUILD_METHOD} \
+		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
 			-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
-			-DCMAKE_CXX_COMPILER="clang++" \
-			-DCMAKE_C_FLAGS="-m${LINUX_BIT} ${FLAGS}" \
-			-DCMAKE_CXX_FLAGS="-m${LINUX_BIT} ${FLAGS} -fno-rtti" \
-			-DCMAKE_EXE_LINKER_FLAGS="${LFLAGS}"
+			-DCMAKE_CXX_COMPILER="clang++"
 	fi
 
 	${MAKE_CMD}
@@ -92,6 +77,5 @@ build "Android" "armeabi-v7a" "android-31"
 build "Android" "x86_64" "android-31"
 build "Android" "x86" "android-31"
 build "Linux" "x86_64"
-build "Linux" "x86"
 
 exit 0
