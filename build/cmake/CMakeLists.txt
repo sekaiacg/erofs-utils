@@ -1,66 +1,81 @@
-cmake_minimum_required(VERSION 3.20)
-project(erofs-utils)
+cmake_minimum_required(VERSION 3.25)
+project(erofs-utils LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options (-fdiagnostics-color=always)
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    add_compile_options (-fcolor-diagnostics)
-endif()
+set(CMAKE_C_FLAGS "")
+set(CMAKE_CXX_FLAGS "")
 
-add_definitions(-D_LARGEFILE_SOURCE)
-add_definitions(-D_FILE_OFFSET_BITS=64)
+set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-if(DEFINED EROFS_C_FLAGS)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EROFS_C_FLAGS}")
-endif()
-
-if(DEFINED EROFS_CXX_FLAGS)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EROFS_CXX_FLAGS}")
-endif()
-
-if (DEFINED EROFS_LINKER_FLAGS)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${EROFS_LINKER_FLAGS}")
-else ()
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections -static -s")
-endif()
-
-set(MODULES_SRC "${PROJECT_SOURCE_DIR}/../../src")
-set(PROJECT_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../..")
-
-execute_process(COMMAND sh "${PROJECT_SOURCE_DIR}/scripts/get-version-number" OUTPUT_VARIABLE PROJECT_VERSION)
-string(REGEX REPLACE "\n$" "" PROJECT_VERSION "${PROJECT_VERSION}")
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/erofs-utils-version.in"
-    "${PROJECT_SOURCE_DIR}/erofs-utils-version.h"
+# File options
+add_definitions(
+	"-D_FILE_OFFSET_BITS=64"
+	"-D_LARGEFILE_SOURCE"
+	"-DNDEBUG"
 )
 
-# git clone submodule
+# Compile flags
+set(GLOBAL_CFLAGS
+	"-Os"
+	"-fdata-sections"
+	"-ffunction-sections"
+	"-funwind-tables"
+	"-fstack-protector-strong"
+	"-D_FORTIFY_SOURCE=2"
+	"-Wformat"
+	"-Werror=format-security"
+	"-no-canonical-prefixes"
+	"-fvisibility=hidden"
+	"-fvisibility-inlines-hidden"
+	"-fno-exceptions"
+	"-fno-rtti"
+)
+
+# Linker flags
+set(GLOBAL_LDFLAGS
+	"-fstack-protector-strong"
+	"-Wl,--fatal-warnings"
+	"-Qunused-arguments"
+	"-Wl,--no-undefined"
+	"-Wl,--gc-sections"
+	"-static"
+	"-s"
+)
+
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+	list(APPEND GLOBAL_CFLAGS "-fdiagnostics-color=always")
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+	list(APPEND GLOBAL_CFLAGS "-fcolor-diagnostics")
+endif()
+
+if (CMAKE_SYSTEM_NAME MATCHES "Android")
+	list(APPEND GLOBAL_CFLAGS "-DANDROID" "-mllvm" "-polly")
+	list(APPEND GLOBAL_LDFLAGS "-Wl,--build-id=none")
+endif()
+
+add_compile_options("$<$<COMPILE_LANGUAGE:C>:${GLOBAL_CFLAGS}>" "$<$<COMPILE_LANGUAGE:CXX>:${GLOBAL_CFLAGS}>")
+add_link_options("$<$<LINK_LANGUAGE:C>:${GLOBAL_LDFLAGS}>" "$<$<LINK_LANGUAGE:CXX>:${GLOBAL_LDFLAGS}>")
+
+set(LIB_DIR "${PROJECT_SOURCE_DIR}/../../src")
+set(PROJECT_ROOT_DIR "${PROJECT_SOURCE_DIR}/../..")
+
+execute_process(COMMAND sh
+	"${PROJECT_SOURCE_DIR}/../../scripts/get-version-number"
+	OUTPUT_VARIABLE PROJECT_VERSION
+)
+string(REGEX REPLACE "\n$" "" PROJECT_VERSION "${PROJECT_VERSION}")
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/erofs-utils-version.in"
+	"${CMAKE_BINARY_DIR}/erofs-utils-version.h"
+)
+
+# Git clone submodule
 execute_process(COMMAND git submodule init)
 execute_process(COMMAND git submodule update)
 
-# thrid part library
-add_subdirectory("${MODULES_SRC}/lz4/build/cmake" "modules/lz4")
-set(BUILD_TESTING OFF)
-set(CREATE_XZ_SYMLINKS OFF)
-set(CREATE_LZMA_SYMLINKS OFF)
-add_subdirectory("${MODULES_SRC}/xz" "modules/xz")
-
-# header
-include_directories(
-    "${PROJECT_SOURCE_DIR}/lib"
-    "${PROJECT_SOURCE_DIR}/include"
-    "${PROJECT_SOURCE_DIR}/src/lz4/lib"
-    "${PROJECT_SOURCE_DIR}/src/xz/src/liblzma/api"
-    "${MODULES_SRC}/core/libcutils/include"
-    "${MODULES_SRC}/e2fsprogs/lib"
-    "${MODULES_SRC}/e2fsprogs/lib/uuid"
-    "${MODULES_SRC}/selinux/libselinux/include"
-    "${MODULES_SRC}/logging/liblog/include"
-)
-
-# start building
-add_subdirectory(modules)
+# Start building
+add_subdirectory(lib)
 add_subdirectory(erofs-tools)
