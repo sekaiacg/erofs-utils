@@ -44,4 +44,4 @@
 
 #define HAVE_VMSPLICE
 
-#define PACKAGE_VERSION "3.12.0"
+#define PACKAGE_VERSION "3.13.0"
