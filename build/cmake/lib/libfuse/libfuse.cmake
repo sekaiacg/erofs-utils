@@ -3,7 +3,7 @@ set(TARGET fuse_static)
 set(TARGET_SRC_DIR "${LIB_DIR}/libfuse/lib")
 
 set(LIBFUSE_DEFAULTS_CFLAGS
-	"-DFUSE_USE_VERSION=312"
+	"-DFUSE_USE_VERSION=313"
 	"-Wall"
 	"-Wextra"
 	"-Wno-sign-compare"
