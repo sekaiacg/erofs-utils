@@ -43,7 +43,6 @@ jobs:
         androidX86x64Name=`ls -d target/Android_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86x64Name=$androidX86x64Name" >> $GITHUB_OUTPUT
         androidX86Name=`ls -d target/Android_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86Name=$androidX86Name" >> $GITHUB_OUTPUT
         linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
-        linuxX86Name=`ls -d target/Linux_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86Name=$linuxX86Name" >> $GITHUB_OUTPUT
     - name: Upload erofs-utils Android_arm64-v8a release
       uses: actions/upload-artifact@v3
       with:
@@ -69,8 +68,3 @@ jobs:
       with:
         name: ${{ steps.prepareArtifact.outputs.linuxX86x64Name }}
         path: './target/Linux_x86_64/${{ steps.prepareArtifact.outputs.linuxX86x64Name }}/*'
-    - name: Upload erofs-utils Linux_x86 release
-      uses: actions/upload-artifact@v3
-      with:
-        name: ${{ steps.prepareArtifact.outputs.linuxX86Name }}
-        path: './target/Linux_x86/${{ steps.prepareArtifact.outputs.linuxX86Name }}/*'
