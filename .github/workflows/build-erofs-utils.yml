@@ -5,7 +5,7 @@ on:
     tags: [ v* ]
 
 jobs:
-  build:
+  Build-on-Ubuntu:
     runs-on: ubuntu-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -17,13 +17,14 @@ jobs:
       uses: actions/checkout@v3
       with:
         submodules: 'recursive'
-        fetch-depth: 0
+        fetch-depth: 1
     - name: Update system and install dependencies
-      run: sudo apt update -y && sudo apt install llvm lld g++-multilib ninja-build -y
+      run: sudo apt update -y && sudo apt install llvm g++-multilib ninja-build -y
     - name: Install NDK
       uses: nttld/setup-ndk@v1
+      id: setup-ndk
       with:
-        ndk-version: r25b
+        ndk-version: r25c
         local-cache: true
     - name: Set up ccache
       uses: hendrikmuhs/ccache-action@v1.2
@@ -31,6 +32,8 @@ jobs:
         key: ${{ runner.os }}
         restore-keys: ${{ runner.os }}
     - name: Build erofs-utils
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
       run: |
         chmod a+x build.sh
         ./build.sh
