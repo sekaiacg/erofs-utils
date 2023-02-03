@@ -24,7 +24,7 @@ cmake_build()
 			-DANDROID_PLATFORM="$ANDROID_PLATFORM" \
 			-DANDROID_ABI="$ABI" \
 			-DANDROID_STL="c++_static" \
-			-DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+			-DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
 			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF"
 	elif [[ $TARGET == "Linux" ]]; then
 		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
@@ -59,13 +59,14 @@ build()
 	local FSCK_BIN="$BUILD/fsck.erofs"
 	local FUSE_BIN="$BUILD/fuse.erofs"
 	local MKFS_BIN="$BUILD/mkfs.erofs"
-	local TARGET_DIR="./target/${TARGET}_${ABI}/erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
+	local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
+	local TARGET_DIR_PATH="./target/${TARGET}_${ABI}/${TARGE_DIR_NAME}"
 
 	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$FUSE_BIN" -a -f "$MKFS_BIN" ]; then
-		echo "打包中..."
-		[[ ! -d "$TARGET_DIR" ]] && mkdir -p ${TARGET_DIR}
-		cp -af $BUILD/*.erofs ${TARGET_DIR}
-		echo "打包完成！"
+		echo "复制文件中..."
+		[[ ! -d "$TARGET_DIR_PATH" ]] && mkdir -p ${TARGET_DIR_PATH}
+		cp -af $BUILD/*.erofs ${TARGET_DIR_PATH}
+		echo "编译成功: ${TARGE_DIR_NAME}"
 	else
 		echo "error"
 		exit -1
