@@ -18,9 +18,6 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-DWITH_ANDROID"
 	"-DHAVE_MEMRCHR"
 	"-DHAVE_SYS_IOCTL_H"
-	"-DGWINSZ_IN_SYS_IOCTL"
-	"-DHAVE_SYS_SYSMACROS_H"
-	"-DHAVE_PWRITE64"
 	CACHE INTERNAL "liberofs_static_defaults_cflags"
 )
 
@@ -56,6 +53,10 @@ include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Wno-deprecated-non-prototype" CFLAG_Wno-deprecated-non-prototype)
 if (CFLAG_Wno-deprecated-non-prototype)
 	list(APPEND LIBEROFS_STATIC_DEFAULTS_CFLAGS "-Wno-deprecated-non-prototype")
+endif()
+
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+	list(APPEND LIBEROFS_STATIC_DEFAULTS_CFLAGS "-DGWINSZ_IN_SYS_IOCTL")
 endif()
 
 add_library(${TARGET} STATIC ${liberofs_srcs})
