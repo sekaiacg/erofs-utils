@@ -12,6 +12,7 @@ include(liberofs.cmake)
 # LZ4
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(LZ4_BUILD_CLI OFF)
+set(LZ4_BUILD_LEGACY_LZ4C OFF)
 add_subdirectory("${LIB_DIR}/lz4/build/cmake" "lz4")
 
 # XZ
