@@ -103,7 +103,7 @@ jobs:
       if: success()
       id: prepareArtifact
       run: |
-        darwinx86x64Name=`echo erofs-utils-v`head -1 VERSION`-g`git rev-parse --verify HEAD | cut -c1-8`-$(TZ=UTC-8 date +%y%m%d%H%M)` && echo "darwinx86x64Name=$darwinx86x64Name" >> $GITHUB_OUTPUT
+        darwinx86x64Name=`echo erofs-utils-v$(. scripts/get-version-number)-Darwin_x86_64-$(TZ=UTC-8 date +%y%m%d%H%M)` && echo "darwinx86x64Name=$darwinx86x64Name" >> $GITHUB_OUTPUT
     - name: Upload erofs-utils Darwin x86_64
       uses: actions/upload-artifact@v3
       with:
