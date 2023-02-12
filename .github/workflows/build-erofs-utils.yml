@@ -97,7 +97,7 @@ jobs:
         mkdir out
         ./autogen.sh
         ./configure --enable-fuse --prefix=$(pwd)/out
-        ./make
+        make
     - name: Prepare artifact
       if: success()
       id: prepareArtifact
