@@ -104,7 +104,7 @@ jobs:
       id: prepareArtifact
       run: |
         darwinx86x64Name=`echo erofs-utils-v$(. scripts/get-version-number)-Darwin_x86_64-$(TZ=UTC-8 date +%y%m%d%H%M)` && echo "darwinx86x64Name=$darwinx86x64Name" >> $GITHUB_OUTPUT
-    - name: Upload erofs-utils Darwin x86_64
+    - name: Upload erofs-utils Darwin_x86_64 release
       uses: actions/upload-artifact@v3
       with:
         name: ${{ steps.prepareArtifact.outputs.darwinx86x64Name }}
