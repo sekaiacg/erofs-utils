@@ -71,3 +71,40 @@ jobs:
       with:
         name: ${{ steps.prepareArtifact.outputs.linuxX86x64Name }}
         path: './target/Linux_x86_64/${{ steps.prepareArtifact.outputs.linuxX86x64Name }}/*'
+
+  Build-on-Macos:
+    runs-on: macos-latest
+    env:
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_MAXSIZE: "50M"
+      CCACHE_HARDLINK: "true"
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        submodules: 'recursive'
+        fetch-depth: 1
+    - name: Install dependencies
+      run: brew install automake autoconf lz4 macfuse
+    - name: Set up ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ runner.os }}
+        restore-keys: ${{ runner.os }}
+    - name: Build erofs-utils
+      run: |
+        mkdir out
+        ./autogen.sh
+        ./configure --enable-fuse --prefix=$(pwd)/out
+        ./make
+    - name: Prepare artifact
+      if: success()
+      id: prepareArtifact
+      run: |
+        darwinx86x64Name=`echo erofs-utils-v`head -1 VERSION`-g`git rev-parse --verify HEAD | cut -c1-8`-$(TZ=UTC-8 date +%y%m%d%H%M)` && echo "darwinx86x64Name=$darwinx86x64Name" >> $GITHUB_OUTPUT
+    - name: Upload erofs-utils Darwin x86_64
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ steps.prepareArtifact.outputs.darwinx86x64Name }}
+        path: 'out/bin/*'
