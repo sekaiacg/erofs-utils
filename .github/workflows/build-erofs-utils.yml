@@ -72,7 +72,7 @@ jobs:
         name: ${{ steps.prepareArtifact.outputs.linuxX86x64Name }}
         path: './target/Linux_x86_64/${{ steps.prepareArtifact.outputs.linuxX86x64Name }}/*'
 
-  Build-on-Macos:
+  Build-on-macOS:
     runs-on: macos-latest
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
