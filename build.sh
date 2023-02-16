@@ -28,6 +28,7 @@ cmake_build()
 			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF"
 	elif [[ $TARGET == "Linux" ]]; then
 		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+			-DCMAKE_BUILD_TYPE="Release" \
 			-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
