@@ -14,24 +14,26 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_definitions(
 	"-D_FILE_OFFSET_BITS=64"
 	"-D_LARGEFILE_SOURCE"
-	"-DNDEBUG"
 )
 
 # Compile flags
 set(GLOBAL_CFLAGS
-	"-Os"
-	"-fdata-sections"
-	"-ffunction-sections"
 	"-funwind-tables"
 	"-fstack-protector-strong"
-	"-D_FORTIFY_SOURCE=2"
 	"-Wformat"
 	"-Werror=format-security"
 	"-no-canonical-prefixes"
-	"-fvisibility=hidden"
-	"-fvisibility-inlines-hidden"
+	"-Wno-macro-redefined"
 	"-fno-exceptions"
 	"-fno-rtti"
+)
+set(GLOBAL_CFLAGS_RELEASE
+	"-Os"
+	"-D_FORTIFY_SOURCE=2"
+	"-fdata-sections"
+	"-ffunction-sections"
+	"-fvisibility=hidden"
+	"-fvisibility-inlines-hidden"
 )
 
 # Linker flags
@@ -40,10 +42,20 @@ set(GLOBAL_LDFLAGS
 	"-Wl,--fatal-warnings"
 	"-Qunused-arguments"
 	"-Wl,--no-undefined"
-	"-Wl,--gc-sections"
 	"-static"
+)
+set(GLOBAL_LDFLAGS_RELEASE
+	"-Wl,--gc-sections"
 	"-s"
 )
+
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+	list(APPEND GLOBAL_CFLAGS ${GLOBAL_CFLAGS_RELEASE})
+	list(APPEND GLOBAL_LDFLAGS ${GLOBAL_LDFLAGS_RELEASE})
+	add_definitions("-DNDEBUG")
+elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
+	list(APPEND GLOBAL_CFLAGS "-O0" "-g")
+endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 	list(APPEND GLOBAL_CFLAGS "-fdiagnostics-color=always")
