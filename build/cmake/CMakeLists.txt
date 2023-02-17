@@ -14,6 +14,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_definitions(
 	"-D_FILE_OFFSET_BITS=64"
 	"-D_LARGEFILE_SOURCE"
+	"-D_LARGEFILE64_SOURCE"
 )
 
 # Compile flags
@@ -23,7 +24,6 @@ set(GLOBAL_CFLAGS
 	"-Wformat"
 	"-Werror=format-security"
 	"-no-canonical-prefixes"
-	"-Wno-macro-redefined"
 	"-fno-exceptions"
 	"-fno-rtti"
 )
@@ -80,7 +80,7 @@ execute_process(COMMAND sh
 )
 string(REGEX REPLACE "\n$" "" PROJECT_VERSION "${PROJECT_VERSION}")
 configure_file(
-	"${CMAKE_CURRENT_SOURCE_DIR}/erofs-utils-version.in"
+	"${CMAKE_CURRENT_SOURCE_DIR}/erofs-utils-version.h.in"
 	"${CMAKE_BINARY_DIR}/erofs-utils-version.h"
 )
 
