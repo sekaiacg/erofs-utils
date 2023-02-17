@@ -1,0 +1,26 @@
+#ifndef __LIB_EROFS_CONFIG_H
+#define __LIB_EROFS_CONFIG_H
+
+// Includes
+#cmakedefine HAVE_EXECINFO_H 1
+#cmakedefine HAVE_LINUX_FALLOC_H 1
+#cmakedefine HAVE_LINUX_FS_H 1
+#cmakedefine HAVE_LINUX_XATTR_H 1
+#cmakedefine HAVE_SYS_IOCTL_H 1
+#cmakedefine HAVE_SYS_SYSMACROS_H 1
+
+// Functions
+#cmakedefine HAVE_BACKTRACE 1
+#cmakedefine HAVE_COPY_FILE_RANGE 1
+#cmakedefine HAVE_FTELLO64 1
+#cmakedefine HAVE_LSEEK64 1
+#cmakedefine HAVE_PREAD64 1
+#cmakedefine HAVE_PWRITE64 1
+#cmakedefine HAVE_TMPFILE64 1
+#cmakedefine HAVE_UTIMENSAT 1
+
+// Symbols
+#cmakedefine GWINSZ_IN_SYS_IOCTL 1
+#cmakedefine HAVE_LSEEK64_PROTOTYPE 1
+
+#endif
