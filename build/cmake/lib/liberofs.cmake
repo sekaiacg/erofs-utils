@@ -2,6 +2,35 @@ set(TARGET erofs_static)
 
 set(TARGET_SRC_DIR "${PROJECT_ROOT_DIR}/lib")
 
+# Check function and header
+include(check.cmake)
+set(INC_LIST
+	"execinfo.h"
+	"linux/falloc.h"
+	"linux/fs.h"
+	"linux/xattr.h"
+	"sys/ioctl.h"
+	"sys/sysmacros.h"
+)
+check_include(INC_LIST)
+set(FUNC_LIST
+	"backtrace"
+	"copy_file_range"
+	"ftello64"
+	"lseek64"
+	"pread64"
+	"pwrite64"
+	"tmpfile64"
+	"utimensat"
+)
+check_fun(FUNC_LIST)
+check_symbol_exists(lseek64 "unistd.h" HAVE_LSEEK64_PROTOTYPE)
+check_symbol_exists(TIOCGWINSZ "sys/ioctl.h" GWINSZ_IN_SYS_IOCTL)
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/liberofs_config.h.in"
+	"${CMAKE_BINARY_DIR}/liberofs_config.h"
+)
+
 set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-Wall"
 	"-Wno-ignored-qualifiers"
@@ -57,13 +86,12 @@ if (CFLAG_Wno-deprecated-non-prototype)
 	list(APPEND LIBEROFS_STATIC_DEFAULTS_CFLAGS "-Wno-deprecated-non-prototype")
 endif()
 
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-	list(APPEND LIBEROFS_STATIC_DEFAULTS_CFLAGS "-DGWINSZ_IN_SYS_IOCTL")
-endif()
-
 add_library(${TARGET} STATIC ${liberofs_srcs})
 
-target_precompile_headers(${TARGET} PRIVATE "${CMAKE_BINARY_DIR}/erofs-utils-version.h")
+target_precompile_headers(${TARGET} PUBLIC
+	"${CMAKE_BINARY_DIR}/erofs-utils-version.h"
+	"${CMAKE_BINARY_DIR}/liberofs_config.h"
+)
 
 target_include_directories(${TARGET} PRIVATE
 	${liberofs_headers}
