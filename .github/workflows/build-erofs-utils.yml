@@ -2,9 +2,46 @@ name: Build erofs-utils
 on:
   push:
     branches: [ "dev" ]
-    tags: [ v* ]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Push a new release'
+        required: false
+        default: 'false'
+      version:
+        description: 'Version'
+        required: false
+        default: 'v1.5-23010100'
 
 jobs:
+  release:
+    needs: [ Build-on-Ubuntu ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v3
+        if: github.event.inputs.release == 'true' && github.event.inputs.release != 'false' && !cancelled()
+
+      - name: Version
+        if: github.event.inputs.release == 'true' && github.event.inputs.release != 'false' && !cancelled()
+        run: |
+          ARTIFACT_DIR=$(ls); for name in ${ARTIFACT_DIR}; do zip -9 -jy "${name}.zip" ${name}/*.erofs > /dev/null 2>&1; done;
+          ls -lahR
+
+      - name: Upload release
+        if: github.event.inputs.release == 'true' && github.event.inputs.release != 'false' && !cancelled()
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          removeArtifacts: true
+          token: ${{ secrets.ACCESS_TOKEN }}
+          name: ${{ github.event.inputs.version }}
+          tag: ${{ github.event.inputs.version }}
+          body: This release is built by github-action.
+          artifacts: "*.zip"
+
   Build-on-Ubuntu:
     runs-on: ubuntu-latest
     env:
