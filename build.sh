@@ -60,17 +60,18 @@ build()
 	local FSCK_BIN="$BUILD/fsck.erofs"
 	local FUSE_BIN="$BUILD/fuse.erofs"
 	local MKFS_BIN="$BUILD/mkfs.erofs"
+	local EXTRACT_BIN="$BUILD/extract.erofs"
 	local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
 	local TARGET_DIR_PATH="./target/${TARGET}_${ABI}/${TARGE_DIR_NAME}"
 
-	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$FUSE_BIN" -a -f "$MKFS_BIN" ]; then
+	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$FUSE_BIN" -a -f "$MKFS_BIN" -a -f "$EXTRACT_BIN" ]; then
 		echo "复制文件中..."
 		[[ ! -d "$TARGET_DIR_PATH" ]] && mkdir -p ${TARGET_DIR_PATH}
 		cp -af $BUILD/*.erofs ${TARGET_DIR_PATH}
 		echo "编译成功: ${TARGE_DIR_NAME}"
 	else
 		echo "error"
-		exit -1
+		exit 1
 	fi
 }
 
