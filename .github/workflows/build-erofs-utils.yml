@@ -97,6 +97,9 @@ jobs:
           echo "androidX86Dir=target/Android_x86" >> $GITHUB_OUTPUT
           androidX86Name=`ls -d target/Android_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86Name=$androidX86Name" >> $GITHUB_OUTPUT
 
+          echo "wslX86x64Dir=target/WSL_x86_64" >> $GITHUB_OUTPUT
+          wslX86x64Name=`ls -d target/WSL_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "wslX86x64Name=$wslX86x64Name" >> $GITHUB_OUTPUT
+
           echo "linuxX86x64Dir=target/Linux_x86_64" >> $GITHUB_OUTPUT
           linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
 
@@ -127,6 +130,13 @@ jobs:
         with:
           name: ${{ steps.Artifact.outputs.androidX86Name }}
           path: '${{ steps.Artifact.outputs.androidX86Dir }}/${{ steps.Artifact.outputs.androidX86Name }}/*'
+
+      - name: Upload erofs-utils WSL_x86_64
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.Artifact.outputs.wslX86x64Name }}
+          path: '${{ steps.Artifact.outputs.wslX86x64Dir }}/${{ steps.Artifact.outputs.wslX86x64Name }}/*'
 
       - name: Upload erofs-utils Linux_x86_64
         if: success()
