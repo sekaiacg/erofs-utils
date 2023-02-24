@@ -27,8 +27,12 @@ cmake_build()
 			-DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
 			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF"
 	elif [[ $TARGET == "Linux" ]]; then
+		local LINUX_PLATFORM=$4
+		local WSL="OFF"
+		[ "${LINUX_PLATFORM}" == "WSL" ] && WSL="ON"
 		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
 			-DCMAKE_BUILD_TYPE="Release" \
+			-DRUN_ON_WSL="${WSL}" \
 			-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
@@ -42,7 +46,7 @@ build()
 {
 	local TARGET=$1
 	local ABI=$2
-	local ANDROID_PLATFORM=$3
+	local PLATFORM=$3
 
 	rm -r $OUT > /dev/null 2>&1
 
@@ -53,7 +57,9 @@ build()
 		local METHOD="make"
 	fi
 
-	cmake_build "${TARGET}" "${METHOD}" "${ABI}" "${ANDROID_PLATFORM}"
+	cmake_build "${TARGET}" "${METHOD}" "${ABI}" "${PLATFORM}"
+
+	[ "${PLATFORM}" == "WSL" ] && TARGET="WSL"
 
 	local BUILD="$OUT/erofs-tools"
 	local DUMP_BIN="$BUILD/dump.erofs"
@@ -79,6 +85,7 @@ build "Android" "arm64-v8a" "android-31"
 build "Android" "armeabi-v7a" "android-31"
 build "Android" "x86_64" "android-31"
 build "Android" "x86" "android-31"
+build "Linux" "x86_64" "WSL"
 build "Linux" "x86_64"
 
 exit 0
