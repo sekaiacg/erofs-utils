@@ -31,6 +31,13 @@ configure_file(
 	"${CMAKE_BINARY_DIR}/liberofs_config.h"
 )
 
+if (NOT RUN_ON_WSL)
+	set(LIBEROFS_STATIC_ADD_CFLAGS
+		"-DHAVE_LLISTXATTR"
+		"-DHAVE_LGETXATTR"
+	)
+endif ()
+
 set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-Wall"
 	"-Wno-ignored-qualifiers"
@@ -47,8 +54,7 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-DWITH_ANDROID"
 	"-DHAVE_MEMRCHR"
 	"-DHAVE_SYS_IOCTL_H"
-	"-DHAVE_LLISTXATTR"
-	"-DHAVE_LGETXATTR"
+	${LIBEROFS_STATIC_ADD_CFLAGS}
 	CACHE INTERNAL "liberofs_static_defaults_cflags"
 )
 
