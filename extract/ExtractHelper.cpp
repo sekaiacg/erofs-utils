@@ -473,7 +473,7 @@ again:
 				case VFS_CAP_REVISION_1:
 					if (len != XATTR_CAPS_SZ_1)
 						return;
-					capabilities |= le32_to_cpu(fileCapData->data[0].permitted);
+					capabilities = le32_to_cpu(fileCapData->data[0].permitted);
 					break;
 				case VFS_CAP_REVISION_2:
 					if (len != XATTR_CAPS_SZ_2)
