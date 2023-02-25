@@ -456,14 +456,14 @@ again:
 		int len;
 
 		// "security.selinux"
-		len = erofs_getxattr(inode, XATTR_NAME_SELINUX, buf, 128);
+		len = erofs_getxattr(inode, XATTR_NAME_SELINUX, buf, 127);
 		if (len > 0) {
 			eNode->setSeContext(string(buf, len));
 		}
 
 #ifdef WITH_ANDROID
 		// security.capability
-		len = erofs_getxattr(inode, XATTR_NAME_CAPABILITY, buf, 128);
+		len = erofs_getxattr(inode, XATTR_NAME_CAPABILITY, buf, 127);
 		if (len > 0) {
 			uint64_t capabilities = 0;
 			auto *fileCapData = (struct vfs_cap_data *) buf;
@@ -489,9 +489,9 @@ again:
 				eNode->setCapability(capabilities);
 				char capBuf[32] = {0};
 #if defined(__LP64__)
-				snprintf(capBuf, 32, " capabilities=0x%lX", capabilities);
+				snprintf(capBuf, 31, " capabilities=0x%lX", capabilities);
 #else
-				snprintf(capBuf, 32, " capabilities=0x%llX", capabilities);
+				snprintf(capBuf, 31, " capabilities=0x%llX", capabilities);
 #endif
 				eNode->setFsConfigCapabilities(capBuf);
 			}
