@@ -16,7 +16,7 @@ namespace skkk {
 		this->i_mtime = inode->i_mtime;
 		this->i_mtime_nsec = inode->i_mtime_nsec;
 		this->dataLayout = inode->datalayout;
-		char buf[FS_CONFIG_BUF_SIZE + 1];
+		char buf[FS_CONFIG_BUF_SIZE] = {0};
 		snprintf(buf, FS_CONFIG_BUF_SIZE, "%s %u %u %04o",
 				 path,
 				 inode->i_uid,
@@ -91,8 +91,8 @@ namespace skkk {
 
 	bool ErofsNode::initExceptionInfo(int err) {
 		if (err && err != RET_EXTRACT_FAIL_SKIP) [[unlikely]] {
-			char buf[256] = {0};
-			snprintf(buf, 256, "err=%d type=%s dataLayout=%s name=%s",
+			char buf[FS_CONFIG_BUF_SIZE] = {0};
+			snprintf(buf, FS_CONFIG_BUF_SIZE, "err=%d type=%s dataLayout=%s name=%s",
 					 err,
 					 getTypeIdCStr(),
 					 getDataLayoutCStr(),
