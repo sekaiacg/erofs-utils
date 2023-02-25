@@ -501,8 +501,8 @@ again:
 
 	int initErofsNodeByRoot() {
 		int rc = RET_EXTRACT_DONE, err;
-		eo->iter_path = (char *) malloc(PATH_MAX + 1);
-		memset(eo->iter_path, 0, PATH_MAX + 1);
+		eo->iter_path = (char *) malloc(PATH_MAX);
+		memset(eo->iter_path, 0, PATH_MAX);
 
 		// root is '/'
 		eo->iter_path[0] = '/';
@@ -519,12 +519,12 @@ again:
 	}
 
 	int initErofsNodeByTargetPath(const string &targetPath) {
-		char nameBuf[PATH_MAX + 1] = {0};
+		char pathnameBuf[PATH_MAX] = {0};
 		int rc = RET_EXTRACT_INIT_NODE_FAIL, err;
 		if (targetPath.empty()) return RET_EXTRACT_INIT_NODE_FAIL;
 
-		eo->iter_path = (char *) malloc(PATH_MAX + 1);
-		memset(eo->iter_path, 0, PATH_MAX + 1);
+		eo->iter_path = (char *) malloc(PATH_MAX);
+		memset(eo->iter_path, 0, PATH_MAX);
 
 		// find targetPath
 		struct erofs_inode vi = {.nid = sbi.root_nid};
@@ -534,11 +534,11 @@ again:
 			goto exit;
 		}
 
-		err = erofs_get_pathname(vi.nid, nameBuf, PATH_MAX);
+		err = erofs_get_pathname(vi.nid, pathnameBuf, PATH_MAX);
 		if (err) {
 			goto exit;
 		}
-		eo->iter_pos = snprintf(eo->iter_path, PATH_MAX, nameBuf, nullptr);
+		eo->iter_pos = snprintf(eo->iter_path, PATH_MAX, pathnameBuf, nullptr);
 
 		err = doInitNode(vi.nid);
 		if (err) {
