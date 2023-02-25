@@ -15,22 +15,22 @@
 using namespace skkk;
 
 static void usage() {
-	char buf[1024];
-	sprintf(buf,
-			BROWN "usage: [options]" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-h, --help" COLOR_NONE "          " BROWN "Display this help and exit" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "  " BROWN "Image file" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-p" COLOR_NONE "                  " BROWN "Print all entrys" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "--print=X" COLOR_NONE "           " BROWN "Print the target of path X" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-x" COLOR_NONE "                  " BROWN "Extract all items" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "--extract=X" COLOR_NONE "         " BROWN "Extract the target of path X" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "     " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-T#" COLOR_NONE "                 " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
-			"  " GREEN2_BOLD "--only-cfg" COLOR_NONE "          " BROWN "Only extract fs_config and file_contexts" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "      " BROWN "Output dir" COLOR_NONE "\n"
-			"  " GREEN2_BOLD "-V, --version" COLOR_NONE "       " BROWN "Print the version info" COLOR_NONE "\n",
-			eo->limitHardwareConcurrency,
-			eo->hardwareConcurrency
+	char buf[1024] = {0};
+	snprintf(buf, 1024,
+			 BROWN "usage: [options]" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-h, --help" COLOR_NONE "          " BROWN "Display this help and exit" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "  " BROWN "Image file" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-p" COLOR_NONE "                  " BROWN "Print all entrys" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--print=X" COLOR_NONE "           " BROWN "Print the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-x" COLOR_NONE "                  " BROWN "Extract all items" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--extract=X" COLOR_NONE "         " BROWN "Extract the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "     " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                 " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "          " BROWN "Only extract fs_config and file_contexts" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "      " BROWN "Output dir" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-V, --version" COLOR_NONE "       " BROWN "Print the version info" COLOR_NONE "\n",
+			 eo->limitHardwareConcurrency,
+			 eo->hardwareConcurrency
 	);
 	fputs(buf, stderr);
 }
