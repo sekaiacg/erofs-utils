@@ -15,7 +15,7 @@
 using namespace skkk;
 
 static void usage() {
-	char buf[1024];
+	char buf[1024] = {0};
 	sprintf(buf,
 			BROWN "usage: [options]" COLOR_NONE "\n"
 			"  " GREEN2_BOLD "-h, --help" COLOR_NONE "          " BROWN "Display this help and exit" COLOR_NONE "\n"
