@@ -111,8 +111,9 @@ namespace skkk {
 			fprintf(seContextFile, "/%s %s\n", imgBaseName, seContext.c_str());
 		}
 		fprintf(fsConfigFile, "%s%s\n", imgBaseName, fsConfig.c_str());
-		const string seCFilePath = handleSpecialSymbols(path);
-		fprintf(seContextFile, "/%s%s %s\n", imgBaseName, seCFilePath.c_str(), seContext.c_str());
+		string newPath = path;
+		handleSpecialSymbols(newPath);
+		fprintf(seContextFile, "/%s%s %s\n", imgBaseName, newPath.c_str(), seContext.c_str());
 	}
 
 	int ErofsNode::writeNodeEntity2File(const string &outDir) {
