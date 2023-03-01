@@ -10,13 +10,11 @@ using namespace std;
 
 namespace skkk {
 
-	static inline string handleSpecialSymbols(const string &str) {
-		string tmp = string(str);
-		strReplaceAll(tmp, ".", "\\.");
-		strReplaceAll(tmp, "+", "\\+");
-		strReplaceAll(tmp, "[", "\\[");
-		strReplaceAll(tmp, "]", "\\]");
-		return tmp;
+	static inline void handleSpecialSymbols(string &str) {
+		strReplaceAll(str, ".", "\\.");
+		strReplaceAll(str, "+", "\\+");
+		strReplaceAll(str, "[", "\\[");
+		strReplaceAll(str, "]", "\\]");
 	}
 
 	/**
