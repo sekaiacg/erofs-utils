@@ -1,0 +1,43 @@
+#ifndef LIBFUSE_CONFIG_H
+#define LIBFUSE_CONFIG_H
+
+#if defined(ANDROID) || defined(_ANDROID_)
+#define pthread_setcancelstate(x, y)
+#define pthread_cancel(c)
+#endif
+
+#define PACKAGE_VERSION "3.14.0"
+
+#cmakedefine HAVE_COPY_FILE_RANGE 1
+
+#cmakedefine HAVE_FALLOCATE 1
+
+#cmakedefine HAVE_FDATASYNC 1
+
+#cmakedefine HAVE_FORK 1
+
+#cmakedefine HAVE_FSTATAT 1
+
+#cmakedefine HAVE_ICONV 1
+
+#cmakedefine HAVE_OPENAT 1
+
+#cmakedefine HAVE_PIPE2 1
+
+#cmakedefine HAVE_POSIX_FALLOCATE 1
+
+#cmakedefine HAVE_READLINKAT 1
+
+#cmakedefine HAVE_SETXATTR 1
+
+#cmakedefine HAVE_SPLICE 1
+
+#cmakedefine HAVE_STRUCT_STAT_ST_ATIM 1
+
+#cmakedefine HAVE_STRUCT_STAT_ST_ATIMESPEC 1
+
+#cmakedefine HAVE_UTIMENSAT 1
+
+#cmakedefine HAVE_VMSPLICE 1
+
+#endif // LIBFUSE_CONFIG_H
