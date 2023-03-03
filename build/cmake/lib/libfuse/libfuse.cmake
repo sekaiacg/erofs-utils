@@ -2,8 +2,36 @@ set(TARGET fuse_static)
 
 set(TARGET_SRC_DIR "${LIB_DIR}/libfuse/lib")
 
+include(check.cmake)
+include(CheckStructHasMember)
+set(LIBFUSE_FUNC_LIST
+	"copy_file_range"
+	"fork"
+	"fstatat"
+	"openat"
+	"readlinkat"
+	"pipe2"
+	"splice"
+	"vmsplice"
+	"posix_fallocate"
+	"fdatasync"
+	"utimensat"
+	"fallocate"
+)
+check_fun(LIBFUSE_FUNC_LIST)
+check_symbol_exists(setxattr "sys/xattr.h" HAVE_SETXATTR)
+check_symbol_exists(iconv "iconv.h" HAVE_ICONV)
+check_struct_has_member("struct stat" "st_atim" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIM)
+check_struct_has_member("struct stat" "st_atimespec" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIMESPEC)
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/libfuse/fuse_config.h.in"
+	"${libfuse_headers}/fuse_config.h"
+)
+
 set(LIBFUSE_DEFAULTS_CFLAGS
-	"-DFUSE_USE_VERSION=313"
+	"-DFUSE_USE_VERSION=314"
+	"-D_REENTRANT"
+	"-DHAVE_LIBFUSE_PRIVATE_CONFIG_H"
 	"-Wall"
 	"-Wextra"
 	"-Wno-sign-compare"
@@ -35,7 +63,7 @@ set(libfuse_srcs
 )
 
 file(GLOB LIBFUSE_CONFIG_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/libfuse/*.h")
-file(COPY ${LIBFUSE_CONFIG_HEADER} DESTINATION ${TARGET_SRC_DIR})
+file(COPY ${LIBFUSE_CONFIG_HEADER} DESTINATION ${libfuse_headers})
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 	list(APPEND LIBFUSE_DEFAULTS_CFLAGS "-DFUSERMOUNT_DIR=\"/bin\"")
