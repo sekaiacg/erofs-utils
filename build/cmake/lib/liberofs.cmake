@@ -94,10 +94,8 @@ endif()
 
 add_library(${TARGET} STATIC ${liberofs_srcs})
 
-target_precompile_headers(${TARGET} PUBLIC
-	"${CMAKE_BINARY_DIR}/erofs-utils-version.h"
-	"${CMAKE_BINARY_DIR}/liberofs_config.h"
-)
+target_precompile_headers(${TARGET} PRIVATE "${CMAKE_BINARY_DIR}/erofs-utils-version.h")
+target_precompile_headers(${TARGET} PUBLIC "${CMAKE_BINARY_DIR}/liberofs_config.h")
 
 target_include_directories(${TARGET} PRIVATE
 	${liberofs_headers}
