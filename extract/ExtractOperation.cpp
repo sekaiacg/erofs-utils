@@ -211,7 +211,7 @@ namespace skkk {
 	}
 
 	void ExtractOperation::extractErofsNode() const {
-		eo->extractNodeDirs();
+		extractNodeDirs();
 		if (!nodeOther.empty()) {
 			int nodeOtherSize = nodeOther.size();
 			for (int i = 0; i < nodeOtherSize; i++) {
@@ -224,12 +224,11 @@ namespace skkk {
 	}
 
 	void ExtractOperation::extractErofsNodeMultiThread() const {
-		eo->extractNodeDirs();
-		LOGCI(GREEN2_BOLD "Use " COLOR_NONE RED2 "%d" COLOR_NONE GREEN2_BOLD " therads" COLOR_NONE,
-			  eo->threadNum);
+		extractNodeDirs();
+		LOGCI(GREEN2_BOLD "Use " COLOR_NONE RED2 "%d" COLOR_NONE GREEN2_BOLD " therads" COLOR_NONE, threadNum);
 
 		int nodeOtherSize = nodeOther.size();
-		threadpool tp(eo->threadNum);
+		threadpool tp(threadNum);
 		for (const auto &eNode: nodeOther) {
 			tp.commit(extractNodeTaskMultiThread, eNode, outDir);
 		}
