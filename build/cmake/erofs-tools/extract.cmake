@@ -6,7 +6,6 @@ add_executable(${TARGET_extract} ${extract_srcs})
 target_include_directories(${TARGET_extract} PRIVATE
         "${TARGET_SRC_DIR}/include"
         ${common_headers}
-        ${liblog_headers}
 )
 target_link_libraries(${TARGET_extract} ${common_static_link_lib})
 target_compile_options(${TARGET_extract} PRIVATE ${common_compile_flags})
