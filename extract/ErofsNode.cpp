@@ -92,8 +92,9 @@ namespace skkk {
 	bool ErofsNode::initExceptionInfo(int err) {
 		if (err && err != RET_EXTRACT_FAIL_SKIP) [[unlikely]] {
 			char buf[FS_CONFIG_BUF_SIZE] = {0};
-			snprintf(buf, FS_CONFIG_BUF_SIZE, "err=%d type=%s dataLayout=%s name=%s",
+			snprintf(buf, FS_CONFIG_BUF_SIZE, "err=%d[%s] type=%s dataLayout=%s name=%s",
 					 err,
+					 strerror(abs(err)),
 					 getTypeIdCStr(),
 					 getDataLayoutCStr(),
 					 getPath().c_str()
