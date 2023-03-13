@@ -17,7 +17,7 @@
  */
 namespace std {
 //线程池最大容量,应尽量设小一点
-#define  THREADPOOL_MAX_NUM 128
+#define  THREADPOOL_MAX_NUM thread::hardware_concurrency() * 2
 //线程池是否可以自动增长(如果需要,且不超过 THREADPOOL_MAX_NUM)
 //#define  THREADPOOL_AUTO_GROW
 
