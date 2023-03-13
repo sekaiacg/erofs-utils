@@ -26,7 +26,7 @@ jobs:
       - name: Version
         if: github.event.inputs.release == 'true' && github.event.inputs.release != 'false' && !cancelled()
         run: |
-          ARTIFACT_DIR=$(ls); for name in ${ARTIFACT_DIR}; do touch -c -d "2009-01-01 00:00:00" ${name}/*; zip -9 -jy "${name}.zip" ${name}/*.erofs > /dev/null 2>&1; done;
+          ARTIFACT_DIR=$(ls); for name in ${ARTIFACT_DIR}; do chmod +x ${name}/*; touch -c -d "2009-01-01 00:00:00" ${name}/*; zip -9 -jy "${name}.zip" ${name}/*.erofs > /dev/null 2>&1; done;
           ls -lahR
 
       - name: Upload release
