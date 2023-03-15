@@ -1,6 +1,7 @@
 include(CheckIncludeFile)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
+include(CheckStructHasMember)
 
 function(check_include include_list)
 	set(_output_list)
