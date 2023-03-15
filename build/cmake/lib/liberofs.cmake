@@ -4,39 +4,43 @@ set(TARGET_SRC_DIR "${PROJECT_ROOT_DIR}/lib")
 
 # Check function and header
 include(check.cmake)
-set(INC_LIST
+set(liberofs_include_list
 	"execinfo.h"
 	"linux/falloc.h"
 	"linux/fs.h"
+	"linux/types.h"
 	"linux/xattr.h"
 	"sys/ioctl.h"
 	"sys/sysmacros.h"
 )
-check_include(INC_LIST)
-set(FUNC_LIST
+check_include(liberofs_include_list)
+set(liberofs_function_list
 	"backtrace"
 	"copy_file_range"
+	"fallocate"
 	"ftello64"
 	"lseek64"
+	"memrchr"
 	"pread64"
 	"pwrite64"
 	"tmpfile64"
 	"utimensat"
 )
-check_fun(FUNC_LIST)
+if (NOT RUN_ON_WSL)
+	list(APPEND liberofs_function_list
+		"lgetxattr"
+		"llistxattr"
+	)
+endif ()
+check_fun(liberofs_function_list)
 check_symbol_exists(lseek64 "unistd.h" HAVE_LSEEK64_PROTOTYPE)
 check_symbol_exists(TIOCGWINSZ "sys/ioctl.h" GWINSZ_IN_SYS_IOCTL)
+check_struct_has_member("struct stat" "st_atim" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIM)
+check_struct_has_member("struct stat" "st_atimespec" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIMESPEC)
 configure_file(
 	"${CMAKE_CURRENT_SOURCE_DIR}/liberofs_config.h.in"
 	"${CMAKE_BINARY_DIR}/liberofs_config.h"
 )
-
-if (NOT RUN_ON_WSL)
-	set(LIBEROFS_STATIC_ADD_CFLAGS
-		"-DHAVE_LLISTXATTR"
-		"-DHAVE_LGETXATTR"
-	)
-endif ()
 
 set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-Wall"
@@ -44,17 +48,12 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-Wno-pointer-arith"
 	"-Wno-unused-parameter"
 	"-Wno-unused-function"
-	"-DHAVE_FALLOCATE"
-	"-DHAVE_LINUX_TYPES_H"
 	"-DHAVE_LIBSELINUX"
 	"-DHAVE_LIBUUID"
 	"-DLZ4_ENABLED"
 	"-DLZ4HC_ENABLED"
 	"-DHAVE_LIBLZMA"
 	"-DWITH_ANDROID"
-	"-DHAVE_MEMRCHR"
-	"-DHAVE_SYS_IOCTL_H"
-	${LIBEROFS_STATIC_ADD_CFLAGS}
 	CACHE INTERNAL "liberofs_static_defaults_cflags"
 )
 
