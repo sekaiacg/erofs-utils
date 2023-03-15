@@ -3,7 +3,6 @@ set(TARGET fuse_static)
 set(TARGET_SRC_DIR "${LIB_DIR}/libfuse/lib")
 
 include(check.cmake)
-include(CheckStructHasMember)
 set(LIBFUSE_FUNC_LIST
 	"copy_file_range"
 	"fork"
