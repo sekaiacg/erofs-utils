@@ -2,18 +2,13 @@
 #include <utime.h>
 #include <erofs/compress.h>
 #include <erofs/dir.h>
+#include <private/fs_config.h>
 
 #include "ExtractHelper.h"
 #include "ErofsNode.h"
 #include "ExtractState.h"
 #include "ExtractOperation.h"
 #include "Logging.h"
-
-#ifdef WITH_ANDROID
-
-#include <private/fs_config.h>
-
-#endif
 
 namespace skkk {
 
@@ -461,7 +456,6 @@ again:
 			eNode->setSeContext(string(buf, len));
 		}
 
-#ifdef WITH_ANDROID
 		// security.capability
 		len = erofs_getxattr(inode, XATTR_NAME_CAPABILITY, buf, 128);
 		if (len > 0) {
@@ -496,7 +490,6 @@ again:
 				eNode->setFsConfigCapabilities(capBuf);
 			}
 		}
-#endif
 	}
 
 	int initErofsNodeByRoot() {
