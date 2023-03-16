@@ -380,28 +380,20 @@ again:
 #ifdef HAVE_UTIMENSAT
 		if (utimensat(AT_FDCWD, path, (struct timespec[]) {
 				{
-						.tv_sec =  (__time_t) inode->i_mtime,
-#if defined(__LP64__)
-						.tv_nsec = inode->i_mtime_nsec
-#else
-						.tv_nsec = (long int) inode->i_mtime_nsec
-#endif
+						.tv_sec =  (time_t) inode->i_mtime,
+						.tv_nsec = (time_t) inode->i_mtime_nsec
 				},
 				{
-						.tv_sec = (__time_t) inode->i_mtime,
-#if defined(__LP64__)
-						.tv_nsec = inode->i_mtime_nsec
-#else
-						.tv_nsec = (long int) inode->i_mtime_nsec
-#endif
+						.tv_sec = (time_t) inode->i_mtime,
+						.tv_nsec = (time_t) inode->i_mtime_nsec
 				},
 		}, AT_SYMLINK_NOFOLLOW) < 0)
 #else
-			struct utimbuf ub = {
-					.actime =  (__time_t)inode->i_mtime,
-					.modtime =  (__time_t)inode->i_mtime
-			};
-			if (utime(path, &ub) <0 )
+		struct utimbuf ub = {
+				.actime = (time_t) inode->i_mtime,
+				.modtime = (time_t) inode->i_mtime
+		};
+		if (utime(path, &ub) < 0)
 #endif
 			LOGCW("failed to set times: %s", path);
 		if (!S_ISLNK(inode->i_mode)) {
