@@ -79,15 +79,11 @@ namespace skkk {
 
 	void ErofsNode::setSeContext(const string &_seContext) { this->seContext = _seContext; }
 
-#ifdef WITH_ANDROID
-
 	uint64_t ErofsNode::getCapability() const { return capabilities; }
 
 	void ErofsNode::setCapability(uint64_t _capabilities) { this->capabilities = _capabilities; }
 
 	void ErofsNode::setFsConfigCapabilities(const char *capabilitiesStr) { fsConfig.append(capabilitiesStr); }
-
-#endif
 
 	bool ErofsNode::initExceptionInfo(int err) {
 		if (err && err != RET_EXTRACT_FAIL_SKIP) [[unlikely]] {

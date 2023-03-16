@@ -12,10 +12,8 @@ using namespace std;
 #define XATTR_NAME_SELINUX "security.selinux"
 #endif
 
-#ifdef WITH_ANDROID
 #ifndef XATTR_NAME_CAPABILITY
 #define XATTR_NAME_CAPABILITY "security.capability"
-#endif
 #endif
 
 namespace skkk {
@@ -86,7 +84,7 @@ namespace skkk {
 	 * @param eNode
 	 * @param inode
 	 */
-	void initSecurityContext(ErofsNode * eNode, struct erofs_inode *inode);
+	void initSecurityContext(ErofsNode *eNode, struct erofs_inode *inode);
 
 	/**
 	 * Initialize all nodes
