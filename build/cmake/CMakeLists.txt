@@ -39,7 +39,6 @@ set(GLOBAL_CFLAGS_RELEASE
 # Linker flags
 set(GLOBAL_LDFLAGS
 	"-fstack-protector-strong"
-	"-Wl,--fatal-warnings"
 	"-Qunused-arguments"
 	"-Wl,--no-undefined"
 	"-static"
