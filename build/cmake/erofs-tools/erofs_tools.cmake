@@ -64,9 +64,6 @@ add_executable(${TARGET_fuse} ${fuse_srcs})
 target_precompile_headers(${TARGET_fuse} PRIVATE "${PROJECT_ROOT_DIR}/fuse/macosx.h")
 target_include_directories(${TARGET_fuse} PRIVATE ${common_headers} ${libfuse_headers})
 target_link_libraries(${TARGET_fuse} ${common_static_link_lib})
-if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
-	target_link_options(${TARGET_fuse} PRIVATE "-Wl,--no-fatal-warnings")
-endif()
 target_compile_options(${TARGET_fuse} PRIVATE
 	${common_compile_flags}
 	"$<$<COMPILE_LANGUAGE:C>:${LIBFUSE_DEFAULTS_CFLAGS}>"
