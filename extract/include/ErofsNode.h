@@ -34,9 +34,7 @@ namespace skkk {
 			uint64_t i_mtime;
 			u32 i_mtime_nsec;
 			unsigned char dataLayout;
-#ifdef WITH_ANDROID
 			uint64_t capabilities = 0;
-#endif
 			string extractExceptionInfo;
 
 		public:
@@ -60,15 +58,11 @@ namespace skkk {
 
 			void setSeContext(const string &_seContext);
 
-#ifdef WITH_ANDROID
-
 			uint64_t getCapability() const;
 
 			void setCapability(uint64_t _capabilities);
 
 			void setFsConfigCapabilities(const char *capabilitiesStr);
-
-#endif
 
 			bool initExceptionInfo(int err);
 
