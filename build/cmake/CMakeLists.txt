@@ -40,13 +40,18 @@ set(GLOBAL_CFLAGS_RELEASE
 set(GLOBAL_LDFLAGS
 	"-fstack-protector-strong"
 	"-Qunused-arguments"
-	"-Wl,--no-undefined"
-	"-static"
 )
-set(GLOBAL_LDFLAGS_RELEASE
-	"-Wl,--gc-sections"
-	"-s"
-)
+set(GLOBAL_LDFLAGS_RELEASE)
+
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+	list(APPEND GLOBAL_LDFLAGS "-Wl,-dead_strip,-S")
+elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+	list(APPEND GLOBAL_LDFLAGS "-Wl,--no-undefined" "-static")
+	list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,--gc-sections" "-s")
+	if (CMAKE_SYSTEM_NAME MATCHES "Android")
+		list(APPEND GLOBAL_CFLAGS "-DANDROID" "-mllvm" "-polly")
+	endif()
+endif()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
 	list(APPEND GLOBAL_CFLAGS ${GLOBAL_CFLAGS_RELEASE})
@@ -60,11 +65,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
 	list(APPEND GLOBAL_CFLAGS "-fdiagnostics-color=always")
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 	list(APPEND GLOBAL_CFLAGS "-fcolor-diagnostics")
-endif()
-
-if (CMAKE_SYSTEM_NAME MATCHES "Android")
-	list(APPEND GLOBAL_CFLAGS "-DANDROID" "-mllvm" "-polly")
-	list(APPEND GLOBAL_LDFLAGS "-Wl,--build-id=none")
 endif()
 
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${GLOBAL_CFLAGS}>" "$<$<COMPILE_LANGUAGE:CXX>:${GLOBAL_CFLAGS}>")
