@@ -16,21 +16,25 @@ set(liberofs_include_list
 check_include(liberofs_include_list)
 set(liberofs_function_list
 	"backtrace"
-	"copy_file_range"
-	"fallocate"
-	"ftello64"
-	"lseek64"
-	"memrchr"
-	"pread64"
-	"pwrite64"
-	"tmpfile64"
 	"utimensat"
 )
-if (NOT RUN_ON_WSL)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	list(APPEND liberofs_function_list
-		"lgetxattr"
-		"llistxattr"
+		"copy_file_range"
+		"fallocate"
+		"ftello64"
+		"lseek64"
+		"memrchr"
+		"pread64"
+		"pwrite64"
+		"tmpfile64"
 	)
+	if (NOT RUN_ON_WSL)
+		list(APPEND liberofs_function_list
+			"lgetxattr"
+			"llistxattr"
+		)
+	endif ()
 endif ()
 check_fun(liberofs_function_list)
 check_symbol_exists(lseek64 "unistd.h" HAVE_LSEEK64_PROTOTYPE)
@@ -48,6 +52,7 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-Wno-pointer-arith"
 	"-Wno-unused-parameter"
 	"-Wno-unused-function"
+	"-Wno-deprecated-declarations"
 	"-DHAVE_LIBSELINUX"
 	"-DHAVE_LIBUUID"
 	"-DLZ4_ENABLED"
