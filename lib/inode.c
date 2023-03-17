@@ -1647,8 +1647,12 @@ static int erofs_mkfs_import_localdir(struct erofs_importer *im, struct erofs_in
 				break;
 			goto err_closedir;
 		}
-
+#ifndef __APPLE__
 		if (is_dot_dotdot(dp->d_name))
+#else
+		if (is_dot_dotdot(dp->d_name) ||
+			!strncmp(dp->d_name, ".DS_Store", 9))
+#endif
 			continue;
 
 		/* skip if it's a exclude file */
