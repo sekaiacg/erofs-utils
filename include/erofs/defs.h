@@ -333,11 +333,6 @@ unsigned long __roundup_pow_of_two(unsigned long n)
 #define ST_MTIM_NSEC(stbuf) 0
 #endif
 
-#ifdef __APPLE__
-#define stat64		stat
-#define lstat64		lstat
-#endif
-
 #ifdef __cplusplus
 }
 #endif
