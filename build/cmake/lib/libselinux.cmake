@@ -21,57 +21,67 @@ set(TARGET_CFLAGS
 )
 
 set(libselinux_srcs
-	"${TARGET_SRC_DIR}/android/android.c"
-	"${TARGET_SRC_DIR}/android/android_seapp.c"
-	"${TARGET_SRC_DIR}/avc.c"
-	"${TARGET_SRC_DIR}/avc_internal.c"
-	"${TARGET_SRC_DIR}/avc_sidtab.c"
-	"${TARGET_SRC_DIR}/booleans.c"
+	#"${TARGET_SRC_DIR}/android/android.c"
+	#"${TARGET_SRC_DIR}/android/android_seapp.c"
+	#"${TARGET_SRC_DIR}/avc.c"
+	#"${TARGET_SRC_DIR}/avc_internal.c"
+	#"${TARGET_SRC_DIR}/avc_sidtab.c"
+	#"${TARGET_SRC_DIR}/booleans.c"
 	"${TARGET_SRC_DIR}/callbacks.c"
-	"${TARGET_SRC_DIR}/canonicalize_context.c"
-	"${TARGET_SRC_DIR}/checkAccess.c"
+	#"${TARGET_SRC_DIR}/canonicalize_context.c"
+	#"${TARGET_SRC_DIR}/checkAccess.c"
 	"${TARGET_SRC_DIR}/check_context.c"
-	"${TARGET_SRC_DIR}/compute_av.c"
-	"${TARGET_SRC_DIR}/compute_create.c"
-	"${TARGET_SRC_DIR}/compute_member.c"
-	"${TARGET_SRC_DIR}/context.c"
-	"${TARGET_SRC_DIR}/deny_unknown.c"
-	"${TARGET_SRC_DIR}/disable.c"
-	"${TARGET_SRC_DIR}/enabled.c"
-	"${TARGET_SRC_DIR}/fgetfilecon.c"
+	#"${TARGET_SRC_DIR}/compute_av.c"
+	#"${TARGET_SRC_DIR}/compute_create.c"
+	#"${TARGET_SRC_DIR}/compute_member.c"
+	#"${TARGET_SRC_DIR}/context.c"
+	#"${TARGET_SRC_DIR}/deny_unknown.c"
+	#"${TARGET_SRC_DIR}/disable.c"
+	#"${TARGET_SRC_DIR}/enabled.c"
+	#"${TARGET_SRC_DIR}/fgetfilecon.c"
 	"${TARGET_SRC_DIR}/freecon.c"
-	"${TARGET_SRC_DIR}/fsetfilecon.c"
-	"${TARGET_SRC_DIR}/get_initial_context.c"
-	"${TARGET_SRC_DIR}/getenforce.c"
-	"${TARGET_SRC_DIR}/getfilecon.c"
-	"${TARGET_SRC_DIR}/getpeercon.c"
+	#"${TARGET_SRC_DIR}/fsetfilecon.c"
+	#"${TARGET_SRC_DIR}/get_initial_context.c"
+	#"${TARGET_SRC_DIR}/getenforce.c"
+	#"${TARGET_SRC_DIR}/getfilecon.c"
+	#"${TARGET_SRC_DIR}/getpeercon.c"
 	"${TARGET_SRC_DIR}/init.c"
 	"${TARGET_SRC_DIR}/label.c"
 	"${TARGET_SRC_DIR}/label_backends_android.c"
 	"${TARGET_SRC_DIR}/label_file.c"
 	"${TARGET_SRC_DIR}/label_support.c"
-	"${TARGET_SRC_DIR}/lgetfilecon.c"
-	"${TARGET_SRC_DIR}/load_policy.c"
-	"${TARGET_SRC_DIR}/lsetfilecon.c"
-	"${TARGET_SRC_DIR}/mapping.c"
+	#"${TARGET_SRC_DIR}/lgetfilecon.c"
+	#"${TARGET_SRC_DIR}/load_policy.c"
+	#"${TARGET_SRC_DIR}/lsetfilecon.c"
+	#"${TARGET_SRC_DIR}/mapping.c"
 	"${TARGET_SRC_DIR}/matchpathcon.c"
-	"${TARGET_SRC_DIR}/policyvers.c"
-	"${TARGET_SRC_DIR}/procattr.c"
+	#"${TARGET_SRC_DIR}/policyvers.c"
+	#"${TARGET_SRC_DIR}/procattr.c"
 	"${TARGET_SRC_DIR}/regex.c"
-	"${TARGET_SRC_DIR}/reject_unknown.c"
-	"${TARGET_SRC_DIR}/selinux_internal.c"
-	"${TARGET_SRC_DIR}/sestatus.c"
-	"${TARGET_SRC_DIR}/setenforce.c"
-	"${TARGET_SRC_DIR}/setfilecon.c"
+	#"${TARGET_SRC_DIR}/reject_unknown.c"
+	#"${TARGET_SRC_DIR}/selinux_internal.c"
+	#"${TARGET_SRC_DIR}/sestatus.c"
+	#"${TARGET_SRC_DIR}/setenforce.c"
+	#"${TARGET_SRC_DIR}/setfilecon.c"
 	"${TARGET_SRC_DIR}/setrans_client.c"
 	"${TARGET_SRC_DIR}/sha1.c"
-	"${TARGET_SRC_DIR}/stringrep.c"
+	#"${TARGET_SRC_DIR}/stringrep.c"
+)
+
+execute_process(COMMAND readlink -f "${TARGET_SRC_DIR}/init.c" OUTPUT_VARIABLE PATH_TARGET_FILE)
+string(REGEX REPLACE "\n$" "" PATH_TARGET_FILE "${PATH_TARGET_FILE}")
+execute_process(COMMAND patch -N
+	"${PATH_TARGET_FILE}"
+	"${CMAKE_CURRENT_SOURCE_DIR}/patch/libselinux_init.c.patch"
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 	list(APPEND TARGET_CFLAGS "-DBUILD_HOST")
+	if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+		list(APPEND TARGET_CFLAGS "-DHAVE_STRLCPY")
+	endif()
 elseif (CMAKE_SYSTEM_NAME MATCHES "Android")
-	list(APPEND libselinux_srcs "${TARGET_SRC_DIR}/android/android_device.c")
+#	list(APPEND libselinux_srcs "${TARGET_SRC_DIR}/android/android_device.c")
 	list(APPEND TARGET_CFLAGS "-DHAVE_STRLCPY")
 endif()
 
