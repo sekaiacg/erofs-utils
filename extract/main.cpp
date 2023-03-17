@@ -7,6 +7,7 @@
 #include <erofs/io.h>
 #include <erofs/config.h>
 #include <erofs/print.h>
+#include <sys/time.h>
 
 #include "ExtractState.h"
 #include "ExtractOperation.h"
