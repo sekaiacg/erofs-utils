@@ -37,7 +37,7 @@ static void usage() {
 }
 
 static inline void print_version() {
-	printf("  " BROWN "extract.erofs:" COLOR_NONE "      " RED2_BOLD "1.0.1" COLOR_NONE "\n");
+	printf("  " BROWN "extract.erofs:" COLOR_NONE "      " RED2_BOLD "1.0.2" COLOR_NONE "\n");
 	printf("  " BROWN "Author:" COLOR_NONE "             " RED2_BOLD "skkk" COLOR_NONE "\n");
 }
 
