@@ -5,8 +5,10 @@ include(liblog.cmake)
 include(libpcre2.cmake)
 include(libselinux.cmake)
 include(libext2_uuid.cmake)
-include(libfuse/libfuse.cmake)
 include(liberofs.cmake)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+	include(libfuse/libfuse.cmake)
+endif()
 
 # Thrid part library
 # LZ4
