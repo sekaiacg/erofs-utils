@@ -10,8 +10,13 @@ set(common_headers
 	${libe2fsprogs_headers}
 )
 
+if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+	set(ld_start_group "-Wl,--start-group" "fuse_static")
+	set(ld_end_group "-Wl,--end-group")
+endif()
+
 set(common_static_link_lib
-	-Wl,--start-group
+	${ld_start_group}
 	base
 	cutils
 	log
@@ -20,15 +25,10 @@ set(common_static_link_lib
 	ext2_uuid
 	lz4_static
 	liblzma
-	fuse_static
 	dl
 	erofs_static
-	-Wl,--end-group
+	${ld_end_group}
 )
-
-if (CMAKE_SYSTEM_NAME MATCHES "Android")
-	list(APPEND common_static_lib packagelistparser)
-endif()
 
 ###############################------mkfs.erofs------###############################
 set(TARGET_mkfs mkfs.erofs)
@@ -56,17 +56,19 @@ target_link_libraries(${TARGET_fsck} ${common_static_link_lib})
 target_compile_options(${TARGET_fsck} PRIVATE ${common_compile_flags})
 ##################################################################################
 
+if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 ###############################------fuse.erofs------###############################
-set(TARGET_fuse fuse.erofs)
-file(GLOB fuse_srcs "${PROJECT_ROOT_DIR}/fuse/*.c")
+	set(TARGET_fuse fuse.erofs)
+	file(GLOB fuse_srcs "${PROJECT_ROOT_DIR}/fuse/*.c")
 
-add_executable(${TARGET_fuse} ${fuse_srcs})
-target_precompile_headers(${TARGET_fuse} PRIVATE "${PROJECT_ROOT_DIR}/fuse/macosx.h")
-target_include_directories(${TARGET_fuse} PRIVATE ${common_headers} ${libfuse_headers})
-target_link_libraries(${TARGET_fuse} ${common_static_link_lib})
-target_compile_options(${TARGET_fuse} PRIVATE
-	${common_compile_flags}
-	"$<$<COMPILE_LANGUAGE:C>:${LIBFUSE_DEFAULTS_CFLAGS}>"
-	"$<$<COMPILE_LANGUAGE:CXX>:${LIBFUSE_DEFAULTS_CFLAGS}>"
-)
+	add_executable(${TARGET_fuse} ${fuse_srcs})
+	target_precompile_headers(${TARGET_fuse} PRIVATE "${PROJECT_ROOT_DIR}/fuse/macosx.h")
+	target_include_directories(${TARGET_fuse} PRIVATE ${common_headers} ${libfuse_headers})
+	target_link_libraries(${TARGET_fuse} ${common_static_link_lib})
+	target_compile_options(${TARGET_fuse} PRIVATE
+		${common_compile_flags}
+		"$<$<COMPILE_LANGUAGE:C>:${LIBFUSE_DEFAULTS_CFLAGS}>"
+		"$<$<COMPILE_LANGUAGE:CXX>:${LIBFUSE_DEFAULTS_CFLAGS}>"
+	)
 ##################################################################################
+endif()
