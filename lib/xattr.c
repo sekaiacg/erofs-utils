@@ -728,7 +728,12 @@ static int erofs_count_all_xattrs_from_path(const char *path)
 			break;
 
 		if (is_dot_dotdot(dp->d_name) ||
-		    !strncmp(dp->d_name, "lost+found", strlen("lost+found")))
+		    !strncmp(dp->d_name, "lost+found", strlen("lost+found"))
+#ifdef __APPLE__
+		    || !strncmp(dp->d_name, ".DS_Store", 9))
+#else
+				)
+#endif
 			continue;
 
 		ret = snprintf(buf, PATH_MAX, "%s/%s", path, dp->d_name);
