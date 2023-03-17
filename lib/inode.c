@@ -1123,7 +1123,12 @@ static int erofs_mkfs_build_tree(struct erofs_inode *dir, struct list_head *dirs
 		if (!dp)
 			break;
 
+#ifndef __APPLE__
 		if (is_dot_dotdot(dp->d_name))
+#else
+		if (is_dot_dotdot(dp->d_name) ||
+			!strncmp(dp->d_name, ".DS_Store", 9))
+#endif
 			continue;
 
 		/* skip if it's a exclude file */
