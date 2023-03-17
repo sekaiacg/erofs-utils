@@ -1,0 +1,40 @@
+--- init.c	2023-03-16 19:26:39.232694993 +0800
++++ init.c	2023-03-16 19:13:46.533484711 +0800
+@@ -5,10 +5,17 @@
+ #include <errno.h>
+ #include <ctype.h>
+ #include <stdio.h>
++#ifndef __APPLE__
+ #include <stdio_ext.h>
++#endif
+ #include <dlfcn.h>
+ #include <sys/statvfs.h>
++#ifndef __APPLE__
+ #include <sys/vfs.h>
++#endif
++#ifdef __APPLE__
++#include <sys/mount.h>
++#endif
+ #include <stdint.h>
+ #include <limits.h>
+ 
+@@ -63,7 +70,9 @@
+ 	fp = fopen("/proc/filesystems", "re");
+ 	if (!fp)
+ 		return 1; /* Fail as if it exists */
++#ifndef __APPLE__
+ 	__fsetlocking(fp, FSETLOCKING_BYCALLER);
++#endif
+ 
+ 	num = getline(&buf, &len, fp);
+ 	while (num != -1) {
+@@ -103,7 +112,9 @@
+ 	if (!fp)
+ 		goto out;
+ 
++#ifndef __APPLE__
+ 	__fsetlocking(fp, FSETLOCKING_BYCALLER);
++#endif
+ 	while ((num = getline(&buf, &len, fp)) != -1) {
+ 		char *tmp;
+ 		p = strchr(buf, ' ');
