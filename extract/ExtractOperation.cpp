@@ -12,6 +12,10 @@ namespace skkk {
 	void ExtractOperation::setImgPath(const char *path) {
 		imgPath = path;
 		strTrim(imgPath);
+#if defined(_WIN32) || defined(__CYGWIN__)
+		strReplaceAll(imgPath, "\\", "/");
+#endif
+
 		LOGCD("config: imagePath=%s", imgPath.c_str());
 		imgBaseName = path;
 		if (!imgPath.empty()) {
@@ -41,6 +45,9 @@ namespace skkk {
 	int ExtractOperation::initOutDir() {
 		int rc = RET_EXTRACT_DONE;
 		strTrim(outDir);
+#if defined(_WIN32) || defined(__CYGWIN__)
+		strReplaceAll(outDir, "\\", "/");
+#endif
 
 		if (outDir.empty()) {
 			configDir = "./config";
