@@ -73,8 +73,8 @@ add_link_options("$<$<LINK_LANGUAGE:C>:${GLOBAL_LDFLAGS}>" "$<$<LINK_LANGUAGE:CX
 set(LIB_DIR "${PROJECT_SOURCE_DIR}/../../src")
 set(PROJECT_ROOT_DIR "${PROJECT_SOURCE_DIR}/../..")
 
-execute_process(COMMAND sh
-	"${PROJECT_SOURCE_DIR}/../../scripts/get-version-number"
+execute_process(COMMAND sh -c
+	"cd ${PROJECT_SOURCE_DIR}/../../ && scripts/get-version-number"
 	OUTPUT_VARIABLE PROJECT_VERSION
 )
 string(REGEX REPLACE "\n$" "" PROJECT_VERSION "${PROJECT_VERSION}")
