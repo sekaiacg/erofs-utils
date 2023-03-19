@@ -474,11 +474,7 @@ again:
 			if (capabilities) {
 				eNode->setCapability(capabilities);
 				char capBuf[32] = {0};
-#if defined(__LP64__)
-				snprintf(capBuf, 32, " capabilities=0x%lX", capabilities);
-#else
-				snprintf(capBuf, 32, " capabilities=0x%llX", capabilities);
-#endif
+				snprintf(capBuf, 32, " capabilities=0x%" PRIX64, capabilities);
 				eNode->setFsConfigCapabilities(capBuf);
 			}
 		}
