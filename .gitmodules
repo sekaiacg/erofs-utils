@@ -21,7 +21,8 @@
 	url = https://android.googlesource.com/platform/external/selinux
 [submodule "src/xz"]
 	path = src/xz
-	url = https://github.com/sekaiacg/xz
+	url = https://github.com/tukaani-project/xz
+	branch = master
 [submodule "src/libfuse"]
 	path = src/libfuse
 	url = https://github.com/libfuse/libfuse
