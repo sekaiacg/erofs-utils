@@ -105,12 +105,15 @@ namespace skkk {
 	ErofsNode::writeFsConfigAndSeContext2File(FILE *fsConfigFile, FILE *seContextFile, const char *imgBaseName) const {
 		if (path == "/") [[unlikely]] {
 			fprintf(fsConfigFile, "%s\n", fsConfig.c_str());
-			fprintf(seContextFile, "/%s %s\n", imgBaseName, seContext.c_str());
+			fprintf(fsConfigFile, "%s%s\n", imgBaseName, fsConfig.c_str());
+			fprintf(seContextFile, "/ %s\n", seContext.c_str());
+			fprintf(seContextFile, "/%s(/.*)? %s\n", imgBaseName, seContext.c_str());
+		} else [[likely]] {
+			fprintf(fsConfigFile, "%s%s\n", imgBaseName, fsConfig.c_str());
+			string newPath = path;
+			handleSpecialSymbols(newPath);
+			fprintf(seContextFile, "/%s%s %s\n", imgBaseName, newPath.c_str(), seContext.c_str());
 		}
-		fprintf(fsConfigFile, "%s%s\n", imgBaseName, fsConfig.c_str());
-		string newPath = path;
-		handleSpecialSymbols(newPath);
-		fprintf(seContextFile, "/%s%s %s\n", imgBaseName, newPath.c_str(), seContext.c_str());
 	}
 
 	int ErofsNode::writeNodeEntity2File(const string &outDir) {
