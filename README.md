@@ -22,10 +22,14 @@ usage: [options]
   -x                  Extract all items
   --extract=X         Extract the target of path X
   -f, --overwrite     [default: skip] overwrite files that already exist
-  -T#                 [1-24] Use # threads, -T0: 12
+  -T#                 [1-X] Use # threads, -T0: X/2
   --only-cfg          Only extract fs_config and file_contexts
   -o, --outdir=X      Output dir
   -V, --version       Print the version info
+  erofs-utils:        x.x-gxxxxxxxx
+  extract.erofs:      x.x.x
+  extract author:     skkk
+
 ```
 
 **Contributors**
