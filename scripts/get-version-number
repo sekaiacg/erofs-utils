@@ -5,7 +5,10 @@ scm_version()
 {
 	# Check for git and a git repo.
 	if test -z "$(git rev-parse --show-cdup 2>/dev/null)" &&
-	   head="$(git rev-parse --verify HEAD 2>/dev/null)"; then
+	   #head="$(git rev-parse --verify HEAD 2>/dev/null)"; then
+	   flag="$(git log --pretty=format:'%H' --grep='make: switch cmake')"; then
+		num="$(git log ${flag}^...HEAD --oneline | wc -l)"
+		head="$(git rev-parse --verify HEAD~$(echo ${num} | tr -d '\r\n'))"
 		# If we are at a tagged commit, we ignore it.
 		if [ -z "$(git describe --exact-match 2>/dev/null)" ]; then
 			# Add -g and 8 hex chars.
