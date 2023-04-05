@@ -19,21 +19,21 @@ add_definitions(
 
 # Compile flags
 set(GLOBAL_CFLAGS
-	"-funwind-tables"
-	"-fstack-protector-strong"
 	"-Wformat"
 	"-Werror=format-security"
 	"-no-canonical-prefixes"
+	"-fdata-sections"
+	"-ffunction-sections"
+	"-fvisibility=hidden"
+	"-fvisibility-inlines-hidden"
+	"-funwind-tables"
+	"-fstack-protector-strong"
 	"-fno-exceptions"
 	"-fno-rtti"
 )
 set(GLOBAL_CFLAGS_RELEASE
 	"-Os"
 	"-D_FORTIFY_SOURCE=2"
-	"-fdata-sections"
-	"-ffunction-sections"
-	"-fvisibility=hidden"
-	"-fvisibility-inlines-hidden"
 )
 
 # Linker flags
