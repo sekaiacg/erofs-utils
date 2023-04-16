@@ -32,7 +32,11 @@ static inline int mkdirs(const char *dirPath, mode_t mode) {
 	strncpy(str, dirPath, PATH_MAX);
 	len = strlen(str);
 	for (int i = 0; i < len; i++) {
+#if !(defined(_WIN32) || defined(__CYGWIN__))
 		if (str[i] == '/' && i > 0) {
+#else
+		if (str[i] == '/' && i > 0 && str[i - 1] != ':') {
+#endif
 			str[i] = '\0';
 			if (access(str, F_OK) != 0) {
 				err = mkdir(str, mode);
