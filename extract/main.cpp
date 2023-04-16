@@ -5,6 +5,7 @@
 
 #include <getopt.h>
 #include <erofs/io.h>
+#include <erofs/compress.h>
 #include <erofs/config.h>
 #include <erofs/print.h>
 #include <sys/time.h>
@@ -15,21 +16,32 @@
 
 using namespace skkk;
 
-static void usage() {
+static inline void get_available_compressors(string &ret) {
+	unsigned int i = 0;
+	const char *s;
+
+	while ((s = z_erofs_list_available_compressors(i)) != nullptr) {
+		if (i++)
+			ret.append(", ");
+		ret.append(s);
+	}
+}
+
+static inline void usage() {
 	char buf[1024] = {0};
 	snprintf(buf, 1024,
 			 BROWN "usage: [options]" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-h, --help" COLOR_NONE "          " BROWN "Display this help and exit" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "  " BROWN "Image file" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-p" COLOR_NONE "                  " BROWN "Print all entrys" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "--print=X" COLOR_NONE "           " BROWN "Print the target of path X" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-x" COLOR_NONE "                  " BROWN "Extract all items" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "--extract=X" COLOR_NONE "         " BROWN "Extract the target of path X" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "     " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                 " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "          " BROWN "Only extract fs_config and file_contexts" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "      " BROWN "Output dir" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-V, --version" COLOR_NONE "       " BROWN "Print the version info" COLOR_NONE "\n",
+			 "  " GREEN2_BOLD "-h, --help" COLOR_NONE "              " BROWN "Display this help and exit" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "      " BROWN "Image file" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-p" COLOR_NONE "                      " BROWN "Print all entrys" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--print=X" COLOR_NONE "               " BROWN "Print the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-x" COLOR_NONE "                      " BROWN "Extract all items" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--extract=X" COLOR_NONE "             " BROWN "Extract the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config and file_contexts" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "          " BROWN "Output dir" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-V, --version" COLOR_NONE "           " BROWN "Print the version info" COLOR_NONE "\n",
 			 eo->limitHardwareConcurrency,
 			 eo->hardwareConcurrency
 	);
@@ -37,9 +49,12 @@ static void usage() {
 }
 
 static inline void print_version() {
-	printf("  " BROWN "erofs-utils:" COLOR_NONE "        " RED2_BOLD "%s" COLOR_NONE "\n", cfg.c_version);
-	printf("  " BROWN "extract.erofs:" COLOR_NONE "      " RED2_BOLD "1.0.2" COLOR_NONE "\n");
-	printf("  " BROWN "extract author:" COLOR_NONE "     " RED2_BOLD "skkk" COLOR_NONE "\n");
+	string compressors;
+	get_available_compressors(compressors);
+	printf("  " BROWN "erofs-utils:" COLOR_NONE "            " RED2_BOLD "%s" COLOR_NONE "\n", cfg.c_version);
+	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.2" COLOR_NONE "\n");
+	printf("  " BROWN "Available compressors:" COLOR_NONE "  " RED2_BOLD "%s" COLOR_NONE "\n", compressors.c_str());
+	printf("  " BROWN "extract author:" COLOR_NONE "         " RED2_BOLD "skkk" COLOR_NONE "\n");
 }
 
 static struct option arg_options[] = {
