@@ -30,6 +30,10 @@ set(common_static_link_lib
 	${ld_end_group}
 )
 
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+	list(APPEND common_static_link_lib "iconv")
+endif()
+
 ###############################------mkfs.erofs------###############################
 set(TARGET_mkfs mkfs.erofs)
 file(GLOB mkfs_srcs "${PROJECT_ROOT_DIR}/mkfs/*.c")
