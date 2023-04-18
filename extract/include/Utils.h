@@ -5,6 +5,7 @@
 #include <vector>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <iconv.h>
 
 using namespace std;
 
@@ -66,6 +67,30 @@ static inline void strReplaceAll(string &str, const string &oldValue, const stri
 		str.replace(pos, oldValueSize, newValue);
 		pos = str.find(oldValue, pos + newValueSize);
 	}
+}
+
+/**
+ *
+ * charset: UTF-16LE, UTF-8
+ *
+ * @param fromCharset
+ * @param toCharset
+ * @param input
+ * @return success: true
+ */
+static inline bool CharsetConvert(const char *fromCharset, const char *toCharset,
+		const char *input, size_t inputLen, const char *output, size_t *outputLen) {
+	bool ret = false;
+	iconv_t conv = iconv_open(toCharset, fromCharset);
+	if (conv != (iconv_t) -1) {
+		char *_input = const_cast<char *>(input);
+		char *_output = const_cast<char *>(output);
+		if (iconv(conv, &_input, &inputLen, &_output, outputLen) != -1) {
+			ret = true;
+		}
+		iconv_close(conv);
+	}
+	return ret;
 }
 
 #endif  // EXTRACT_UTILS_H
