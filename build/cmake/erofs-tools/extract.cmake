@@ -8,4 +8,4 @@ target_include_directories(${TARGET_extract} PRIVATE
         ${common_headers}
 )
 target_link_libraries(${TARGET_extract} ${common_static_link_lib})
-target_compile_options(${TARGET_extract} PRIVATE ${common_compile_flags})
+target_compile_options(${TARGET_extract} PRIVATE ${common_compile_flags} "-Wno-unused-result")
