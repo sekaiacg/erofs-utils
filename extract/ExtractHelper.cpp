@@ -10,6 +10,10 @@
 #include "ExtractOperation.h"
 #include "Logging.h"
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+#include <fileapi.h>
+#endif
+
 namespace skkk {
 
 	static int doInitNode(erofs_nid_t nid);
@@ -289,6 +293,39 @@ again:
 
 	}
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+	const char CYGLINK_MAGIC[] = "!<symlink>";
+
+	int symlink_cygwin(const char *from, const char *to) {
+		int fd;
+		size_t utf16Len = PATH_MAX;
+		char utf16LEBuf[PATH_MAX] = {0};
+
+		fd = open(to,
+				  O_WRONLY | O_CREAT | O_NOFOLLOW | O_EXCL,
+				  0700);
+		if (fd < 0) {
+			return -1;
+		}
+
+		if (!CharsetConvert("UTF-8",
+				  "UTF-16LE",
+				  from, strlen(from),
+				  utf16LEBuf, &utf16Len)) {
+			return -1;
+		}
+
+		write(fd, CYGLINK_MAGIC, strlen(CYGLINK_MAGIC));
+		write(fd, "\xFF\xFE", 2); //UTF16 BOM (little endian)
+		write(fd, utf16LEBuf, PATH_MAX - utf16Len);
+		write(fd, "\x0\x0", 2);
+		close(fd);
+		SetFileAttributesA(to, FILE_ATTRIBUTE_SYSTEM);
+		return 0;
+	}
+
+#endif
+
 	/**
 	 * Copy from fsck.erofs
 	 * Modified
@@ -315,7 +352,11 @@ again:
 
 		buf[inode->i_size] = '\0';
 again:
+#if !(defined(_WIN32) || defined(__CYGWIN__))
 		if (symlink(buf, filePath) < 0) {
+#else
+		if (symlink_cygwin(buf, filePath) < 0) {
+#endif
 			if (errno == EEXIST && eo->overwrite && tryagain) {
 				if (unlink(filePath) < 0) {
 					ret = -errno;
@@ -333,7 +374,6 @@ out:
 		if (buf)
 			free(buf);
 		return ret;
-
 	}
 
 	/**
