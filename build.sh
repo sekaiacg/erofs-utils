@@ -26,7 +26,8 @@ cmake_build()
 			-DANDROID_STL="c++_static" \
 			-DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
 			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF" \
-			-DENABLE_FULL_LTO="ON"
+			-DENABLE_FULL_LTO="ON" \
+			-DMAX_BLOCK_SIZE="4096"
 	elif [[ $TARGET == "Linux" ]]; then
 		local LINUX_PLATFORM=$4
 		local WSL="OFF"
@@ -38,7 +39,8 @@ cmake_build()
 			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
 			-DCMAKE_CXX_COMPILER="clang++" \
-			-DENABLE_FULL_LTO="ON"
+			-DENABLE_FULL_LTO="ON" \
+			-DMAX_BLOCK_SIZE="4096"
 	fi
 
 	${MAKE_CMD}
