@@ -17,6 +17,23 @@ add_definitions(
 	"-D_LARGEFILE64_SOURCE"
 )
 
+if (NOT MAX_BLOCK_SIZE)
+	try_run(CHECK_MAX_BLOCK_SIZE_RESULT
+		CHECK_MAX_BLOCK_SIZE_COMPILE_RESULT
+		${CMAKE_CURRENT_BINARY_DIR}/sources
+		${CMAKE_CURRENT_SOURCE_DIR}/sources/checkMaxBlockSize.c
+		NO_CACHE
+		RUN_OUTPUT_VARIABLE erofs_cv_max_block_size
+	)
+	if (erofs_cv_max_block_size GREATER 0)
+		add_definitions(-DEROFS_MAX_BLOCK_SIZE=${erofs_cv_max_block_size})
+	else ()
+		add_definitions(-DEROFS_MAX_BLOCK_SIZE=4096)
+	endif ()
+else ()
+	add_definitions(-DEROFS_MAX_BLOCK_SIZE=${MAX_BLOCK_SIZE})
+endif ()
+
 # Compile flags
 set(GLOBAL_CFLAGS
 	"-Wformat"
