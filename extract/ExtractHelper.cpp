@@ -27,28 +27,33 @@ namespace skkk {
 	 */
 	static int dirent_iter(struct erofs_dir_context *ctx) {
 		int ret;
-		size_t prev_pos = eo->iter_pos;
+		size_t prev_pos, curr_pos;
 
 		if (ctx->dot_dotdot)
 			return 0;
 
-		if (eo->iter_path) {
-			size_t curr_pos = prev_pos;
+		prev_pos = eo->iter_pos;
+		curr_pos = prev_pos;
 
+		if (prev_pos + ctx->de_namelen >= PATH_MAX) {
+			return -EOPNOTSUPP;
+		}
+
+		if (eo->iter_path) {
 			eo->iter_path[curr_pos++] = '/';
 			strncpy(eo->iter_path + curr_pos, ctx->dname,
 					ctx->de_namelen);
 			curr_pos += ctx->de_namelen;
 			eo->iter_path[curr_pos] = '\0';
-			eo->iter_pos = curr_pos;
+		} else {
+			curr_pos += ctx->de_namelen;
 		}
-
+		eo->iter_pos = curr_pos;
 		ret = doInitNode(ctx->de_nid);
 
-		if (eo->iter_path) {
+		if (eo->iter_path)
 			eo->iter_path[prev_pos] = '\0';
-			eo->iter_pos = prev_pos;
-		}
+		eo->iter_pos = prev_pos;
 		return ret;
 	}
 
@@ -159,6 +164,8 @@ out:
 		}
 
 		while (pos < inode->i_size) {
+			unsigned int alloc_rawsize;
+
 			map.m_la = pos;
 			if (compressed)
 				ret = z_erofs_map_blocks_iter(inode, &map,
@@ -184,10 +191,25 @@ out:
 			if (!(map.m_flags & EROFS_MAP_MAPPED) || !eo->check_decomp)
 				continue;
 
-			if (map.m_plen > raw_size) {
-				raw_size = map.m_plen;
-				raw = (char *) realloc(raw, raw_size);
-				BUG_ON(!raw);
+			if (map.m_plen > Z_EROFS_PCLUSTER_MAX_SIZE) {
+				if (compressed) {
+					ret = -EFSCORRUPTED;
+					goto out;
+				}
+				alloc_rawsize = Z_EROFS_PCLUSTER_MAX_SIZE;
+			} else {
+				alloc_rawsize = map.m_plen;
+			}
+
+			if (alloc_rawsize > raw_size) {
+				char *newraw = (char *) realloc(raw, alloc_rawsize);
+
+				if (!newraw) {
+					ret = -ENOMEM;
+					goto out;
+				}
+				raw = newraw;
+				raw_size = alloc_rawsize;
 			}
 
 			if (compressed) {
@@ -198,16 +220,27 @@ out:
 				}
 				ret = z_erofs_read_one_data(inode, &map, raw, buffer,
 											0, map.m_llen, false);
-			} else {
-				ret = erofs_read_one_data(&map, raw, 0, map.m_plen);
-			}
-			if (ret)
-				goto out;
+				if (ret)
+					goto out;
 
-			if (outfd > 0 && write(outfd, compressed ? buffer : raw,
-								   map.m_llen) < 0) {
-				ret = -EIO;
-				goto out;
+				if (outfd > 0 && write(outfd, buffer, map.m_llen) < 0)
+					goto fail_eio;
+			} else {
+				u64 p = 0;
+
+				do {
+					u64 count = min_t(u64, alloc_rawsize,
+									  map.m_llen);
+
+					ret = erofs_read_one_data(&map, raw, p, count);
+					if (ret)
+						goto out;
+
+					if (outfd > 0 && write(outfd, raw, count) < 0)
+						goto fail_eio;
+					map.m_llen -= count;
+					p += count;
+				} while (map.m_llen);
 			}
 		}
 
@@ -217,6 +250,10 @@ out:
 		if (buffer)
 			free(buffer);
 		return ret < 0 ? ret : 0;
+
+fail_eio:
+		ret = -EIO;
+		goto out;
 	}
 
 	/**
