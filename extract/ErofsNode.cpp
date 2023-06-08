@@ -65,10 +65,10 @@ namespace skkk {
 				return "INLINE";
 			case EROFS_INODE_CHUNK_BASED:
 				return "CHUNK";
-			case EROFS_INODE_FLAT_COMPRESSION_LEGACY:
-				return "COMPRESSION_LEGACY";
-			case EROFS_INODE_FLAT_COMPRESSION:
-				return "COMPRESSION";
+			case EROFS_INODE_COMPRESSED_FULL:
+				return "COMPRESSED_FULL";
+			case EROFS_INODE_COMPRESSED_COMPACT:
+				return "COMPRESSED_COMPACT";
 		}
 		return "UNKNOWN";
 	}
