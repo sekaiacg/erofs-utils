@@ -440,10 +440,10 @@ struct z_erofs_lcluster_index {
 /* check the EROFS on-disk layout strictly at compile time */
 static inline void erofs_check_ondisk_layout_definitions(void)
 {
-	const __le64 fmh __maybe_unused =
-		*(__le64 *)&(struct z_erofs_map_header) {
-			.h_clusterbits = 1 << Z_EROFS_FRAGMENT_INODE_BIT
-		};
+	struct z_erofs_map_header zemh __maybe_unused = {
+		.h_clusterbits = 1 << Z_EROFS_FRAGMENT_INODE_BIT
+	};
+	const __le64 fmh __maybe_unused = *(__le64 *)&zemh;
 
 	BUILD_BUG_ON(sizeof(struct erofs_super_block) != 128);
 	BUILD_BUG_ON(sizeof(struct erofs_inode_compact) != 32);
