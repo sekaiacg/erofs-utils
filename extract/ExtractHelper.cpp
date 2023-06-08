@@ -155,8 +155,8 @@ out:
 			case EROFS_INODE_CHUNK_BASED:
 				compressed = false;
 				break;
-			case EROFS_INODE_FLAT_COMPRESSION_LEGACY:
-			case EROFS_INODE_FLAT_COMPRESSION:
+			case EROFS_INODE_COMPRESSED_FULL:
+			case EROFS_INODE_COMPRESSED_COMPACT:
 				compressed = true;
 				break;
 			default:
