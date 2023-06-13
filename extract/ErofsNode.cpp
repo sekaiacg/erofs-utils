@@ -75,9 +75,9 @@ namespace skkk {
 
 	const string &ErofsNode::getFsConfig() const { return fsConfig; }
 
-	const string &ErofsNode::getSeLabel() const { return seContext; }
+	const string &ErofsNode::getSelinuxLabel() const { return selinuxLabel; }
 
-	void ErofsNode::setSeContext(const string &_seContext) { this->seContext = _seContext; }
+	void ErofsNode::setSelinuxLabel(const string &label) { this->selinuxLabel = label; }
 
 	uint64_t ErofsNode::getCapability() const { return capabilities; }
 
@@ -101,18 +101,33 @@ namespace skkk {
 		return false;
 	}
 
-	void
-	ErofsNode::writeFsConfigAndSeContext2File(FILE *fsConfigFile, FILE *seContextFile, const char *imgBaseName) const {
+	void ErofsNode::writeFsConfig2File(FILE *fsConfigFile, const char *mountPoint) const {
 		if (path == "/") [[unlikely]] {
 			fprintf(fsConfigFile, "%s\n", fsConfig.c_str());
-			fprintf(fsConfigFile, "%s%s\n", imgBaseName, fsConfig.c_str());
-			fprintf(seContextFile, "/ %s\n", seContext.c_str());
-			fprintf(seContextFile, "/%s(/.*)? %s\n", imgBaseName, seContext.c_str());
+			fprintf(fsConfigFile, "%s%s\n", mountPoint, fsConfig.c_str());
+			for (auto &otherPath: otherPathsInRootDir) {
+				fprintf(fsConfigFile, "%s%s 0 0 0755\n", mountPoint, otherPath.c_str());
+			}
 		} else [[likely]] {
-			fprintf(fsConfigFile, "%s%s\n", imgBaseName, fsConfig.c_str());
-			string newPath = path;
+			fprintf(fsConfigFile, "%s%s\n", mountPoint, fsConfig.c_str());
+		}
+	}
+
+	void ErofsNode::writeSelinuxLabel2File(FILE *selinuxLabelsFile, const char *mountPoint) const {
+		string newPath;
+		if (path == "/") [[unlikely]] {
+			fprintf(selinuxLabelsFile, "/ %s\n", selinuxLabel.c_str());
+			fprintf(selinuxLabelsFile, "/%s %s\n", mountPoint, selinuxLabel.c_str());
+			fprintf(selinuxLabelsFile, "/%s/ %s\n", mountPoint, selinuxLabel.c_str());
+			for (auto &otherPath: otherPathsInRootDir) {
+				newPath = otherPath;
+				handleSpecialSymbols(newPath);
+				fprintf(selinuxLabelsFile, "/%s%s %s\n", mountPoint, newPath.c_str(), selinuxLabel.c_str());
+			}
+		} else [[likely]] {
+			newPath = path;
 			handleSpecialSymbols(newPath);
-			fprintf(seContextFile, "/%s%s %s\n", imgBaseName, newPath.c_str(), seContext.c_str());
+			fprintf(selinuxLabelsFile, "/%s%s %s\n", mountPoint, newPath.c_str(), selinuxLabel.c_str());
 		}
 	}
 
