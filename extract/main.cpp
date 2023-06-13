@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
 			ret = RET_EXTRACT_CREATE_DIR_FAIL;
 			goto exit_dev_close;
 		}
-		eo->extractFsConfigAndSeLabel();
+		eo->extractFsConfigAndSelinuxLabel();
 		goto end;
 	}
 
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
 			ret = RET_EXTRACT_CREATE_DIR_FAIL;
 			goto exit_dev_close;
 		}
-		eo->extractFsConfigAndSeLabel();
+		eo->extractFsConfigAndSelinuxLabel();
 		eo->useMultiThread ? eo->extractErofsNodeMultiThread() : eo->extractErofsNode();
 		goto end;
 	}
