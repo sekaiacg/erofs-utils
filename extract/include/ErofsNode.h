@@ -3,6 +3,7 @@
 
 #include <string>
 #include <erofs/internal.h>
+#include <set>
 
 #include "Utils.h"
 
@@ -17,6 +18,10 @@ namespace skkk {
 		strReplaceAll(str, "]", "\\]");
 	}
 
+	static set<string> otherPathsInRootDir = {
+			"/lost+found"
+	};
+
 	/**
 	 * erofs node
 	 */
@@ -26,7 +31,7 @@ namespace skkk {
 			short typeId = EROFS_FT_UNKNOWN;
 			erofs_inode *inode = nullptr;
 			string fsConfig;
-			string seContext;
+			string selinuxLabel;
 			erofs_nid_t nid;
 			umode_t i_mode;
 			u32 i_uid;
@@ -54,9 +59,9 @@ namespace skkk {
 
 			const string &getFsConfig() const;
 
-			const string &getSeLabel() const;
+			const string &getSelinuxLabel() const;
 
-			void setSeContext(const string &_seContext);
+			void setSelinuxLabel(const string &label);
 
 			uint64_t getCapability() const;
 
@@ -66,7 +71,9 @@ namespace skkk {
 
 			bool initExceptionInfo(int err);
 
-			void writeFsConfigAndSeContext2File(FILE *fsConfigFile, FILE *seContextFile, const char *imgBaseName) const;
+			void writeFsConfig2File(FILE *fsConfigFile, const char *mountPoint) const;
+
+			void writeSelinuxLabel2File(FILE *selinuxLabelsFile, const char *mountPoint) const;
 
 			int writeNodeEntity2File(const string &outDir);
 
