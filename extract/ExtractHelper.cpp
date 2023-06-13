@@ -522,7 +522,7 @@ again:
 		// "security.selinux"
 		len = erofs_getxattr(inode, XATTR_NAME_SELINUX, buf, 128);
 		if (len > 0) {
-			eNode->setSeContext(string(buf, len));
+			eNode->setSelinuxLabel(string(buf, len));
 		}
 
 		// security.capability
