@@ -110,10 +110,11 @@ namespace skkk {
 #else
 
 			const ErofsNode *eNode = ExtractOperation::createErofsNode(eo->iter_path, typeId, &inode);
-			LOGCD("type=%s dataLayout=%s %s",
+			LOGCD("type=%s dataLayout=%s %s %s",
 				  eNode->getTypeIdCStr(),
 				  eNode->getDataLayoutCStr(),
-				  eNode->getFsConfig().c_str()
+				  eNode->getFsConfig().c_str(),
+				  eNode->getSelinuxLabel().c_str()
 			);
 #endif
 		}
