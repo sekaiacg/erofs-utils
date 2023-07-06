@@ -120,7 +120,7 @@ namespace skkk {
 			 * print all extract entity
 			 * "Extract: type=DIR dataLayout= / 0 0 0644 capabilities=0x0"
 			 */
-			static void printInitializedNode() ;
+			static void printInitializedNode();
 
 			void extractFsConfigAndSelinuxLabel() const;
 
