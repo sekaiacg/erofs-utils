@@ -1,3 +1,4 @@
+#include <mutex>
 #include <sys/stat.h>
 #include <utime.h>
 #include <erofs/compress.h>
@@ -8,6 +9,7 @@
 #include "ErofsNode.h"
 #include "ExtractState.h"
 #include "ExtractOperation.h"
+#include "ErofsHardlinkHandle.h"
 #include "Logging.h"
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -415,6 +417,39 @@ out:
 	}
 
 	/**
+	 * erofs_extract_hardlink
+	 *
+	 * @param srcPath
+	 * @param targetPath
+	 * @return
+	 */
+	int erofs_extract_hardlink(erofs_inode *inode, const char *srcPath, const char *targetPath) {
+		bool tryagain = true;
+		int ret = 0;
+
+		if (!fileExists(srcPath))
+			ret = erofs_extract_file(inode, srcPath);
+again:
+		if (strncmp(srcPath, targetPath, strlen(targetPath)) != 0 &&
+			link(srcPath, targetPath) < 0) {
+			if (errno == EEXIST && eo->overwrite && tryagain) {
+				if (unlink(targetPath) < 0) {
+					ret = -errno;
+					goto out;
+				}
+				tryagain = false;
+				goto again;
+			}
+			if (errno == EEXIST && !eo->overwrite) {
+				return RET_EXTRACT_FAIL_SKIP;
+			}
+			ret = -errno;
+		}
+out:
+		return ret;
+	}
+
+	/**
 	 * Copy from fsck.erofs
 	 * Modified
 	 *
@@ -495,6 +530,14 @@ again:
 		string _tmp = outDir + eNode->getPath();
 		const char *filePath = _tmp.c_str();
 		erofs_inode *inode = eNode->getErofsInode();
+		const char *hardlinkSrcPath;
+
+		hardlinkSrcPath = erofsHardlinkFind(inode->nid);
+		if (hardlinkSrcPath) {
+			unique_lock lock(erofsHardlinkLock);
+			return erofs_extract_hardlink(inode, (outDir + hardlinkSrcPath).c_str(), filePath);
+		}
+
 		switch (eNode->getTypeId()) {
 			case EROFS_FT_DIR:
 				err = erofs_extract_dir(filePath);
