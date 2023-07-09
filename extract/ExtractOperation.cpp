@@ -3,6 +3,7 @@
 #include "ExtractOperation.h"
 #include "ExtractState.h"
 #include "ExtractHelper.h"
+#include "ErofsHardlinkHandle.h"
 #include "Logging.h"
 #include "Utils.h"
 #include "threadpool.h"
@@ -35,6 +36,7 @@ namespace skkk {
 		erofsNodes.clear();
 		nodeDirs.clear();
 		nodeOther.clear();
+		erofsHardlinkExit();
 	}
 
 	const string &ExtractOperation::getImgPath() const { return imgPath; }
@@ -130,15 +132,27 @@ namespace skkk {
 		return eNode;
 	}
 
-	void ExtractOperation::initDirAndOther() {
-		for_each(erofsNodes.begin(), erofsNodes.end(), [](auto &eNode) {
+	void ExtractOperation::erofsNodeClassification() {
+		for (auto &eNode: erofsNodes) {
 			if (eNode->getTypeId() == EROFS_FT_DIR) {
 				nodeDirs.push_back(eNode);
+			} else if (eNode->getNlink() > 1) {
+				auto nid = eNode->getNid();
+				if (erofsHardlinkFind(nid) == nullptr) {
+					int ret = erofsHardlinkInsert(eNode->getNid(), eNode->getPath().c_str());
+					if (ret < 0) {
+						LOGCE("erofsHardlinkInsert: err=%d[%s] path=%s",
+							  ret,
+							  strerror(abs(ret)),
+							  eNode->getPath().c_str());
+					}
+				}
+				nodeOther.push_back(eNode);
 			} else {
 				nodeOther.push_back(eNode);
 			}
-		});
-		LOGCD("initDirAndOther done");
+		}
+		LOGCD("erofsNodeClassification done");
 	}
 
 	void ExtractOperation::addErofsNode(ErofsNode *eNode) { erofsNodes.push_back(eNode); }
@@ -225,7 +239,7 @@ namespace skkk {
 	}
 
 	void ExtractOperation::extractNodeDirs() const {
-		ExtractOperation::initDirAndOther();
+		ExtractOperation::erofsNodeClassification();
 		if (!nodeDirs.empty()) {
 			for (const auto &eNode: nodeDirs) {
 				extractNodeTask(eNode, outDir);
