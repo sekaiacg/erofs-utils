@@ -38,6 +38,7 @@ namespace skkk {
 			u32 i_gid;
 			uint64_t i_mtime;
 			u32 i_mtime_nsec;
+			u32 i_nlink;
 			unsigned char dataLayout;
 			uint64_t capabilities = 0;
 			string extractExceptionInfo;
@@ -68,6 +69,10 @@ namespace skkk {
 			void setCapability(uint64_t _capabilities);
 
 			void setFsConfigCapabilities(const char *capabilitiesStr);
+
+			erofs_nid_t getNid() const;
+
+			u32 getNlink() const;
 
 			bool initExceptionInfo(int err);
 

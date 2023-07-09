@@ -48,6 +48,16 @@ namespace skkk {
 	 */
 	int erofs_extract_symlink(struct erofs_inode *inode, const char *filePath);
 
+
+	/**
+	 * erofs_extract_hardlink
+	 *
+	 * @param srcPath
+	 * @param targetPath
+	 * @return
+	 */
+	int erofs_extract_hardlink(erofs_inode *inode, const char *srcPath, const char *targetPath);
+
 	/**
 	 * erofs_extract_special
 	 * Copy from fsck.erofs
