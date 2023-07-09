@@ -13,6 +13,7 @@
 #include "Logging.h"
 
 #if defined(_WIN32) || defined(__CYGWIN__)
+#include <winbase.h>
 #include <fileapi.h>
 #endif
 
@@ -431,7 +432,11 @@ out:
 			ret = erofs_extract_file(inode, srcPath);
 again:
 		if (strncmp(srcPath, targetPath, strlen(targetPath)) != 0 &&
+#if !(defined(_WIN32) || defined(__CYGWIN__))
 			link(srcPath, targetPath) < 0) {
+#else
+			createHardLinkA(targetPath, srcPath) != true) {
+#endif
 			if (errno == EEXIST && eo->overwrite && tryagain) {
 				if (unlink(targetPath) < 0) {
 					ret = -errno;
