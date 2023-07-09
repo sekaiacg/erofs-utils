@@ -1,6 +1,8 @@
+#include <mutex>
 #include "ErofsNode.h"
 #include "ExtractHelper.h"
 #include "ExtractState.h"
+#include "ErofsHardlinkHandle.h"
 
 #define FS_CONFIG_BUF_SIZE (PATH_MAX + 256)
 
@@ -15,6 +17,7 @@ namespace skkk {
 		this->i_gid = inode->i_gid;
 		this->i_mtime = inode->i_mtime;
 		this->i_mtime_nsec = inode->i_mtime_nsec;
+		this->i_nlink = inode->i_nlink;
 		this->dataLayout = inode->datalayout;
 		char buf[FS_CONFIG_BUF_SIZE] = {0};
 		snprintf(buf, FS_CONFIG_BUF_SIZE, "%s %u %u %04o",
@@ -85,6 +88,10 @@ namespace skkk {
 
 	void ErofsNode::setFsConfigCapabilities(const char *capabilitiesStr) { fsConfig.append(capabilitiesStr); }
 
+	erofs_nid_t ErofsNode::getNid() const { return this->nid; };
+
+	u32 ErofsNode::getNlink() const { return this->i_nlink; };
+
 	bool ErofsNode::initExceptionInfo(int err) {
 		if (err && err != RET_EXTRACT_FAIL_SKIP) [[unlikely]] {
 			char buf[FS_CONFIG_BUF_SIZE] = {0};
@@ -135,7 +142,15 @@ namespace skkk {
 		int err = RET_EXTRACT_DONE;
 		string _tmp = outDir + path;
 		const char *filePath = _tmp.c_str();
-		switch (this->typeId) {
+		const char *hardlinkSrcPath;
+
+		hardlinkSrcPath = erofsHardlinkFind(nid);
+		if (hardlinkSrcPath) {
+			unique_lock lock(erofsHardlinkLock);
+			return erofs_extract_hardlink(inode, (outDir + hardlinkSrcPath).c_str(), filePath);
+		}
+
+		switch (typeId) {
 			case EROFS_FT_DIR:
 				err = erofs_extract_dir(filePath);
 				break;

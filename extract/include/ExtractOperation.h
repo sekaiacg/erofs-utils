@@ -110,7 +110,7 @@ namespace skkk {
 			 */
 			static const ErofsNode *createErofsNode(const char *path, short typeId, struct erofs_inode *inode);
 
-			static void initDirAndOther();
+			static void erofsNodeClassification();
 
 			static void addErofsNode(ErofsNode *eNode);
 
