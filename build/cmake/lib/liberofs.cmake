@@ -49,7 +49,7 @@ check_struct_has_member("struct stat" "st_atim" "sys/stat.h" HAVE_STRUCT_STAT_ST
 check_struct_has_member("struct stat" "st_atimespec" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIMESPEC)
 configure_file(
 	"${CMAKE_CURRENT_SOURCE_DIR}/liberofs_config.h.in"
-	"${CMAKE_BINARY_DIR}/liberofs_config.h"
+	"${CMAKE_BINARY_DIR}/config.h"
 )
 
 set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
@@ -107,7 +107,7 @@ endif()
 add_library(${TARGET} STATIC ${liberofs_srcs})
 
 target_precompile_headers(${TARGET} PRIVATE "${CMAKE_BINARY_DIR}/erofs-utils-version.h")
-target_precompile_headers(${TARGET} PUBLIC "${CMAKE_BINARY_DIR}/liberofs_config.h")
+target_precompile_headers(${TARGET} PUBLIC "${CMAKE_BINARY_DIR}/config.h")
 
 target_include_directories(${TARGET} PRIVATE
 	${liberofs_headers}
