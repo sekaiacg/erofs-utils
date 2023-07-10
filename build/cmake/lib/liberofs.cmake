@@ -13,12 +13,15 @@ set(liberofs_include_list
 	"sys/ioctl.h"
 	"sys/sysmacros.h"
 )
-check_include(liberofs_include_list)
+
 set(liberofs_function_list
 	"backtrace"
 	"utimensat"
 )
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+	list(APPEND liberofs_include_list
+		"sys/random.h"
+	)
 	list(APPEND liberofs_function_list
 		"copy_file_range"
 		"fallocate"
@@ -35,7 +38,10 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 			"llistxattr"
 		)
 	endif ()
+elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+	set(DARWIN_CFLAGS "-DHAVE_LIBUUID")
 endif ()
+check_include(liberofs_include_list)
 check_fun(liberofs_function_list)
 check_symbol_exists(lseek64 "unistd.h" HAVE_LSEEK64_PROTOTYPE)
 check_symbol_exists(TIOCGWINSZ "sys/ioctl.h" GWINSZ_IN_SYS_IOCTL)
@@ -54,11 +60,11 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-Wno-unused-function"
 	"-Wno-deprecated-declarations"
 	"-DHAVE_LIBSELINUX"
-	"-DHAVE_LIBUUID"
 	"-DLZ4_ENABLED"
 	"-DLZ4HC_ENABLED"
 	"-DHAVE_LIBLZMA"
 	"-DWITH_ANDROID"
+	"${DARWIN_CFLAGS}"
 	CACHE INTERNAL "liberofs_static_defaults_cflags"
 )
 
@@ -85,6 +91,8 @@ set(liberofs_srcs
 	"${TARGET_SRC_DIR}/fragments.c"
 	"${TARGET_SRC_DIR}/rb_tree.c"
 	"${TARGET_SRC_DIR}/dedupe.c"
+	"${TARGET_SRC_DIR}/uuid.c"
+	"${TARGET_SRC_DIR}/uuid_unparse.c"
 	"${TARGET_SRC_DIR}/compressor_lz4.c"
 	"${TARGET_SRC_DIR}/compressor_lz4hc.c"
 	"${TARGET_SRC_DIR}/compressor_liblzma.c"
