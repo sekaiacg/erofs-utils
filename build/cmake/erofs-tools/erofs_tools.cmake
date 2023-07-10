@@ -22,7 +22,6 @@ set(common_static_link_lib
 	log
 	selinux
 	pcre2
-	ext2_uuid
 	lz4_static
 	liblzma
 	dl
@@ -31,7 +30,7 @@ set(common_static_link_lib
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-	list(APPEND common_static_link_lib "iconv")
+	list(APPEND common_static_link_lib "ext2_uuid" "iconv")
 endif()
 
 ###############################------mkfs.erofs------###############################
