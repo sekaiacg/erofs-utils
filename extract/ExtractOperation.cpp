@@ -253,7 +253,7 @@ namespace skkk {
 			int nodeOtherSize = nodeOther.size();
 			for (int i = 0; i < nodeOtherSize; i++) {
 				extractNodeTask(nodeOther[i], outDir);
-				printExtractProgress(nodeOtherSize, i + 1, 4, true);
+				printExtractProgress(nodeOtherSize, i + 1, 2, true);
 			}
 		}
 		// If there is an exception
@@ -273,7 +273,7 @@ namespace skkk {
 		int i = 0;
 		while (extractTaskRunCount < nodeOtherSize) {
 			if (i != extractTaskRunCount) {
-				printExtractProgress(nodeOtherSize, extractTaskRunCount, 2, false);
+				printExtractProgress(nodeOtherSize, extractTaskRunCount, 1, false);
 				i = extractTaskRunCount;
 			}
 			sleep(0);
