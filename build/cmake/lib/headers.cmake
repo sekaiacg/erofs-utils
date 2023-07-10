@@ -9,10 +9,10 @@ set(liblzma_headers               "${LIB_DIR}/xz/src/liblzma/api"               
 set(libpcre2_headers              "${LIB_DIR}/pcre/include"                         CACHE INTERNAL "libpcre2_headers")
 set(libselinux_headers            "${LIB_DIR}/selinux/libselinux/include"           CACHE INTERNAL "libselinux_headers")
 set(libfuse_headers               "${LIB_DIR}/libfuse/include"                      CACHE INTERNAL "libfuse_headers")
-set(liberofs_headers              "${PROJECT_ROOT_DIR}/include"                     CACHE INTERNAL "liberofs_headers")
-set(libpackagelistparser_headers  "${LIB_DIR}/core/libpackagelistparser/include"    CACHE INTERNAL "libpackagelistparser_headers")
-set(libe2fsprogs_headers
-	"${LIB_DIR}/e2fsprogs/lib"
-	"${LIB_DIR}/e2fsprogs/lib/uuid"
-	CACHE INTERNAL "libe2fsprogs_headers"
+set(liberofs_headers
+	"${PROJECT_ROOT_DIR}/include"
+	"${CMAKE_BINARY_DIR}"
+	CACHE INTERNAL "liberofs_headers"
 )
+set(libpackagelistparser_headers  "${LIB_DIR}/core/libpackagelistparser/include"    CACHE INTERNAL "libpackagelistparser_headers")
+set(libe2fsprogs_headers          "${LIB_DIR}/e2fsprogs/lib/uuid"                   CACHE INTERNAL "libe2fsprogs_headers")
