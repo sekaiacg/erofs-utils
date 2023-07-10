@@ -9,6 +9,7 @@
 #cmakedefine HAVE_LINUX_XATTR_H 1
 #cmakedefine HAVE_SYS_IOCTL_H 1
 #cmakedefine HAVE_SYS_SYSMACROS_H 1
+#cmakedefine HAVE_SYS_RANDOM_H 1
 
 // Functions
 #cmakedefine HAVE_BACKTRACE 1
