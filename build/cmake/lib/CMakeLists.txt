@@ -4,10 +4,11 @@ include(libcutils.cmake)
 include(liblog.cmake)
 include(libpcre2.cmake)
 include(libselinux.cmake)
-include(libext2_uuid.cmake)
 include(liberofs.cmake)
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	include(libfuse/libfuse.cmake)
+elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+	include(libext2_uuid.cmake)
 endif()
 
 # Thrid part library
