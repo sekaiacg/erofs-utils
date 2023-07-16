@@ -4,7 +4,6 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <erofs/internal.h>
 
 using namespace std;
 
@@ -16,20 +15,20 @@ namespace skkk {
 
 	class ErofsHardlinkEntry {
 		public:
-			erofs_nid_t nid = 0;
+			uint64_t nid = 0;
 			string path;
 		public:
 			ErofsHardlinkEntry() = default;
 
-			ErofsHardlinkEntry(erofs_nid_t _nid, const char *_path);
+			ErofsHardlinkEntry(uint64_t _nid, const char *_path);
 
 	};
 
 	inline static unordered_map<uint64_t, ErofsHardlinkEntry> erofsHardlinkMap;
 
-	int erofsHardlinkInsert(erofs_nid_t nid, const char *path);
+	int erofsHardlinkInsert(uint64_t nid, const char *path);
 
-	const char *erofsHardlinkFind(erofs_nid_t nid);
+	const char *erofsHardlinkFind(uint64_t nid);
 
 	void erofsHardlinkExit();
 
