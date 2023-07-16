@@ -13,6 +13,7 @@
 #include "Logging.h"
 
 #if defined(_WIN32) || defined(__CYGWIN__)
+#include <windef.h>
 #include <winbase.h>
 #include <fileapi.h>
 #endif
@@ -435,7 +436,7 @@ again:
 #if !(defined(_WIN32) || defined(__CYGWIN__))
 			link(srcPath, targetPath) < 0) {
 #else
-			createHardLinkA(targetPath, srcPath) != true) {
+			CreateHardLinkA(targetPath, srcPath, nullptr) != true) {
 #endif
 			if (errno == EEXIST && eo->overwrite && tryagain) {
 				if (unlink(targetPath) < 0) {
