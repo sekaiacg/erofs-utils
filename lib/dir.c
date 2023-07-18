@@ -9,6 +9,7 @@ static int traverse_dirents(struct erofs_dir_context *ctx,
 			    unsigned int next_nameoff, unsigned int maxsize,
 			    bool fsck)
 {
+	struct erofs_inode *dir = ctx->dir;
 	struct erofs_dirent *de = dentry_blk;
 	const struct erofs_dirent *end = dentry_blk + next_nameoff;
 	const char *prev_name = NULL;
@@ -76,7 +77,7 @@ static int traverse_dirents(struct erofs_dir_context *ctx,
 					goto out;
 				}
 				ctx->flags |= EROFS_READDIR_DOTDOT_FOUND;
-				if (sbi.root_nid == ctx->dir->nid) {
+				if (sbi.root_nid == dir->nid) {
 					ctx->pnid = sbi.root_nid;
 					ctx->flags |= EROFS_READDIR_VALID_PNID;
 				}
@@ -95,7 +96,7 @@ static int traverse_dirents(struct erofs_dir_context *ctx,
 				}
 
 				ctx->flags |= EROFS_READDIR_DOT_FOUND;
-				if (fsck && ctx->de_nid != ctx->dir->nid) {
+				if (fsck && ctx->de_nid != dir->nid) {
 					errmsg = "corrupted `.' dirent";
 					goto out;
 				}
@@ -115,7 +116,7 @@ static int traverse_dirents(struct erofs_dir_context *ctx,
 out:
 	if (ret && !silent)
 		erofs_err("%s @ nid %llu, lblk %u, index %lu",
-			  errmsg, ctx->dir->nid | 0ULL, lblk,
+			  errmsg, dir->nid | 0ULL, lblk,
 			  (de - (struct erofs_dirent *)dentry_blk) | 0UL);
 	return ret;
 }
