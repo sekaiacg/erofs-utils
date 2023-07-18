@@ -49,14 +49,6 @@ struct z_erofs_vle_compress_ctx {
 
 #define Z_EROFS_LEGACY_MAP_HEADER_SIZE	Z_EROFS_FULL_INDEX_ALIGN(0)
 
-static unsigned int vle_compressmeta_capacity(erofs_off_t filesize)
-{
-	const unsigned int indexsize = BLK_ROUND_UP(filesize) *
-		sizeof(struct z_erofs_lcluster_index);
-
-	return Z_EROFS_LEGACY_MAP_HEADER_SIZE + indexsize;
-}
-
 static void z_erofs_write_indexes_final(struct z_erofs_vle_compress_ctx *ctx)
 {
 	const unsigned int type = Z_EROFS_LCLUSTER_TYPE_PLAIN;
@@ -843,7 +835,9 @@ int erofs_write_compressed_file(struct erofs_inode *inode, int fd)
 	erofs_blk_t blkaddr, compressed_blocks;
 	unsigned int legacymetasize;
 	int ret;
-	u8 *compressmeta = malloc(vle_compressmeta_capacity(inode->i_size));
+	u8 *compressmeta = malloc(BLK_ROUND_UP(inode->i_size) *
+				  sizeof(struct z_erofs_lcluster_index) +
+				  Z_EROFS_LEGACY_MAP_HEADER_SIZE);
 
 	if (!compressmeta)
 		return -ENOMEM;
