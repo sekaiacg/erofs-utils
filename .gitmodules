@@ -27,3 +27,7 @@
 	path = src/libfuse
 	url = https://github.com/libfuse/libfuse
 	branch = master
+[submodule "src/zlib"]
+	path = src/zlib
+	url = https://android.googlesource.com/platform/external/zlib
+	branch = main
