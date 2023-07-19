@@ -24,6 +24,7 @@ set(common_static_link_lib
 	pcre2
 	lz4_static
 	liblzma
+	z_stable
 	dl
 	erofs_static
 	${ld_end_group}
