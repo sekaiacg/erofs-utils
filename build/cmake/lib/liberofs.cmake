@@ -92,10 +92,13 @@ set(liberofs_srcs
 	"${TARGET_SRC_DIR}/rb_tree.c"
 	"${TARGET_SRC_DIR}/dedupe.c"
 	"${TARGET_SRC_DIR}/uuid.c"
+	"${TARGET_SRC_DIR}/tar.c"
 	"${TARGET_SRC_DIR}/uuid_unparse.c"
 	"${TARGET_SRC_DIR}/compressor_lz4.c"
 	"${TARGET_SRC_DIR}/compressor_lz4hc.c"
 	"${TARGET_SRC_DIR}/compressor_liblzma.c"
+	"${TARGET_SRC_DIR}/kite_deflate.c"
+	"${TARGET_SRC_DIR}/compressor_deflate.c"
 )
 
 include(CheckCXXCompilerFlag)
