@@ -39,7 +39,7 @@ static int z_erofs_fill_inode_lazy(struct erofs_inode *vi)
 	if (vi->flags & EROFS_I_Z_INITED)
 		return 0;
 
-	pos = round_up(iloc(vi->nid) + vi->inode_isize + vi->xattr_isize, 8);
+	pos = round_up(erofs_iloc(vi) + vi->inode_isize + vi->xattr_isize, 8);
 	ret = dev_read(0, buf, pos, sizeof(buf));
 	if (ret < 0)
 		return -EIO;
@@ -143,7 +143,7 @@ static int legacy_load_cluster_from_disk(struct z_erofs_maprecorder *m,
 					 unsigned long lcn)
 {
 	struct erofs_inode *const vi = m->inode;
-	const erofs_off_t ibase = iloc(vi->nid);
+	const erofs_off_t ibase = erofs_iloc(vi);
 	const erofs_off_t pos = Z_EROFS_FULL_INDEX_ALIGN(ibase +
 			vi->inode_isize + vi->xattr_isize) +
 		lcn * sizeof(struct z_erofs_lcluster_index);
@@ -342,7 +342,7 @@ static int compacted_load_cluster_from_disk(struct z_erofs_maprecorder *m,
 {
 	struct erofs_inode *const vi = m->inode;
 	const unsigned int lclusterbits = vi->z_logical_clusterbits;
-	const erofs_off_t ebase = round_up(iloc(vi->nid) + vi->inode_isize +
+	const erofs_off_t ebase = round_up(erofs_iloc(vi) + vi->inode_isize +
 					   vi->xattr_isize, 8) +
 		sizeof(struct z_erofs_map_header);
 	const unsigned int totalidx = BLK_ROUND_UP(vi->i_size);

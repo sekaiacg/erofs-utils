@@ -325,7 +325,7 @@ static int erofs_verify_xattr(struct erofs_inode *inode)
 		}
 	}
 
-	addr = iloc(inode->nid) + inode->inode_isize;
+	addr = erofs_iloc(inode) + inode->inode_isize;
 	ret = dev_read(0, buf, addr, xattr_hdr_size);
 	if (ret < 0) {
 		erofs_err("failed to read xattr header @ nid %llu: %d",

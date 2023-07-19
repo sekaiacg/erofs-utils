@@ -871,8 +871,8 @@ static int init_inode_xattrs(struct erofs_inode *vi)
 		return -ENOATTR;
 	}
 
-	it.blkaddr = erofs_blknr(iloc(vi->nid) + vi->inode_isize);
-	it.ofs = erofs_blkoff(iloc(vi->nid) + vi->inode_isize);
+	it.blkaddr = erofs_blknr(erofs_iloc(vi) + vi->inode_isize);
+	it.ofs = erofs_blkoff(erofs_iloc(vi) + vi->inode_isize);
 
 	ret = blk_read(0, it.page, it.blkaddr, 1);
 	if (ret < 0)
@@ -962,8 +962,8 @@ static int inline_xattr_iter_pre(struct xattr_iter *it,
 
 	inline_xattr_ofs = vi->inode_isize + xattr_header_sz;
 
-	it->blkaddr = erofs_blknr(iloc(vi->nid) + inline_xattr_ofs);
-	it->ofs = erofs_blkoff(iloc(vi->nid) + inline_xattr_ofs);
+	it->blkaddr = erofs_blknr(erofs_iloc(vi) + inline_xattr_ofs);
+	it->ofs = erofs_blkoff(erofs_iloc(vi) + inline_xattr_ofs);
 
 	ret = blk_read(0, it->page, it->blkaddr, 1);
 	if (ret < 0)

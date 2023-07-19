@@ -103,11 +103,6 @@ struct erofs_sb_info {
 /* make sure that any user of the erofs headers has atleast 64bit off_t type */
 extern int erofs_assert_largefile[sizeof(off_t)-8];
 
-static inline erofs_off_t iloc(erofs_nid_t nid)
-{
-	return erofs_pos(sbi.meta_blkaddr) + (nid << sbi.islotbits);
-}
-
 #define EROFS_FEATURE_FUNCS(name, compat, feature) \
 static inline bool erofs_sb_has_##name(void) \
 { \
@@ -218,6 +213,11 @@ struct erofs_inode {
 	erofs_off_t fragmentoff;
 	unsigned int fragment_size;
 };
+
+static inline erofs_off_t erofs_iloc(struct erofs_inode *inode)
+{
+	return erofs_pos(sbi.meta_blkaddr) + (inode->nid << sbi.islotbits);
+}
 
 static inline bool is_inode_layout_compression(struct erofs_inode *inode)
 {

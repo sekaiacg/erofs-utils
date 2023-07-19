@@ -28,7 +28,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	char buf[sizeof(struct erofs_inode_extended)];
 	struct erofs_inode_compact *dic;
 	struct erofs_inode_extended *die;
-	const erofs_off_t inode_loc = iloc(vi->nid);
+	const erofs_off_t inode_loc = erofs_iloc(vi);
 
 	ret = dev_read(0, buf, inode_loc, sizeof(*dic));
 	if (ret < 0)

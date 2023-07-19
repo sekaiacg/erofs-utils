@@ -33,7 +33,7 @@ static int erofs_map_blocks_flatmode(struct erofs_inode *inode,
 		map->m_plen = erofs_pos(lastblk) - offset;
 	} else if (tailendpacking) {
 		/* 2 - inode inline B: inode, [xattrs], inline last blk... */
-		map->m_pa = iloc(vi->nid) + vi->inode_isize +
+		map->m_pa = erofs_iloc(vi) + vi->inode_isize +
 			vi->xattr_isize + erofs_blkoff(map->m_la);
 		map->m_plen = inode->i_size - offset;
 
@@ -89,7 +89,7 @@ int erofs_map_blocks(struct erofs_inode *inode,
 		unit = EROFS_BLOCK_MAP_ENTRY_SIZE;	/* block map */
 
 	chunknr = map->m_la >> vi->u.chunkbits;
-	pos = roundup(iloc(vi->nid) + vi->inode_isize +
+	pos = roundup(erofs_iloc(vi) + vi->inode_isize +
 		      vi->xattr_isize, unit) + unit * chunknr;
 
 	err = blk_read(0, buf, erofs_blknr(pos), 1);
