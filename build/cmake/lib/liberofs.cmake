@@ -62,6 +62,7 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-DHAVE_LIBSELINUX"
 	"-DLZ4_ENABLED"
 	"-DLZ4HC_ENABLED"
+	"-DHAVE_ZLIB"
 	"-DHAVE_LIBLZMA"
 	"-DWITH_ANDROID"
 	"${DARWIN_CFLAGS}"
@@ -118,6 +119,7 @@ target_include_directories(${TARGET} PRIVATE
 	${libselinux_headers}
 	${liblz4_headers}
 	${liblzma_headers}
+	${libz_headers}
 	${libpcre2_headers}
 	${libe2fsprogs_headers}
 )
