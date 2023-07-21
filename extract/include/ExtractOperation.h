@@ -122,7 +122,7 @@ namespace skkk {
 			 */
 			static void printInitializedNode();
 
-			void extractFsConfigAndSelinuxLabel() const;
+			void extractFsConfigAndSelinuxLabelAndFsOptions() const;
 
 			void writeExceptionInfo2File() const;
 
