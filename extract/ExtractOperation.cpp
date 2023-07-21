@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "../lib/liberofs_uuid.h"
 #include "ExtractOperation.h"
 #include "ExtractState.h"
 #include "ExtractHelper.h"
@@ -181,25 +182,47 @@ namespace skkk {
 		for_each(erofsNodes.begin(), erofsNodes.end(), printFsConf);
 	}
 
-	void ExtractOperation::extractFsConfigAndSelinuxLabel() const {
+	void ExtractOperation::extractFsConfigAndSelinuxLabelAndFsOptions() const {
 		string fsConfigPath = configDir + "/" + imgBaseName + "_fs_config";
 		string fsSelinuxLabelsPath = configDir + "/" + imgBaseName + "_file_contexts";
+		string fsOptionPath = configDir + "/" + imgBaseName + "_fs_options";
 		FILE *fsConfigFile = fopen(fsConfigPath.c_str(), "wb");
 		FILE *selinuxLabelsFile = fopen(fsSelinuxLabelsPath.c_str(), "wb");
+		FILE *fsOptionFile = fopen(fsOptionPath.c_str(), "wb");
+		char uuid[37] = {0};
 		const char *mountPoint = imgBaseName.c_str();
-		LOGCI(BROWN "fs_config|file_contexts" LOG_RESET_COLOR "  " GREEN2_BOLD "saving..." LOG_RESET_COLOR);
-		if (fsConfigFile && selinuxLabelsFile) {
+		LOGCI(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " GREEN2_BOLD "saving..." LOG_RESET_COLOR);
+		if (fsConfigFile && selinuxLabelsFile && fsOptionFile) {
 			for (auto &eNode: erofsNodes) {
 				if (otherPathsInRootDir.count(eNode->getPath()) > 0) continue;
 				eNode->writeFsConfig2File(fsConfigFile, mountPoint);
 				if (!eNode->getSelinuxLabel().empty())
 					eNode->writeSelinuxLabel2File(selinuxLabelsFile, mountPoint);
 			}
-			LOGCI(BROWN "fs_config|file_contexts" LOG_RESET_COLOR "  " GREEN2_BOLD "done." LOG_RESET_COLOR);
+			auto time = (time_t) sbi.build_time;
+			erofs_uuid_unparse_lower(sbi.uuid, uuid);
+			fprintf(fsOptionFile, "Filesystem created:        %s", ctime(&time));
+			fprintf(fsOptionFile, "Filesystem UUID:           %s\n", uuid);
+			// The options are for reference only, please modify according to the actual situation.
+			fprintf(fsOptionFile, "mkfs.erofs options:        "
+					"-zlz4hc,1 "               // default: lz4hc,1
+					"-T %" PRIu64 " -U %s "
+					"--mount-point=/%s "
+					"--fs-config-file=%s "
+					"--file-contexts=%s "
+					"%s "                      //output image file
+					"%s",                      //input dir
+					sbi.build_time, uuid,
+					imgBaseName.c_str(),
+					fsConfigPath.c_str(), fsSelinuxLabelsPath.c_str(),
+					(imgBaseName + "_repack.img").c_str(),
+					outDir.c_str());
+			LOGCI(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " GREEN2_BOLD "done." LOG_RESET_COLOR);
 		} else
-			LOGCE(BROWN "fs_config|file_contexts" LOG_RESET_COLOR "  " RED2_BOLD "fail!" LOG_RESET_COLOR);
+			LOGCE(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " RED2_BOLD "fail!" LOG_RESET_COLOR);
 		if (fsConfigFile) fclose(fsConfigFile);
 		if (selinuxLabelsFile) fclose(selinuxLabelsFile);
+		if (fsOptionFile) fclose(fsOptionFile);
 	}
 
 	void ExtractOperation::writeExceptionInfo2File() const {
