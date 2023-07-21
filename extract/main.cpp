@@ -39,7 +39,7 @@ static inline void usage() {
 			 "  " GREEN2_BOLD "--extract=X" COLOR_NONE "             " BROWN "Extract the target of path X" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config and file_contexts" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config|file_contexts|fs_options" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "          " BROWN "Output dir" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-V, --version" COLOR_NONE "           " BROWN "Print the version info" COLOR_NONE "\n",
 			 eo->limitHardwareConcurrency,
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
 			ret = RET_EXTRACT_CREATE_DIR_FAIL;
 			goto exit_dev_close;
 		}
-		eo->extractFsConfigAndSelinuxLabel();
+		eo->extractFsConfigAndSelinuxLabelAndFsOptions();
 		goto end;
 	}
 
@@ -242,7 +242,7 @@ int main(int argc, char **argv) {
 			ret = RET_EXTRACT_CREATE_DIR_FAIL;
 			goto exit_dev_close;
 		}
-		eo->extractFsConfigAndSelinuxLabel();
+		eo->extractFsConfigAndSelinuxLabelAndFsOptions();
 		eo->useMultiThread ? eo->extractErofsNodeMultiThread() : eo->extractErofsNode();
 		goto end;
 	}
