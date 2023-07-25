@@ -237,7 +237,7 @@ int main(int argc, char **argv) {
 	}
 
 	if (eo->isExtractTarget || eo->isExtractAllNode) {
-		err = eo->createExtractConfigDir() && eo->createExtractOutDir();
+		err = eo->createExtractConfigDir() & eo->createExtractOutDir();
 		if (err) {
 			ret = RET_EXTRACT_CREATE_DIR_FAIL;
 			goto exit_dev_close;
