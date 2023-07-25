@@ -13,6 +13,9 @@
 #include "ExtractState.h"
 #include "ExtractOperation.h"
 #include "Logging.h"
+#if defined(__CYGWIN__) || defined(_WIN32)
+#include "WinCaseSensitiveInfo.h"
+#endif
 
 using namespace skkk;
 
@@ -242,6 +245,13 @@ int main(int argc, char **argv) {
 			ret = RET_EXTRACT_CREATE_DIR_FAIL;
 			goto exit_dev_close;
 		}
+#if defined(__CYGWIN__) || defined(_WIN32)
+		// Dir must exist and empty.
+		if (setCaseSensitiveInfo(eo->getOutDir(), true) == true)
+			LOGCI("Success change case sensitive.");
+		else
+			LOGCW("Failed change case sensitive.");
+#endif
 		eo->extractFsConfigAndSelinuxLabelAndFsOptions();
 		eo->useMultiThread ? eo->extractErofsNodeMultiThread() : eo->extractErofsNode();
 		goto end;
