@@ -23,9 +23,11 @@ cmake_build()
 			-DCMAKE_BUILD_TYPE="Release" \
 			-DANDROID_PLATFORM="$ANDROID_PLATFORM" \
 			-DANDROID_ABI="$ABI" \
-			-DANDROID_STL="c++_static" \
+			-DANDROID_STL="none" \
 			-DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
 			-DANDROID_USE_LEGACY_TOOLCHAIN_FILE="OFF" \
+			-DCMAKE_C_FLAGS="" \
+			-DCMAKE_CXX_FLAGS="" \
 			-DENABLE_FULL_LTO="ON" \
 			-DMAX_BLOCK_SIZE="4096"
 	elif [[ $TARGET == "Linux" ]]; then
@@ -39,6 +41,8 @@ cmake_build()
 			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
 			-DCMAKE_CXX_COMPILER="clang++" \
+			-DCMAKE_C_FLAGS="" \
+			-DCMAKE_CXX_FLAGS="" \
 			-DENABLE_FULL_LTO="ON" \
 			-DMAX_BLOCK_SIZE="4096"
 	fi
