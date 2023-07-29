@@ -31,3 +31,6 @@
 	path = src/zlib
 	url = https://android.googlesource.com/platform/external/zlib
 	branch = main
+[submodule "src/libcxx"]
+	path = src/libcxx
+	url = https://github.com/LSPosed/libcxx
