@@ -26,6 +26,8 @@ cmake_build()
 			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
 			-DCMAKE_C_COMPILER="clang" \
 			-DCMAKE_CXX_COMPILER="clang++" \
+			-DCMAKE_C_FLAGS="" \
+			-DCMAKE_CXX_FLAGS="" \
 			-DENABLE_FULL_LTO="ON" \
 			-DMAX_BLOCK_SIZE="4096"
 	fi
