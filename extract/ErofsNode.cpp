@@ -110,6 +110,9 @@ namespace skkk {
 
 	void ErofsNode::writeFsConfig2File(FILE *fsConfigFile, const char *mountPoint) const {
 		if (path == "/") [[unlikely]] {
+#if defined(__CYGWIN__) || defined(_WIN32)
+			fprintf(fsConfigFile, "/lost+found 0 0 0700\n");
+#endif
 			fprintf(fsConfigFile, "%s\n", fsConfig.c_str());
 			fprintf(fsConfigFile, "%s%s\n", mountPoint, fsConfig.c_str());
 			for (auto &otherPath: otherPathsInRootDir) {
@@ -125,7 +128,10 @@ namespace skkk {
 		if (path == "/") [[unlikely]] {
 			fprintf(selinuxLabelsFile, "/ %s\n", selinuxLabel.c_str());
 			fprintf(selinuxLabelsFile, "/%s %s\n", mountPoint, selinuxLabel.c_str());
-			fprintf(selinuxLabelsFile, "/%s/ %s\n", mountPoint, selinuxLabel.c_str());
+#if defined(__CYGWIN__) || defined(_WIN32)
+			fprintf(selinuxLabelsFile, "/%s(/.*)? %s\n", mountPoint, selinuxLabel.c_str());
+			fprintf(selinuxLabelsFile, "/lost\\+found u:object_r:rootfs:s0\n");
+#endif
 			for (auto &otherPath: otherPathsInRootDir) {
 				newPath = otherPath;
 				handleSpecialSymbols(newPath);
