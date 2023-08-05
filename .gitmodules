@@ -33,4 +33,4 @@
 	branch = main
 [submodule "src/libcxx"]
 	path = src/libcxx
-	url = https://github.com/LSPosed/libcxx
+	url = https://github.com/sekaiacg/libcxx
