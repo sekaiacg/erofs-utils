@@ -494,8 +494,9 @@ again:
 	 * @param path
 	 */
 	void set_attributes(struct erofs_inode *inode, const char *path) {
+#ifndef __CYGWIN__
 		int ret;
-
+#endif
 #ifdef HAVE_UTIMENSAT
 		if (utimensat(AT_FDCWD, path, (struct timespec[]) {
 				{
@@ -515,6 +516,7 @@ again:
 		if (utime(path, &ub) < 0)
 #endif
 			LOGCW("failed to set times: %s", path);
+#ifndef __CYGWIN__
 		if (!S_ISLNK(inode->i_mode)) {
 			if (eo->preserve_perms)
 				ret = chmod(path, inode->i_mode);
@@ -529,6 +531,7 @@ again:
 			if (ret < 0)
 				LOGCW("failed to change ownership: %s", path);
 		}
+#endif
 	}
 
 	int writeErofsNode2File(ErofsNode *eNode, const string &outDir) {
