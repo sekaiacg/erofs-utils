@@ -13,6 +13,7 @@
 #include "ExtractState.h"
 #include "ExtractOperation.h"
 #include "Logging.h"
+
 #if defined(__CYGWIN__) || defined(_WIN32)
 #include "WinCaseSensitiveInfo.h"
 #endif
@@ -39,9 +40,9 @@ static inline void usage() {
 			 "  " GREEN2_BOLD "-h, --help" COLOR_NONE "              " BROWN "Display this help and exit" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "      " BROWN "Image file" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-p" COLOR_NONE "                      " BROWN "Print all entrys" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "--print=X" COLOR_NONE "               " BROWN "Print the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-P, --print=X" COLOR_NONE "           " BROWN "Print the target of path X" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-x" COLOR_NONE "                      " BROWN "Extract all items" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "--extract=X" COLOR_NONE "             " BROWN "Extract the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-X, --extract=X" COLOR_NONE "         " BROWN "Extract the target of path X" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config|file_contexts|fs_options" COLOR_NONE "\n"
@@ -78,7 +79,7 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 	int opt;
 	int rc = RET_EXTRACT_CONFIG_FAIL;
 	bool enterParseOpt = false;
-	while ((opt = getopt_long(argc, argv, "hi:pxfT:o:V", arg_options, nullptr)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hi:pxfP:T:o:X:V", arg_options, nullptr)) != -1) {
 		enterParseOpt = true;
 		switch (opt) {
 			case 'h':
