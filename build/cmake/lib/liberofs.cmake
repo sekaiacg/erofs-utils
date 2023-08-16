@@ -106,7 +106,7 @@ include(CheckCXXCompilerFlag)
 check_cxx_compiler_flag("-Wno-deprecated-non-prototype" CFLAG_Wno-deprecated-non-prototype)
 if (CFLAG_Wno-deprecated-non-prototype)
 	list(APPEND LIBEROFS_STATIC_DEFAULTS_CFLAGS "-Wno-deprecated-non-prototype")
-endif()
+endif ()
 
 add_library(${TARGET} STATIC ${liberofs_srcs})
 
