@@ -71,7 +71,7 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Android")
 		"${TARGET_SRC_DIR}/trace-dev.cpp"
 		"${TARGET_SRC_DIR}/uevent.cpp"
 	)
-endif()
+endif ()
 
 add_library(${TARGET} STATIC ${libcutils_srcs})
 
