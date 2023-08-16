@@ -31,12 +31,12 @@ set(libbase_srcs
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
-	list(APPEND libbase_srcs "${TARGET_SRC_DIR}/errors_unix.cpp" )
+	list(APPEND libbase_srcs "${TARGET_SRC_DIR}/errors_unix.cpp")
 elseif (CMAKE_SYSTEM_NAME MATCHES "Android")
 	list(APPEND TARGET_CFLAGS
-        	"-D_FILE_OFFSET_BITS=64"
+		"-D_FILE_OFFSET_BITS=64"
 	)
-endif()
+endif ()
 
 add_library(${TARGET} STATIC ${libbase_srcs})
 
