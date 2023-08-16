@@ -20,13 +20,15 @@
 using namespace skkk;
 
 static inline void get_available_compressors(string &ret) {
-	unsigned int i = 0;
+	int i = 0;
+	bool comma = false;
 	const char *s;
 
-	while ((s = z_erofs_list_available_compressors(i)) != nullptr) {
-		if (i++)
+	while ((s = z_erofs_list_available_compressors(&i)) != nullptr) {
+		if (comma)
 			ret.append(", ");
 		ret.append(s);
+		comma = true;
 	}
 }
 
@@ -199,14 +201,14 @@ int main(int argc, char **argv) {
 		goto exit;
 	}
 
-	err = dev_open_ro(eo->getImgPath().c_str());
+	err = dev_open_ro(&sbi, eo->getImgPath().c_str());
 	if (err) {
 		ret = RET_EXTRACT_INIT_FAIL;
 		LOGCE("failed to open '%s'", eo->getImgPath().c_str());
 		goto exit;
 	}
 
-	err = erofs_read_superblock();
+	err = erofs_read_superblock(&sbi);
 	if (err) {
 		ret = RET_EXTRACT_INIT_FAIL;
 		LOGCE("failed to read superblock");
@@ -263,12 +265,12 @@ end:
 	printOperationTime(&start, &end);
 
 exit_dev_close:
-	dev_close();
+	dev_close(&sbi);
 	LOGCD("ErofsNode size=%lu", eo->getErofsNodes().size());
 	LOGCD("main exit ret=%d", ret);
 
 exit:
-	blob_closeall();
+	blob_closeall(&sbi);
 	erofs_exit_configure();
 	ExtractOperation::erofsOperationExit();
 	return ret;
