@@ -32,6 +32,6 @@ target_include_directories(${TARGET} PRIVATE
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 	list(REMOVE_ITEM TARGET_CFLAGS "-Werror")
 	list(APPEND TARGET_CFLAGS "-Wno-error")
-endif()
+endif ()
 
 target_compile_options(${TARGET} PRIVATE "$<$<COMPILE_LANGUAGE:C>:${TARGET_CFLAGS}>")
