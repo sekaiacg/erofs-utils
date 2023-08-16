@@ -33,7 +33,7 @@ set(liblog_targs_srcs
 
 if (CMAKE_SYSTEM_NAME MATCHES "Android")
 	#list(APPEND liblog_srcs ${liblog_targs_srcs})
-endif()
+endif ()
 
 add_library(${TARGET} STATIC ${liblog_srcs})
 
