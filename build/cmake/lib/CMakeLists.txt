@@ -11,7 +11,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	include(libfuse/libfuse.cmake)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 	include(libext2_uuid.cmake)
-endif()
+endif ()
 
 # Thrid part library
 # LZ4
@@ -35,4 +35,4 @@ add_subdirectory("${LIB_DIR}/xz" "xz")
 
 if (CMAKE_SYSTEM_NAME MATCHES "Android")
 	include(libpackagelistparser.cmake)
-endif()
+endif ()
