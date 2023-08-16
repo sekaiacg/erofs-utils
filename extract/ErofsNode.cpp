@@ -28,6 +28,7 @@ namespace skkk {
 		);
 		this->fsConfig = buf;
 		this->inode = new erofs_inode;
+		this->inode->sbi = inode->sbi;
 		this->inode->nid = inode->nid;
 		erofs_read_inode_from_disk(this->inode);
 	}
