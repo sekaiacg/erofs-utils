@@ -68,7 +68,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 	list(APPEND LIBFUSE_DEFAULTS_CFLAGS "-DFUSERMOUNT_DIR=\"/bin\"")
 elseif (CMAKE_SYSTEM_NAME MATCHES "Android")
 	list(APPEND LIBFUSE_DEFAULTS_CFLAGS "-DFUSERMOUNT_DIR=\"/system/bin\"")
-endif()
+endif ()
 
 add_library(${TARGET} STATIC ${libfuse_srcs})
 
