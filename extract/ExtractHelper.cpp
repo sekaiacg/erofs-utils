@@ -76,6 +76,7 @@ namespace skkk {
 		short typeId = EROFS_FT_UNKNOWN;
 
 		inode.nid = nid;
+		inode.sbi = &sbi;
 		ret = erofs_read_inode_from_disk(&inode);
 		if (ret) {
 			goto out;
@@ -237,7 +238,7 @@ out:
 					u64 count = min_t(u64, alloc_rawsize,
 									  map.m_llen);
 
-					ret = erofs_read_one_data(&map, raw, p, count);
+					ret = erofs_read_one_data(inode, &map, raw, p, count);
 					if (ret)
 						goto out;
 
@@ -638,14 +639,18 @@ again:
 		memset(eo->iter_path, 0, PATH_MAX);
 
 		// find targetPath
-		struct erofs_inode vi = {.nid = sbi.root_nid};
+		struct erofs_inode vi = {
+				.sbi = &sbi,
+				.nid = sbi.root_nid
+		};
+
 		err = erofs_ilookup(targetPath.c_str(), &vi);
 		if (err) {
 			LOGCE("path not found: '%s'", targetPath.c_str());
 			goto exit;
 		}
 
-		err = erofs_get_pathname(vi.nid, pathnameBuf, PATH_MAX);
+		err = erofs_get_pathname(&sbi, vi.nid, pathnameBuf, PATH_MAX);
 		if (err) {
 			goto exit;
 		}
