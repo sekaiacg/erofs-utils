@@ -4,6 +4,7 @@
 #include <erofs/compress.h>
 #include <erofs/dir.h>
 #include <private/fs_config.h>
+#include <unordered_set>
 
 #include "ExtractHelper.h"
 #include "ErofsNode.h"
@@ -20,7 +21,10 @@
 
 namespace skkk {
 
-	static int doInitNode(erofs_nid_t nid);
+
+	static int doInitNode(const string &path, bool recursive);
+
+	static int doInitNodeRecursive(erofs_nid_t nid);
 
 	/**
 	 * Copy from fsck.erofs
@@ -53,7 +57,7 @@ namespace skkk {
 			curr_pos += ctx->de_namelen;
 		}
 		eo->iter_pos = curr_pos;
-		ret = doInitNode(ctx->de_nid);
+		ret = doInitNodeRecursive(ctx->de_nid);
 
 		if (eo->iter_path)
 			eo->iter_path[prev_pos] = '\0';
@@ -61,26 +65,8 @@ namespace skkk {
 		return ret;
 	}
 
-	/**
-	 * Copy from fsck.erofs
-	 * Modified
-	 *
-	 * @param pnid
-	 * @param nid
-	 * @return
-	 */
-	static int doInitNode(erofs_nid_t nid) {
-		int ret;
-
-		struct erofs_inode inode = {};
+	static void createErofsNode(struct erofs_inode &inode) {
 		short typeId = EROFS_FT_UNKNOWN;
-
-		inode.nid = nid;
-		inode.sbi = &sbi;
-		ret = erofs_read_inode_from_disk(&inode);
-		if (ret) {
-			goto out;
-		}
 		switch (inode.i_mode & S_IFMT) {
 			case S_IFDIR:
 				typeId = EROFS_FT_DIR;
@@ -108,12 +94,10 @@ namespace skkk {
 			default:
 				break;
 		}
-
-		{
+		if (typeId != EROFS_FT_UNKNOWN) {
 #ifdef NDEBUG
 			ExtractOperation::createErofsNode(eo->iter_path, typeId, &inode);
 #else
-
 			const ErofsNode *eNode = ExtractOperation::createErofsNode(eo->iter_path, typeId, &inode);
 			LOGCD("type=%s dataLayout=%s %s %s",
 				  eNode->getTypeIdCStr(),
@@ -123,6 +107,29 @@ namespace skkk {
 			);
 #endif
 		}
+	}
+
+	/**
+	 * Copy from fsck.erofs
+	 * Modified
+	 *
+	 * @param nid
+	 * @return
+	 */
+	static int doInitNodeRecursive(erofs_nid_t nid) {
+		int ret;
+
+		struct erofs_inode inode = {
+				.sbi = &sbi,
+				.nid = nid
+		};
+
+		ret = erofs_read_inode_from_disk(&inode);
+		if (ret) {
+			goto out;
+		}
+
+		createErofsNode(inode);
 
 		{
 			struct erofs_dir_context ctx = {
@@ -132,6 +139,45 @@ namespace skkk {
 			if (S_ISDIR(inode.i_mode)) {
 				ret = erofs_iterate_dir(&ctx, false);
 			}
+		}
+out:
+		return ret;
+	}
+
+	/**
+	 * See @doInitNodeRecursive
+	 *
+	 * @param path
+	 * @param recursive
+	 * @return
+	 */
+	int doInitNode(const string &path, bool recursive) {
+		bool ret = 0;
+		char pathnameBuf[PATH_MAX] = {0};
+		struct erofs_inode vi = {
+				.sbi = &sbi,
+				.nid = sbi.root_nid
+		};
+
+		ret = erofs_ilookup(path.c_str(), &vi);
+		if (ret) {
+			LOGCE("path not found: '%s'", path.c_str());
+			goto out;
+		}
+
+		ret = erofs_get_pathname(&sbi, vi.nid, pathnameBuf, PATH_MAX);
+		if (ret) {
+			goto out;
+		}
+		eo->iter_pos = snprintf(eo->iter_path, PATH_MAX, pathnameBuf, nullptr);
+
+		if (recursive) {
+			ret = doInitNodeRecursive(vi.nid);
+			if (ret) {
+				LOGCE("failed to initialize ErofsNode, path: '%s'", path.c_str());
+			}
+		} else {
+			createErofsNode(vi);
 		}
 out:
 		return ret;
@@ -611,52 +657,64 @@ again:
 		}
 	}
 
+	inline static bool readConfig(const string &path, vector<string> &results) {
+		char buffer[PATH_MAX] = {0};
+		FILE *file = fopen(path.c_str(), "rb");
+		if (file) {
+			results.clear();
+			while (fscanf(file, "%s", buffer) != EOF) {
+				results.emplace_back(buffer);
+			}
+			fclose(file);
+			return !results.empty();
+		}
+		return false;
+	}
+
+	inline static void initDirByFiles(const vector<string> *files, const string *filePath) {
+		unordered_set<string> dirs;
+		string tmpStr;
+		if (files && !files->empty()) {
+			for (auto &file: *files) {
+				getFileDirPath(file, tmpStr);
+				if (!tmpStr.empty()) {
+					dirs.insert(tmpStr);
+				}
+			}
+		}
+
+		if (filePath && !filePath->empty()) {
+			getFileDirPath(*filePath, tmpStr);
+		}
+
+		if (!dirs.empty()) {
+			for (auto &dir: dirs) {
+				doInitNode(dir, false);
+			}
+		}
+	}
+
 	int initErofsNodeByRoot() {
 		int rc = RET_EXTRACT_DONE, err;
-		eo->iter_path = (char *) malloc(PATH_MAX);
-		memset(eo->iter_path, 0, PATH_MAX);
 
 		// root is '/'
-		eo->iter_path[0] = '/';
+		snprintf(eo->iter_path, PATH_MAX, "/");
 		eo->iter_pos = 0;
 
-		err = doInitNode(sbi.root_nid);
+		err = doInitNodeRecursive(sbi.root_nid);
 		if (err) {
 			rc = RET_EXTRACT_INIT_NODE_FAIL;
 			LOGCE("failed to initialize ErofsNode!");
 		}
-		if (eo->iter_path) free(eo->iter_path);
-		eo->iter_pos = 0;
 		return rc;
 	}
 
 	int initErofsNodeByTargetPath(const string &targetPath) {
-		char pathnameBuf[PATH_MAX] = {0};
 		int rc = RET_EXTRACT_INIT_NODE_FAIL, err;
 		if (targetPath.empty()) return RET_EXTRACT_INIT_NODE_FAIL;
 
-		eo->iter_path = (char *) malloc(PATH_MAX);
-		memset(eo->iter_path, 0, PATH_MAX);
-
-		// find targetPath
-		struct erofs_inode vi = {
-				.sbi = &sbi,
-				.nid = sbi.root_nid
-		};
-
-		err = erofs_ilookup(targetPath.c_str(), &vi);
-		if (err) {
-			LOGCE("path not found: '%s'", targetPath.c_str());
-			goto exit;
-		}
-
-		err = erofs_get_pathname(&sbi, vi.nid, pathnameBuf, PATH_MAX);
-		if (err) {
-			goto exit;
-		}
-		eo->iter_pos = snprintf(eo->iter_path, PATH_MAX, pathnameBuf, nullptr);
-
-		err = doInitNode(vi.nid);
+		initDirByFiles(nullptr, &targetPath);
+		err = doInitNode(targetPath, true);
 		if (err) {
 			LOGCE("failed to initialize ErofsNode, path: '%s'", targetPath.c_str());
 			goto exit;
@@ -664,8 +722,31 @@ again:
 
 		rc = RET_EXTRACT_DONE;
 exit:
-		if (eo->iter_path) free(eo->iter_path);
-		eo->iter_pos = 0;
+		return rc;
+	}
+
+	int initErofsNodeByTargetConfig(const string &targetPath, bool recursive) {
+		int rc = RET_EXTRACT_INIT_NODE_FAIL, err;
+		int initializedCount = 0;
+		vector<string> lines;
+
+		if (readConfig(targetPath, lines)) {
+			initDirByFiles(&lines, nullptr);
+			for (auto &line: lines) {
+				if (line == "/") {
+					continue;
+				}
+				err = doInitNode(line, recursive);
+				if (err == 0) {
+					initializedCount++;
+				}
+			}
+		} else {
+			LOGCE("target config error: '%s'", targetPath.c_str());
+		}
+
+		if (initializedCount > 0) rc = RET_EXTRACT_DONE;
+
 		return rc;
 	}
 }
