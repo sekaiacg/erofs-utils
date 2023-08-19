@@ -69,6 +69,11 @@ static inline void strReplaceAll(string &str, const string &oldValue, const stri
 	}
 }
 
+inline static void handleWinFilePath(string &path) {
+	strReplaceAll(path, "\\", "/");
+	strReplaceAll(path, "./", ".\\/");
+}
+
 inline static void getFileDirPath(const string &filePath, string &fileDirPath) {
 	fileDirPath.clear();
 	if (!filePath.empty()) {
