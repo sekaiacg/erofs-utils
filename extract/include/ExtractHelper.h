@@ -111,6 +111,15 @@ namespace skkk {
 	 */
 	int initErofsNodeByTargetPath(const string &targetPath);
 
+
+	/**
+	 * Initialize the specified node according to the configuration
+	 *
+	 * @param targetPath
+	 * @return
+	 */
+	int initErofsNodeByTargetConfig(const string &targetPath, bool recursive = false);
+
 }
 
 #endif //EXTRACT_HELPER_H
