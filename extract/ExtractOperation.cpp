@@ -81,7 +81,7 @@ namespace skkk {
 #endif
 		}
 #if defined(_WIN32) || defined(__CYGWIN__)
-		handleWinFilePath(outDir)
+		handleWinFilePath(outDir);
 #endif
 		return rc;
 	}
