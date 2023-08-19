@@ -34,8 +34,8 @@ static inline void get_available_compressors(string &ret) {
 }
 
 static inline void usage() {
-	char buf[1024] = {0};
-	snprintf(buf, 1024,
+	char buf[1536] = {0};
+	snprintf(buf, 1536,
 			 BROWN "usage: [options]" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-h, --help" COLOR_NONE "              " BROWN "Display this help and exit" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "      " BROWN "Image file" COLOR_NONE "\n"
@@ -43,6 +43,8 @@ static inline void usage() {
 			 "  " GREEN2_BOLD "-P, --print=X" COLOR_NONE "           " BROWN "Print the target of path X" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-x" COLOR_NONE "                      " BROWN "Extract all items" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-X, --extract=X" COLOR_NONE "         " BROWN "Extract the target of path X" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-c, --config=[FILE]" COLOR_NONE "     " BROWN "Target of config" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-r" COLOR_NONE "                      " BROWN "When using config, recurse directories" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config|file_contexts|fs_options" COLOR_NONE "\n"
@@ -69,8 +71,9 @@ static struct option arg_options[] = {
 		{"image",     required_argument, nullptr, 'i'},
 		{"outdir",    required_argument, nullptr, 'o'},
 		{"print",     required_argument, nullptr, 'P'},
-		{"extract",   required_argument, nullptr, 'X'},
 		{"overwrite", no_argument,       nullptr, 'f'},
+		{"extract",   required_argument, nullptr, 'X'},
+		{"config",    required_argument, nullptr, 'c'},
 		{"only-cfg",  no_argument,       nullptr, 1},
 		{nullptr,     no_argument,       nullptr, 0},
 };
@@ -79,7 +82,7 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 	int opt;
 	int rc = RET_EXTRACT_CONFIG_FAIL;
 	bool enterParseOpt = false;
-	while ((opt = getopt_long(argc, argv, "hi:pxfP:T:o:X:V", arg_options, nullptr)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hi:pxfrc:P:T:o:X:V", arg_options, nullptr)) != -1) {
 		enterParseOpt = true;
 		switch (opt) {
 			case 'h':
@@ -109,6 +112,10 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 				if (optarg) eo->targetPath = optarg;
 				LOGCD("isPrintTarget=%d targetPath=%s", eo->isPrintTarget, eo->targetPath.c_str());
 				break;
+			case 'f':
+				eo->overwrite = true;
+				LOGCD("overwrite=%d", eo->overwrite);
+				break;
 			case 'x':
 				eo->check_decomp = true;
 				eo->isExtractAllNode = true;
@@ -120,9 +127,14 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 				if (optarg) eo->targetPath = optarg;
 				LOGCD("isExtractTarget=%d targetPath=%s", eo->isExtractTarget, eo->targetPath.c_str());
 				break;
-			case 'f':
-				eo->overwrite = true;
-				LOGCD("overwrite=%d", eo->overwrite);
+			case 'c':
+				eo->isExtractTargetConfig = true;
+				if (optarg) eo->targetConfigPath = optarg;
+				LOGCD("targetConfig=%s", eo->targetConfigPath.c_str());
+				break;
+			case 'r':
+				eo->targetConfigRecurse = true;
+				LOGCD("targetConfigRecurse=%d", eo->targetConfigRecurse);
 				break;
 			case 'T':
 				eo->useMultiThread = true;
@@ -216,7 +228,7 @@ int main(int argc, char **argv) {
 		goto exit_dev_close;
 	}
 
-	if (eo->isPrintTarget || eo->isExtractTarget)
+	if (eo->isPrintTarget || eo->isExtractTarget || eo->isExtractTargetConfig)
 		err = eo->initErofsNodeByTarget();
 	else if (eo->isPrintAllNode || eo->isExtractAllNode)
 		err = eo->initAllErofsNode();
