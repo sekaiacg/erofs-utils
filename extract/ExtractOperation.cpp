@@ -118,7 +118,21 @@ namespace skkk {
 
 	int ExtractOperation::initAllErofsNode() const { return initErofsNodeByRoot(); }
 
-	int ExtractOperation::initErofsNodeByTarget() const { return initErofsNodeByTargetPath(targetPath); }
+	int ExtractOperation::initErofsNodeByTarget() const {
+		if (isExtractTargetConfig) {
+#if defined(_WIN32) || defined(__CYGWIN__)
+			strReplaceAll(targetConfigPath, "\\", "/");
+			strReplaceAll(targetConfigPath, "./", ".\\/");
+#endif
+			if (fileExists(targetConfigPath)) {
+
+				return initErofsNodeByTargetConfig(targetConfigPath, targetConfigRecurse);
+			} else {
+				LOGCE("target config '%s' does not exist! ", targetConfigPath.c_str());
+			}
+		}
+		return initErofsNodeByTargetPath(targetPath);
+	}
 
 	int ExtractOperation::initErofsNodeAuto() const {
 		return targetPath.empty() ?
@@ -188,35 +202,40 @@ namespace skkk {
 		string fsOptionPath = configDir + "/" + imgBaseName + "_fs_options";
 		FILE *fsConfigFile = fopen(fsConfigPath.c_str(), "wb");
 		FILE *selinuxLabelsFile = fopen(fsSelinuxLabelsPath.c_str(), "wb");
-		FILE *fsOptionFile = fopen(fsOptionPath.c_str(), "wb");
+		FILE *fsOptionFile = nullptr;
 		char uuid[37] = {0};
 		const char *mountPoint = imgBaseName.c_str();
 		LOGCI(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " GREEN2_BOLD "saving..." LOG_RESET_COLOR);
-		if (fsConfigFile && selinuxLabelsFile && fsOptionFile) {
+		if (fsConfigFile && selinuxLabelsFile) {
 			for (auto &eNode: erofsNodes) {
 				if (otherPathsInRootDir.count(eNode->getPath()) > 0) continue;
 				eNode->writeFsConfig2File(fsConfigFile, mountPoint);
 				if (!eNode->getSelinuxLabel().empty())
 					eNode->writeSelinuxLabel2File(selinuxLabelsFile, mountPoint);
 			}
-			auto time = (time_t) sbi.build_time;
-			erofs_uuid_unparse_lower(sbi.uuid, uuid);
-			fprintf(fsOptionFile, "Filesystem created:        %s", ctime(&time));
-			fprintf(fsOptionFile, "Filesystem UUID:           %s\n", uuid);
-			// The options are for reference only, please modify according to the actual situation.
-			fprintf(fsOptionFile, "mkfs.erofs options:        "
-					"-zlz4hc,1 "               // default: lz4hc,1
-					"-T %" PRIu64 " -U %s "
-					"--mount-point=/%s "
-					"--fs-config-file=%s "
-					"--file-contexts=%s "
-					"%s "                      //output image file
-					"%s",                      //input dir
-					sbi.build_time, uuid,
-					imgBaseName.c_str(),
-					fsConfigPath.c_str(), fsSelinuxLabelsPath.c_str(),
-					(imgBaseName + "_repack.img").c_str(),
-					outDir.c_str());
+			if (!isExtractTargetConfig) {
+				fsOptionFile = fopen(fsOptionPath.c_str(), "wb");
+				if (fsOptionFile) {
+					auto time = (time_t) sbi.build_time;
+					erofs_uuid_unparse_lower(sbi.uuid, uuid);
+					fprintf(fsOptionFile, "Filesystem created:        %s", ctime(&time));
+					fprintf(fsOptionFile, "Filesystem UUID:           %s\n", uuid);
+					// The options are for reference only, please modify according to the actual situation.
+					fprintf(fsOptionFile, "mkfs.erofs options:        "
+										  "-zlz4hc,1 "               // default: lz4hc,1
+										  "-T %" PRIu64 " -U %s "
+										  "--mount-point=/%s "
+										  "--fs-config-file=%s "
+										  "--file-contexts=%s "
+										  "%s "                      //output image file
+										  "%s",                      //input dir
+							sbi.build_time, uuid,
+							imgBaseName.c_str(),
+							fsConfigPath.c_str(), fsSelinuxLabelsPath.c_str(),
+							(imgBaseName + "_repack.img").c_str(),
+							outDir.c_str());
+				}
+			}
 			LOGCI(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " GREEN2_BOLD "done." LOG_RESET_COLOR);
 		} else
 			LOGCE(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " RED2_BOLD "fail!" LOG_RESET_COLOR);
