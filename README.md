@@ -15,20 +15,23 @@
 
 ```
 usage: [options]
-  -h, --help          Display this help and exit
-  -i, --image=[FILE]  Image file
-  -p                  Print all entrys
-  --print=X           Print the target of path X
-  -x                  Extract all items
-  --extract=X         Extract the target of path X
-  -f, --overwrite     [default: skip] overwrite files that already exist
-  -T#                 [1-X] Use # threads, -T0: X/2
-  --only-cfg          Only extract fs_config and file_contexts
-  -o, --outdir=X      Output dir
-  -V, --version       Print the version info
-  erofs-utils:        x.x-gxxxxxxxx
-  extract.erofs:      x.x.x
-  extract author:     skkk
+  -h, --help              Display this help and exit
+  -i, --image=[FILE]      Image file
+  -p                      Print all entrys
+  -P, --print=X           Print the target of path X
+  -x                      Extract all items
+  -X, --extract=X         Extract the target of path X
+  -c, --config=[FILE]     Target of config
+  -r                      When using config, recurse directories
+  -f, --overwrite         [default: skip] overwrite files that already exist
+  -T#                     [1-X] Use # threads, -T0: X/2
+  --only-cfg              Only extract fs_config|file_contexts|fs_options
+  -o, --outdir=X          Output dir
+  -V, --version           Print the version info
+  erofs-utils:            x.x-gxxxxxxxx
+  extract.erofs:          x.x.x
+  Available compressors:  lz4, lz4hc, lzma, deflate
+  extract author:         skkk
 
 ```
 
