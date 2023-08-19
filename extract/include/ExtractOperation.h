@@ -99,7 +99,7 @@ namespace skkk {
 
 			int initAllErofsNode() const;
 
-			int initErofsNodeByTarget() const;
+			int initErofsNodeByTarget();
 
 			int initErofsNodeAuto() const;
 
