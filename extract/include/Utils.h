@@ -69,6 +69,15 @@ static inline void strReplaceAll(string &str, const string &oldValue, const stri
 	}
 }
 
+inline static void getFileDirPath(const string &filePath, string &fileDirPath) {
+	fileDirPath.clear();
+	if (!filePath.empty()) {
+		auto pos = filePath.rfind('/');
+		if (pos != string::npos)
+			fileDirPath = filePath.substr(0, pos);
+	}
+}
+
 /**
  *
  * charset: UTF-16LE, UTF-8
