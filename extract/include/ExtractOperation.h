@@ -44,7 +44,7 @@ namespace skkk {
 			ExtractOperation &operator=(ExtractOperation const &);
 
 		public:
-			char *iter_path = nullptr;
+			char *iter_path = (char *) malloc(PATH_MAX);;
 			size_t iter_pos = 0;
 			static inline atomic_int extractTaskRunCount = 0;
 			static inline atomic_int exceptionSize = 0;
@@ -57,13 +57,15 @@ namespace skkk {
 			bool check_decomp = false;
 			bool isExtractAllNode = false;
 			bool isExtractTarget = false;
+			bool isExtractTargetConfig = false;
+			bool targetConfigRecurse = false;
 			bool useMultiThread = false;
 			unsigned int threadNum = 0;
 			unsigned int hardwareConcurrency = thread::hardware_concurrency();
 			unsigned int limitHardwareConcurrency = hardwareConcurrency * 2;
 			bool overwrite = false;
 			string targetPath;
-			string targetConfPath;
+			string targetConfigPath;
 			bool extractOnlyConfAndSeLabel = false;
 
 		public:
