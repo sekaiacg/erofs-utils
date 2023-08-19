@@ -15,8 +15,7 @@ namespace skkk {
 		imgPath = path;
 		strTrim(imgPath);
 #if defined(_WIN32) || defined(__CYGWIN__)
-		strReplaceAll(imgPath, "\\", "/");
-		strReplaceAll(imgPath, "./", ".\\/");
+		handleWinFilePath(imgPath);
 #endif
 
 		LOGCD("config: imagePath=%s", imgPath.c_str());
@@ -82,8 +81,7 @@ namespace skkk {
 #endif
 		}
 #if defined(_WIN32) || defined(__CYGWIN__)
-		strReplaceAll(outDir, "\\", "/");
-		strReplaceAll(outDir, "./", ".\\/");
+		handleWinFilePath(outDir)
 #endif
 		return rc;
 	}
@@ -118,14 +116,13 @@ namespace skkk {
 
 	int ExtractOperation::initAllErofsNode() const { return initErofsNodeByRoot(); }
 
-	int ExtractOperation::initErofsNodeByTarget() const {
-		if (isExtractTargetConfig) {
+	int ExtractOperation::initErofsNodeByTarget() {
 #if defined(_WIN32) || defined(__CYGWIN__)
-			strReplaceAll(targetConfigPath, "\\", "/");
-			strReplaceAll(targetConfigPath, "./", ".\\/");
+		handleWinFilePath(targetPath);
+		handleWinFilePath(targetConfigPath);
 #endif
+		if (isExtractTargetConfig) {
 			if (fileExists(targetConfigPath)) {
-
 				return initErofsNodeByTargetConfig(targetConfigPath, targetConfigRecurse);
 			} else {
 				LOGCE("target config '%s' does not exist! ", targetConfigPath.c_str());
