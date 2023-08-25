@@ -21,12 +21,6 @@ set(LZ4_BUILD_LEGACY_LZ4C OFF)
 add_subdirectory("${LIB_DIR}/lz4/build/cmake" "lz4")
 
 # XZ
-execute_process(COMMAND readlink -f "${LIB_DIR}/xz/CMakeLists.txt" OUTPUT_VARIABLE PATH_TARGET_FILE)
-string(REGEX REPLACE "\n$" "" PATH_TARGET_FILE "${PATH_TARGET_FILE}")
-execute_process(COMMAND patch -N
-	"${PATH_TARGET_FILE}"
-	"${CMAKE_CURRENT_SOURCE_DIR}/patch/xz_cmakelists.patch"
-)
 set(BUILD_TESTING OFF)
 set(HAVE_GETOPT_LONG OFF)
 set(CREATE_XZ_SYMLINKS OFF)
