@@ -2,6 +2,9 @@ set(TARGET cxx)
 
 set(TARGET_SRC_DIR "${LIB_DIR}/libcxx")
 
+set(LIBCXX_VERSION_STRING "16.0.6")
+set(LIBCXX_VERSION_MARJO "16")
+
 set(LIBCXX_SOURCES
 	algorithm.cpp
 	any.cpp
@@ -93,9 +96,65 @@ set(LIBCXXABI_FLAGS
 set(LIBCXXABI_INCLUDES ${TARGET_SRC_DIR}/include/abi)
 
 add_library(${TARGET} STATIC ${LIBCXX_SOURCES} ${LIBCXXABI_SOURCES})
+
+set_target_properties(${TARGET}
+	PROPERTIES
+	OUTPUT_NAME ${TARGET}_static
+	VERSION ${LIBCXX_VERSION_STRING}
+	SOVERSION ${LIBCXX_VERSION_MARJO}
+	POSITION_INDEPENDENT_CODE ON
+)
+
+target_include_directories(${TARGET} PRIVATE ${LIBCXX_INCLUDES} ${LIBCXXABI_INCLUDES})
+target_include_directories(${TARGET}
+	PUBLIC $<BUILD_INTERFACE:${LIBCXX_EXPORT_INCLUDES}>
+	INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
 target_compile_options(${TARGET} PUBLIC ${LIBCXX_EXPORT_FLAGS})
 target_compile_options(${TARGET} PRIVATE ${LIBCXX_FLAGS} ${LIBCXXABI_FLAGS} -ffunction-sections -fdata-sections)
-target_include_directories(${TARGET} PUBLIC ${LIBCXX_EXPORT_INCLUDES})
-target_include_directories(${TARGET} PRIVATE ${LIBCXX_INCLUDES} ${LIBCXXABI_INCLUDES})
 list(APPEND CMAKE_REQUIRED_INCLUDES ${LIBCXX_EXPORT_INCLUDES})
+
+include(CMakePackageConfigHelpers)
+
+install(TARGETS ${TARGET}
+	EXPORT libcxxTargets
+	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+	LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+	ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+	RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+	PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcxx"
+)
+
+set(LIBCXX_PKG_INSTALLDIR "${CMAKE_INSTALL_LIBDIR}/cmake/libcxx-${LIBCXX_VERSION_MARJO}")
+
+configure_package_config_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/libcxx/libcxxConfig.cmake.in"
+	"${CMAKE_CURRENT_BINARY_DIR}/libcxxConfig.cmake"
+	INSTALL_DESTINATION ${LIBCXX_PKG_INSTALLDIR}
+)
+
+write_basic_package_version_file(
+	"${CMAKE_CURRENT_BINARY_DIR}/libcxxConfigVersion.cmake"
+	VERSION ${LIBCXX_VERSION_STRING}
+	COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+	"${CMAKE_CURRENT_BINARY_DIR}/libcxxConfig.cmake"
+	"${CMAKE_CURRENT_BINARY_DIR}/libcxxConfigVersion.cmake"
+	DESTINATION ${LIBCXX_PKG_INSTALLDIR}
+)
+
+export(EXPORT libcxxTargets
+	FILE libcxxTargets.cmake
+	NAMESPACE CXX::
+)
+
+install(EXPORT libcxxTargets
+	FILE libcxxTargets.cmake
+	NAMESPACE CXX::
+	DESTINATION ${LIBCXX_PKG_INSTALLDIR}
+)
+
 link_libraries(${TARGET})
