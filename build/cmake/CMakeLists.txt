@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 3.26)
+if (NOT CYGWIN)
+	cmake_minimum_required(VERSION 3.26)
+else ()
+	cmake_minimum_required(VERSION 3.25)
+endif ()
 project(erofs-utils LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
