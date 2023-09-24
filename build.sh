@@ -45,9 +45,22 @@ cmake_build()
 			-DCMAKE_CXX_FLAGS="" \
 			-DENABLE_FULL_LTO="ON" \
 			-DMAX_BLOCK_SIZE="4096"
+	elif [[ $TARGET == "Cygwin" ]]; then
+		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+			-DCMAKE_BUILD_TYPE="Release" \
+			-DCMAKE_C_COMPILER="clang" \
+			-DCMAKE_CXX_COMPILER="clang++" \
+			-DCMAKE_C_FLAGS="" \
+			-DCMAKE_CXX_FLAGS="" \
+			-DENABLE_FULL_LTO="OFF" \
+			-DMAX_BLOCK_SIZE="4096"
 	fi
 
-	${MAKE_CMD}
+	if [[ $OSTYPE == "cygwin" ]]; then # do not use time -p
+		ninja -C $OUT
+	else
+		${MAKE_CMD}
+	fi
 }
 
 build()
@@ -90,11 +103,15 @@ build()
 	fi
 }
 
-build "Android" "arm64-v8a" "android-31"
-build "Android" "armeabi-v7a" "android-31"
-build "Android" "x86_64" "android-31"
-build "Android" "x86" "android-31"
-build "Linux" "x86_64" "WSL"
-build "Linux" "x86_64"
+if [[ $OSTYPE == "linux" ]]; then
+	build "Android" "arm64-v8a" "android-31"
+	build "Android" "armeabi-v7a" "android-31"
+	build "Android" "x86_64" "android-31"
+	build "Android" "x86" "android-31"
+	build "Linux" "x86_64" "WSL"
+	build "Linux" "x86_64"
+elif [[ $OSTYPE == "cygwin" ]]; then
+	build "Cygwin" "x86_64"
+fi
 
 exit 0
