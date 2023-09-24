@@ -44,8 +44,14 @@ set(GLOBAL_CFLAGS
 	"-fstack-protector-strong"
 	"-fno-exceptions"
 	"-fno-rtti"
-	"-nostdinc++"
 )
+if (NOT CYGWIN)
+	# Cygwin libcxx has not impl yet.
+	list(APPEND GLOBAL_CFLAGS
+		"-nostdinc++"
+	)
+endif()
+
 set(GLOBAL_CFLAGS_RELEASE
 	"-Os"
 	"-D_FORTIFY_SOURCE=2"
@@ -60,7 +66,7 @@ set(GLOBAL_LDFLAGS_RELEASE)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 	list(APPEND GLOBAL_LDFLAGS "-Wl,-dead_strip,-S,-x")
-elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android|Cygwin")
 	list(APPEND GLOBAL_CFLAGS "-fno-semantic-interposition")
 	list(APPEND GLOBAL_LDFLAGS "-Wl,--no-undefined" "-static")
 	list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-s,-x,--gc-sections")
@@ -79,8 +85,11 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
 			list(APPEND GLOBAL_LDFLAGS "-T${CMAKE_CURRENT_SOURCE_DIR}/lto_fix.lds")
 		endif ()
 		if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
-			list(APPEND GLOBAL_LDFLAGS "-fuse-ld=lld")
-			list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-icf=safe,--lto-O3")
+			if (NOT CYGWIN)
+			# Cygwin lld is not work. cause have no __begin_base__ and __bss_base__ and exit also
+				list(APPEND GLOBAL_LDFLAGS "-fuse-ld=lld")
+				list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-icf=safe,--lto-O3")
+			endif ()
 		endif ()
 	endif ()
 	add_definitions("-DNDEBUG")
