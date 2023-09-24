@@ -11,7 +11,7 @@ on:
       version:
         description: 'Version'
         required: false
-        default: 'v1.5-23010100'
+        default: 'v1.7-23092300'
 
 jobs:
   release:
