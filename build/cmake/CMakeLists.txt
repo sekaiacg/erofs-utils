@@ -64,6 +64,11 @@ set(GLOBAL_LDFLAGS
 )
 set(GLOBAL_LDFLAGS_RELEASE)
 
+if (CYGWIN)
+	list(APPEND GLOBAL_CFLAGS "-static")
+	list(APPEND GLOBAL_LDFLAGS "-static")
+endif ()
+
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 	list(APPEND GLOBAL_LDFLAGS "-Wl,-dead_strip,-S,-x")
 elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android|Cygwin")
