@@ -11,6 +11,10 @@ set(TARGET_CFLAGS
 	"-Wno-c99-designator"
 )
 
+if (CYGWIN)
+	list(APPEND TARGET_CFLAGS "-Doff64_t=off_t" "-Wno-format")
+endif()
+
 set(libbase_srcs
 	"${TARGET_SRC_DIR}/abi_compatibility.cpp"
 	"${TARGET_SRC_DIR}/chrono_utils.cpp"
@@ -29,6 +33,13 @@ set(libbase_srcs
 	"${TARGET_SRC_DIR}/threads.cpp"
 	"${TARGET_SRC_DIR}/test_utils.cpp"
 )
+
+if (CYGWIN)
+	# linux target support this, windows not support this
+	list(REMOVE_ITEM libbase_srcs "${TARGET_SRC_DIR}/cmsg.cpp")
+	list(APPEND libbase_srcs 
+			"${TARGET_SRC_DIR}/errors_unix.cpp")
+endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 	list(APPEND libbase_srcs "${TARGET_SRC_DIR}/errors_unix.cpp")
