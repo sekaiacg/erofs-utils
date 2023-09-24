@@ -1,5 +1,9 @@
 include(headers.cmake)
-include(libcxx/libcxx.cmake)
+if (NOT CYGWIN)
+	# Cygwin libcxx is not impl yet
+	# Use stdc++ instead
+	include(libcxx/libcxx.cmake)
+endif()
 include(libbase.cmake)
 include(libcutils.cmake)
 include(liblog.cmake)
@@ -9,7 +13,7 @@ include(libz.cmake)
 include(liberofs.cmake)
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	include(libfuse/libfuse.cmake)
-elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin|Cygwin")
 	include(libext2_uuid.cmake)
 endif ()
 
