@@ -1,6 +1,8 @@
 #ifndef _EXTRACT_LOGGING_H
 #define _EXTRACT_LOGGING_H
 
+#include <stdarg.h>
+
 /**
  *	Partial code reference：https://blog.csdn.net/m_pfly_fish/article/details/118541894
  *	Partial code reference: erofs/print.h
