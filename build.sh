@@ -2,6 +2,13 @@ OUT="./out"
 BUILD_DIR="./build/cmake"
 EROFS_VERSION="v$(. scripts/get-version-number)"
 
+if [[ $OS == "Windows_NT" ]]; then
+	# defined by system if windows, mingw also can detect this
+	EXT=".exe"
+else
+	EXT=""
+fi
+
 cmake_build()
 {
 	local TARGET=$1
@@ -94,7 +101,7 @@ build()
 	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$FUSE_BIN" -a -f "$MKFS_BIN" -a -f "$EXTRACT_BIN" ]; then
 		echo "复制文件中..."
 		[[ ! -d "$TARGET_DIR_PATH" ]] && mkdir -p ${TARGET_DIR_PATH}
-		cp -af $BUILD/*.erofs ${TARGET_DIR_PATH}
+		cp -af $BUILD/*.erofs${EXT} ${TARGET_DIR_PATH}
 		touch -c -d "2009-01-01 00:00:00" ${TARGET_DIR_PATH}/*
 		echo "编译成功: ${TARGE_DIR_NAME}"
 	else
