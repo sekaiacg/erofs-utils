@@ -34,3 +34,8 @@ add_subdirectory("${LIB_DIR}/xz" "xz")
 if (CMAKE_SYSTEM_NAME MATCHES "Android")
 	include(libpackagelistparser.cmake)
 endif ()
+
+if (CYGWIN)
+	# apply cygwin patches
+	execute_process(COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/patch/cygwin/apply_patches.sh "${LIB_DIR}")
+endif ()
