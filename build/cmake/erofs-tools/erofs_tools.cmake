@@ -17,22 +17,28 @@ endif()
 
 set(common_static_link_lib
 	${ld_start_group}
-	base
+	dl
+	erofs_static
 	cutils
+	base
 	log
 	selinux
-	pcre2
 	lz4_static
 	liblzma
 	z_stable
-	dl
-	erofs_static
+	pcre2
 	${ld_end_group}
 )
 
-if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin|Cygwin")
 	list(APPEND common_static_link_lib "ext2_uuid" "iconv")
 endif()
+
+if (CYGWIN)
+	# extract.erofs use ntdll function to change a dir case sensitive
+	# so we need to link to ntdll
+	list(APPEND common_static_link_lib "ntdll")
+endif ()
 
 ###############################------mkfs.erofs------###############################
 set(TARGET_mkfs mkfs.erofs)
