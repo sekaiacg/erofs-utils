@@ -13,6 +13,11 @@ set(TARGET_CFLAGS
 	"-U__ANDROID__"
 )
 
+if (CYGWIN)
+	# this is cygwin bug
+	list(APPEND TARGET_CFLAGS "-D_Bool=bool")
+endif()
+
 set(liblog_srcs
 	"${TARGET_SRC_DIR}/log_event_list.cpp"
 	"${TARGET_SRC_DIR}/log_event_write.cpp"
