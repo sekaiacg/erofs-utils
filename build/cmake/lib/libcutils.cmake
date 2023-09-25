@@ -38,6 +38,13 @@ set(libcutils_socket_nonwindows_srcs
 	"${TARGET_SRC_DIR}/sockets_unix.cpp"
 )
 
+if (CYGWIN) 
+	list(APPEND libcutils_srcs
+		"${TARGET_SRC_DIR}/canned_fs_config.cpp"
+		"${TARGET_SRC_DIR}/fs_config.cpp"
+	)
+endif ()
+
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 	list(APPEND libcutils_srcs
 		${libcutils_socket_srcs}
