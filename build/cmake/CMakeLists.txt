@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.26)
+cmake_minimum_required(VERSION 3.25...3.27)
 project(erofs-utils LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
@@ -44,8 +44,14 @@ set(GLOBAL_CFLAGS
 	"-fstack-protector-strong"
 	"-fno-exceptions"
 	"-fno-rtti"
-	"-nostdinc++"
 )
+if (NOT CYGWIN)
+	# Cygwin libcxx has not impl yet.
+	list(APPEND GLOBAL_CFLAGS
+		"-nostdinc++"
+	)
+endif()
+
 set(GLOBAL_CFLAGS_RELEASE
 	"-Os"
 	"-D_FORTIFY_SOURCE=2"
@@ -67,6 +73,9 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	if (CMAKE_SYSTEM_NAME MATCHES "Android")
 		list(APPEND GLOBAL_CFLAGS "-DANDROID" "-mllvm" "-polly")
 	endif ()
+elseif (CMAKE_SYSTEM_NAME MATCHES "CYGWIN")
+	list(APPEND GLOBAL_CFLAGS "-static")
+	list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-s,-x,--gc-sections" "-static")
 endif ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -78,7 +87,8 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
 			# https://github.com/android/ndk/issues/1461
 			list(APPEND GLOBAL_LDFLAGS "-T${CMAKE_CURRENT_SOURCE_DIR}/lto_fix.lds")
 		endif ()
-		if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
+		if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|CYGWIN")
+			# Cygwin lld is not work. cause have no __begin_base__ and __bss_base__ and exit also
 			list(APPEND GLOBAL_LDFLAGS "-fuse-ld=lld")
 			list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-icf=safe,--lto-O3")
 		endif ()
