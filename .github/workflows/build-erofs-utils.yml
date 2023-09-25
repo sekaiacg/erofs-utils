@@ -15,7 +15,7 @@ on:
 
 jobs:
   release:
-    needs: [ Build-on-Ubuntu, Build-on-macOS ]
+    needs: [ Build-on-Ubuntu, Build-on-macOS, Build-on-Windows ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -26,7 +26,7 @@ jobs:
       - name: Version
         if: github.event.inputs.release == 'true' && github.event.inputs.release != 'false' && !cancelled()
         run: |
-          ARTIFACT_DIR=$(ls); for name in ${ARTIFACT_DIR}; do chmod +x ${name}/*; touch -c -d "2009-01-01 00:00:00" ${name}/*; zip -9 -jy "${name}.zip" ${name}/*.erofs > /dev/null 2>&1; done;
+          ARTIFACT_DIR=$(ls); for name in ${ARTIFACT_DIR}; do chmod +x ${name}/*; touch -c -d "2009-01-01 00:00:00" ${name}/*; zip -9 -jy "${name}.zip" ${name}/* > /dev/null 2>&1; done;
           ls -lahR
 
       - name: Upload release
@@ -197,3 +197,61 @@ jobs:
         with:
           name: ${{ steps.prepareArtifact.outputs.darwinAarch64Name }}
           path: '${{ steps.prepareArtifact.outputs.darwinAarch64Dir }}/${{ steps.prepareArtifact.outputs.darwinAarch64Name }}/*'
+
+  Build-on-Windows:
+    runs-on: windows-latest
+    env:
+      PREBUILT_CLANG: "https://github.com/affggh/llvm-project/releases/download/clang18/clang18.0.0-cygwin64.tar.gz"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Set up Cygwin
+        uses: egor-tensin/setup-cygwin@v3
+        with:
+          platform: x64
+          packages: cmake ninja make gcc-g++ git libiconv-devel zip unzip gettext gettext-devel patch wget
+          
+      - name: Setup cygwin prebuilt clang
+        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
+        run: |
+          wget "${PREBUILT_CLANG}" -O"$HOME/clang.tar.gz"
+          mkdir clang
+          cd clang
+          tar -xvf $HOME/clang.tar.gz
+
+      - name: Clone source code and build
+        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
+        run: |
+          # Setup clang
+          export PATH="$HOME/clang/bin:$PATH"
+
+          # Cygwin bug on cpuset.h
+          sed "s/__cpuset_zero_s/void __cpuset_zero_s/" -i /usr/include/sys/cpuset.h
+
+          # Build
+          git clone $(echo ${{ github.repositoryUrl }} | sed "s/git:/https:/") erofs -b $(echo ${{ github.ref }} | sed "s/refs\/heads\///")
+          cd erofs
+          chmod a+x build_cygwin.sh
+          ./build_cygwin.sh
+          rm -f $(which git)
+
+      - name: Prepare artifact
+        if: success()
+        id: prepareArtifact
+        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
+        run: |
+          cd erofs
+          echo "cygwinX86x64Dir=$(cygpath -w target/Cygwin_x86_64)" >> $GITHUB_OUTPUT
+          cygwinX86x64Name=`ls -d target/Cygwin_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "cygwinX86x64Name=$(cygpath -w $cygwinX86x64Name)" >> $GITHUB_OUTPUT
+
+      - name: Upload erofs-utils Cygwin_x86_64
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.prepareArtifact.outputs.cygwinX86x64Name }}
+          path: 'C:/tools/cygwin/home/runneradmin/erofs/${{ steps.prepareArtifact.outputs.cygwinX86x64Dir }}/${{ steps.prepareArtifact.outputs.cygwinX86x64Name }}/*'

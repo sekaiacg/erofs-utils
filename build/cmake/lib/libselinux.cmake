@@ -20,6 +20,10 @@ set(TARGET_CFLAGS
 	"-DAUDITD_LOG_TAG=1003"
 )
 
+if (CYGWIN)
+	list(APPEND TARGET_CFLAGS "-Wno-char-subscripts")
+endif()
+
 set(libselinux_srcs
 	#"${TARGET_SRC_DIR}/android/android.c"
 	#"${TARGET_SRC_DIR}/android/android_seapp.c"
@@ -84,6 +88,10 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Android")
 	#	list(APPEND libselinux_srcs "${TARGET_SRC_DIR}/android/android_device.c")
 	list(APPEND TARGET_CFLAGS "-DHAVE_STRLCPY")
 endif ()
+
+if (CYGWIN)
+	list(APPEND TARGET_CFLAGS "-DBUILD_HOST")
+endif()
 
 add_library(${TARGET} STATIC ${libselinux_srcs})
 
