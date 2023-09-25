@@ -8,6 +8,7 @@ set(common_headers
 	${libcutils_headers}
 	${libselinux_headers}
 	${libe2fsprogs_headers}
+	${libz_headers}
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
