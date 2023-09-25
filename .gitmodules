@@ -34,3 +34,6 @@
 [submodule "src/libcxx"]
 	path = src/libcxx
 	url = https://github.com/sekaiacg/libcxx
+[submodule "src/winfsp"]
+	path = src/winfsp
+	url = https://github.com/winfsp/winfsp
