@@ -1,0 +1,30 @@
+From 7fe194365ffad00c9bd526adddbba663b3d49df6 Mon Sep 17 00:00:00 2001
+From: affggh <879632264@qq,com>
+Date: Sun, 24 Sep 2023 10:06:02 +0800
+Subject: [PATCH] Cygwin: libselinux: Replace __selinux_once to __pthread_once
+
+---
+ libselinux/src/selinux_internal.h | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/libselinux/src/selinux_internal.h b/libselinux/src/selinux_internal.h
+index d1e6c50f..6d914269 100644
+--- a/libselinux/src/selinux_internal.h
++++ b/libselinux/src/selinux_internal.h
+@@ -26,6 +26,13 @@ extern int selinux_page_size ;
+ 		}					\
+ 	} while (0)
+ 
++#ifdef __CYGWIN__
++#undef __selinux_once
++// Use pthread_once instead __selinux_once
++#define __selinux_once(ONCE_CONTROL, INIT_FUNCTION) \
++	pthread_once (&(ONCE_CONTROL), (INIT_FUNCTION))
++#endif
++
+ /* Pthread key macros */
+ #define __selinux_key_create(KEY, DESTRUCTOR)			\
+ 	(pthread_key_create != NULL ? pthread_key_create(KEY, DESTRUCTOR) : -1)
+-- 
+2.39.0
+
