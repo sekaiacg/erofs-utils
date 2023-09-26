@@ -48,6 +48,23 @@ cmake_build()
 				-DCMAKE_CXX_FLAGS="" \
 				-DENABLE_FULL_LTO="ON" \
 				-DMAX_BLOCK_SIZE="4096"
+		elif [[ ${ABI} == "aarch64" ]]; then
+			cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+				-DCMAKE_SYSTEM_NAME="Linux" \
+				-DCMAKE_SYSTEM_PROCESSOR="aarch64" \
+				-DCMAKE_BUILD_TYPE="Release" \
+				-DRUN_ON_WSL="${WSL}" \
+				-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
+				-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
+				-DCMAKE_C_COMPILER="${CUSTOM_CLANG_PATH}/bin/clang" \
+				-DCMAKE_CXX_COMPILER="${CUSTOM_CLANG_PATH}/bin/clang++" \
+				-DCMAKE_SYSROOT="${AARCH64_GCC_PATH}/aarch64-linux-gnu/libc" \
+				-DCMAKE_C_COMPILER_TARGET="aarch64-linux-gnu" \
+				-DCMAKE_CXX_COMPILER_TARGET="aarch64-linux-gnu" \
+				-DCMAKE_C_FLAGS="--gcc-toolchain=${AARCH64_GCC_PATH}" \
+				-DCMAKE_CXX_FLAGS="--gcc-toolchain=${AARCH64_GCC_PATH}" \
+				-DENABLE_FULL_LTO="ON" \
+				-DMAX_BLOCK_SIZE="4096"
 		elif [[ ${ABI} == "loongarch64" ]]; then
 			cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
 				-DCMAKE_SYSTEM_NAME="Linux" \
@@ -117,6 +134,7 @@ build "Android" "x86_64" "android-31"
 build "Android" "x86" "android-31"
 build "Linux" "x86_64"
 build "Linux" "x86_64" "WSL"
+build "Linux" "aarch64"
 build "Linux" "loongarch64"
 
 exit 0
