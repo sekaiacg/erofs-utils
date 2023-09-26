@@ -50,6 +50,7 @@ jobs:
       CCACHE_NOHASHDIR: "true"
       CCACHE_MAXSIZE: "50M"
       CCACHE_HARDLINK: "true"
+      AARCH64_TOOLS_PATH: "/opt/aarch64"
       LOONGARCH64_TOOLS_PATH: "/opt/loongarch64"
 
     steps:
@@ -76,6 +77,24 @@ jobs:
           wget https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.4/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz
           tar -xf clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C /opt
           echo "CUSTOM_CLANG_PATH=/opt/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04" >> $GITHUB_ENV
+
+      - name: Set up cache aarch64 tools
+        id: cache-aarch64-tools
+        uses: actions/cache@v3
+        with:
+          path:  ${{ env.AARCH64_TOOLS_PATH }}
+          key: ${{ runner.os }}-aarch64_tools_230927
+
+      - name: Download and install aarch64 tools
+        if: steps.cache-aarch64-tools.outputs.cache-hit != 'true'
+        run: |
+          wget https://github.com/sekaiacg/erofs-utils/releases/download/v1.7-230924/gcc-linaro-13.0.0-2022.11-x86_64_aarch64-linux-gnu.tar.xz
+          mkdir ${AARCH64_TOOLS_PATH}
+          tar -xf gcc-linaro-13.0.0-2022.11-x86_64_aarch64-linux-gnu.tar.xz -C ${AARCH64_TOOLS_PATH}
+
+      - name: Set up aarch64 tools
+        run: |
+          echo "AARCH64_GCC_PATH=${AARCH64_TOOLS_PATH}/gcc-linaro-13.0.0-2022.11-x86_64_aarch64-linux-gnu" >> $GITHUB_ENV
 
       - name: Set up cache loongarch64 tools
         id: cache-loongarch64-tools
@@ -132,6 +151,9 @@ jobs:
           echo "wslX86x64Dir=target/WSL_x86_64" >> $GITHUB_OUTPUT
           wslX86x64Name=`ls -d target/WSL_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "wslX86x64Name=$wslX86x64Name" >> $GITHUB_OUTPUT
 
+          echo "linuxAarch64Dir=target/Linux_aarch64" >> $GITHUB_OUTPUT
+          linuxAarch64Name=`ls -d target/Linux_aarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxAarch64Name=$linuxAarch64Name" >> $GITHUB_OUTPUT
+
           echo "linuxLoongarch64Dir=target/Linux_loongarch64" >> $GITHUB_OUTPUT
           linuxLoongarch64Name=`ls -d target/Linux_loongarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxLoongarch64Name=$linuxLoongarch64Name" >> $GITHUB_OUTPUT
 
@@ -176,6 +198,13 @@ jobs:
         with:
           name: ${{ steps.Artifact.outputs.wslX86x64Name }}
           path: '${{ steps.Artifact.outputs.wslX86x64Dir }}/${{ steps.Artifact.outputs.wslX86x64Name }}/*'
+
+      - name: Upload erofs-utils Linux_aarch64
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.Artifact.outputs.linuxAarch64Name }}
+          path: '${{ steps.Artifact.outputs.linuxAarch64Dir }}/${{ steps.Artifact.outputs.linuxAarch64Name }}/*'
 
       - name: Upload erofs-utils Linux_loongarch64
         if: success()
