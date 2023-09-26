@@ -50,6 +50,7 @@ jobs:
       CCACHE_NOHASHDIR: "true"
       CCACHE_MAXSIZE: "50M"
       CCACHE_HARDLINK: "true"
+      LOONGARCH64_TOOLS_PATH: "/opt/loongarch64"
 
     steps:
       - name: Checkout
@@ -59,7 +60,9 @@ jobs:
           fetch-depth: 0
 
       - name: Update system and install dependencies
-        run: sudo apt update -y && sudo apt install llvm g++-multilib ninja-build -y
+        run: |
+          sudo apt update -y
+          sudo apt install llvm ninja-build -y
 
       - name: Install NDK
         uses: nttld/setup-ndk@v1
@@ -67,6 +70,32 @@ jobs:
         with:
           ndk-version: r25c
           local-cache: true
+
+      - name: Download and install clang-16.0.4
+        run: |
+          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.4/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz
+          tar -xf clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C /opt
+          echo "CUSTOM_CLANG_PATH=/opt/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04" >> $GITHUB_ENV
+
+      - name: Set up cache loongarch64 tools
+        id: cache-loongarch64-tools
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.LOONGARCH64_TOOLS_PATH }}
+          key: ${{ runner.os }}-loongarch64_tools_230927
+
+      - name: Download and install loongarch64 tools
+        if: steps.cache-loongarch64-tools.outputs.cache-hit != 'true'
+        run: |
+          wget https://github.com/loongson/build-tools/releases/download/2023.08.08/CLFS-loongarch64-8.1-x86_64-cross-tools-gcc-glibc.tar.xz
+          mkdir ${LOONGARCH64_TOOLS_PATH}
+          tar -xf CLFS-loongarch64-8.1-x86_64-cross-tools-gcc-glibc.tar.xz -C ${LOONGARCH64_TOOLS_PATH}
+
+      - name: Set up loongarch64 tools
+        run: |
+          echo "LD_LIBRARY_PATH=${LOONGARCH64_TOOLS_PATH}/cross-tools/target/usr/lib64:${LOONGARCH64_TOOLS_PATH}/cross-tools/loongarch64-unknown-linux-gnu/lib64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "PATH=$GITHUB_WORKSPACE:${LOONGARCH64_TOOLS_PATH}/cross-tools/bin:$PATH" >> $GITHUB_ENV
+          echo "LOONGARCH64_GCC_PATH=${LOONGARCH64_TOOLS_PATH}/cross-tools" >> $GITHUB_ENV
 
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -97,11 +126,14 @@ jobs:
           echo "androidX86Dir=target/Android_x86" >> $GITHUB_OUTPUT
           androidX86Name=`ls -d target/Android_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86Name=$androidX86Name" >> $GITHUB_OUTPUT
 
+          echo "linuxX86x64Dir=target/Linux_x86_64" >> $GITHUB_OUTPUT
+          linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
+
           echo "wslX86x64Dir=target/WSL_x86_64" >> $GITHUB_OUTPUT
           wslX86x64Name=`ls -d target/WSL_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "wslX86x64Name=$wslX86x64Name" >> $GITHUB_OUTPUT
 
-          echo "linuxX86x64Dir=target/Linux_x86_64" >> $GITHUB_OUTPUT
-          linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
+          echo "linuxLoongarch64Dir=target/Linux_loongarch64" >> $GITHUB_OUTPUT
+          linuxLoongarch64Name=`ls -d target/Linux_loongarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxLoongarch64Name=$linuxLoongarch64Name" >> $GITHUB_OUTPUT
 
       - name: Upload erofs-utils Android_arm64-v8a
         if: success()
@@ -131,6 +163,13 @@ jobs:
           name: ${{ steps.Artifact.outputs.androidX86Name }}
           path: '${{ steps.Artifact.outputs.androidX86Dir }}/${{ steps.Artifact.outputs.androidX86Name }}/*'
 
+      - name: Upload erofs-utils Linux_x86_64
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ steps.Artifact.outputs.linuxX86x64Name }}
+          path: '${{ steps.Artifact.outputs.linuxX86x64Dir }}/${{ steps.Artifact.outputs.linuxX86x64Name }}/*'
+
       - name: Upload erofs-utils WSL_x86_64
         if: success()
         uses: actions/upload-artifact@v3
@@ -138,12 +177,12 @@ jobs:
           name: ${{ steps.Artifact.outputs.wslX86x64Name }}
           path: '${{ steps.Artifact.outputs.wslX86x64Dir }}/${{ steps.Artifact.outputs.wslX86x64Name }}/*'
 
-      - name: Upload erofs-utils Linux_x86_64
+      - name: Upload erofs-utils Linux_loongarch64
         if: success()
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ steps.Artifact.outputs.linuxX86x64Name }}
-          path: '${{ steps.Artifact.outputs.linuxX86x64Dir }}/${{ steps.Artifact.outputs.linuxX86x64Name }}/*'
+          name: ${{ steps.Artifact.outputs.linuxLoongarch64Name }}
+          path: '${{ steps.Artifact.outputs.linuxLoongarch64Dir }}/${{ steps.Artifact.outputs.linuxLoongarch64Name }}/*'
 
   Build-on-macOS:
     runs-on: macos-latest
@@ -215,7 +254,7 @@ jobs:
         with:
           platform: x64
           packages: cmake ninja make gcc-g++ git libiconv-devel zip unzip gettext gettext-devel patch wget
-          
+
       - name: Setup cygwin prebuilt clang
         shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
         run: |
