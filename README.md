@@ -36,5 +36,6 @@ usage: [options]
 ```
 
 **Contributors**
-- 感谢[lateautumn233](https://github.com/lateautumn233)提供的[erofs-utils](https://github.com/lateautumn233/erofs-utils)编译方法
 - Thanks to [lateautumn233](https://github.com/lateautumn233) for the [erofs-utils](https://github.com/lateautumn233/erofs-utils) compilation method.
+- [xiaoleGun](https://github.com/xiaoleGun): Proposal to support MacOS
+- [affggh](https://github.com/affggh): Cygwin support
