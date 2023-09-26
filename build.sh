@@ -34,17 +34,38 @@ cmake_build()
 		local LINUX_PLATFORM=$4
 		local WSL="OFF"
 		[ "${LINUX_PLATFORM}" == "WSL" ] && WSL="ON"
-		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
-			-DCMAKE_BUILD_TYPE="Release" \
-			-DRUN_ON_WSL="${WSL}" \
-			-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
-			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
-			-DCMAKE_C_COMPILER="clang" \
-			-DCMAKE_CXX_COMPILER="clang++" \
-			-DCMAKE_C_FLAGS="" \
-			-DCMAKE_CXX_FLAGS="" \
-			-DENABLE_FULL_LTO="ON" \
-			-DMAX_BLOCK_SIZE="4096"
+		if [[ ${ABI} == "x86_64" ]]; then
+			cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+				-DCMAKE_SYSTEM_NAME="Linux" \
+				-DCMAKE_SYSTEM_PROCESSOR="x86_64" \
+				-DCMAKE_BUILD_TYPE="Release" \
+				-DRUN_ON_WSL="${WSL}" \
+				-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
+				-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
+				-DCMAKE_C_COMPILER="${CUSTOM_CLANG_PATH}/bin/clang" \
+				-DCMAKE_CXX_COMPILER="${CUSTOM_CLANG_PATH}/bin/clang++" \
+				-DCMAKE_C_FLAGS="" \
+				-DCMAKE_CXX_FLAGS="" \
+				-DENABLE_FULL_LTO="ON" \
+				-DMAX_BLOCK_SIZE="4096"
+		elif [[ ${ABI} == "loongarch64" ]]; then
+			cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+				-DCMAKE_SYSTEM_NAME="Linux" \
+				-DCMAKE_SYSTEM_PROCESSOR="loongarch64" \
+				-DCMAKE_BUILD_TYPE="Release" \
+				-DRUN_ON_WSL="${WSL}" \
+				-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
+				-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
+				-DCMAKE_C_COMPILER="${CUSTOM_CLANG_PATH}/bin/clang" \
+				-DCMAKE_CXX_COMPILER="${CUSTOM_CLANG_PATH}/bin/clang++" \
+				-DCMAKE_SYSROOT="${LOONGARCH64_GCC_PATH}/target" \
+				-DCMAKE_C_COMPILER_TARGET="loongarch64-linux-gnu" \
+				-DCMAKE_CXX_COMPILER_TARGET="loongarch64-linux-gnu" \
+				-DCMAKE_C_FLAGS="--gcc-toolchain=${LOONGARCH64_GCC_PATH}" \
+				-DCMAKE_CXX_FLAGS="--gcc-toolchain=${LOONGARCH64_GCC_PATH}" \
+				-DENABLE_FULL_LTO="OFF" \
+				-DMAX_BLOCK_SIZE="4096"
+		fi
 	fi
 
 	${MAKE_CMD}
@@ -94,7 +115,8 @@ build "Android" "arm64-v8a" "android-31"
 build "Android" "armeabi-v7a" "android-31"
 build "Android" "x86_64" "android-31"
 build "Android" "x86" "android-31"
-build "Linux" "x86_64" "WSL"
 build "Linux" "x86_64"
+build "Linux" "x86_64" "WSL"
+build "Linux" "loongarch64"
 
 exit 0
