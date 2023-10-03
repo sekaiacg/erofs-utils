@@ -316,22 +316,30 @@ fail_eio:
 	 * @return
 	 */
 	int erofs_extract_dir(const char *dirPath) {
+		bool tryagain = true;
 
+again:
 		if (mkdirs(dirPath, 0700) < 0) {
 			struct stat st = {};
-
-			if (errno != EEXIST) {
-				return -errno;
+			if (eo->overwrite && tryagain) {
+				if (errno == EEXIST) {
+					if (lstat(dirPath, &st) || !S_ISDIR(st.st_mode)) {
+						if (unlink(dirPath) < 0) {
+							return -errno;
+						}
+					} else if (chmod(dirPath, 0700) < 0) {
+						return -errno;
+					}
+				}
+				tryagain = false;
+				goto again;
 			}
 
-			if (lstat(dirPath, &st) ||
-				!S_ISDIR(st.st_mode)) {
-				return -ENOTDIR;
+			if (errno == EEXIST) {
+				if (lstat(dirPath, &st) || !S_ISDIR(st.st_mode))
+					return -ENOTDIR;
 			}
-
-			if (chmod(dirPath, 0700) < 0) {
-				return -errno;
-			}
+			return -errno;
 		}
 		return 0;
 	}
