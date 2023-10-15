@@ -69,8 +69,8 @@ jobs:
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r25c
-          local-cache: true
+          ndk-version: r26b
+          local-cache: false
 
       - name: Download and install clang-16.0.4
         run: |
