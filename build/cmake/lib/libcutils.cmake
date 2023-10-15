@@ -18,7 +18,6 @@ set(libcutils_srcs
 	"${TARGET_SRC_DIR}/properties.cpp"
 	"${TARGET_SRC_DIR}/record_stream.cpp"
 	"${TARGET_SRC_DIR}/strlcpy.c"
-	"${TARGET_SRC_DIR}/threads.cpp"
 )
 set(libcutils_nonwindows_srcs
 	"${TARGET_SRC_DIR}/fs.cpp"
@@ -38,7 +37,7 @@ set(libcutils_socket_nonwindows_srcs
 	"${TARGET_SRC_DIR}/sockets_unix.cpp"
 )
 
-if (CYGWIN) 
+if (CYGWIN)
 	list(APPEND libcutils_srcs
 		"${TARGET_SRC_DIR}/canned_fs_config.cpp"
 		"${TARGET_SRC_DIR}/fs_config.cpp"
@@ -50,9 +49,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 		${libcutils_socket_srcs}
 		${libcutils_socket_nonwindows_srcs}
 		${libcutils_nonwindows_srcs}
-		"${TARGET_SRC_DIR}/ashmem-host.cpp"
 		"${TARGET_SRC_DIR}/canned_fs_config.cpp"
 		"${TARGET_SRC_DIR}/fs_config.cpp"
+		"${TARGET_SRC_DIR}/ashmem-host.cpp"
 		"${TARGET_SRC_DIR}/trace-host.cpp"
 	)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Android")

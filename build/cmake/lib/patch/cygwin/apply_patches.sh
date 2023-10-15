@@ -29,9 +29,6 @@ gitapply $LIBBASE \
 gitapply $LIBSELINUX \
     "$CURRENT_DIR/0001-Cygwin-libselinux-Replace-__selinux_once-to-__pthrea.patch"
 
-gitapply $LIBCUTILS \
-    "$CURRENT_DIR/0001-Cygwin-libcutils-Add-cygwin-flag-on-threads.cpp.patch"
-
 gitapply $LIBLOG \
     "$CURRENT_DIR/0001-Cygwin-liblog-Add-cygwin-flags.patch"
 
