@@ -13,7 +13,7 @@ set(TARGET_CFLAGS
 
 if (CYGWIN)
 	list(APPEND TARGET_CFLAGS "-Doff64_t=off_t" "-Wno-format")
-endif()
+endif ()
 
 set(libbase_srcs
 	"${TARGET_SRC_DIR}/abi_compatibility.cpp"
@@ -37,9 +37,9 @@ set(libbase_srcs
 if (CYGWIN)
 	# linux target support this, windows not support this
 	list(REMOVE_ITEM libbase_srcs "${TARGET_SRC_DIR}/cmsg.cpp")
-	list(APPEND libbase_srcs 
-			"${TARGET_SRC_DIR}/errors_unix.cpp")
-endif()
+	list(APPEND libbase_srcs "${TARGET_SRC_DIR}/errors_unix.cpp")
+	list(APPEND TARGET_CFLAGS "-D_POSIX_THREAD_SAFE_FUNCTIONS")
+endif ()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
 	list(APPEND libbase_srcs "${TARGET_SRC_DIR}/errors_unix.cpp")
