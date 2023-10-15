@@ -70,7 +70,7 @@ target_compile_options(${TARGET_fsck} PRIVATE ${common_compile_flags})
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 ###############################------fuse.erofs------###############################
 	set(TARGET_fuse fuse.erofs)
-	file(GLOB fuse_srcs "${PROJECT_ROOT_DIR}/fuse/*.c")
+	set(fuse_srcs "${PROJECT_ROOT_DIR}/fuse/main.c")
 
 	add_executable(${TARGET_fuse} ${fuse_srcs})
 	target_precompile_headers(${TARGET_fuse} PRIVATE "${PROJECT_ROOT_DIR}/fuse/macosx.h")
@@ -86,7 +86,7 @@ elseif (CYGWIN)
 	# install winfsp to cygwin
 	execute_process(COMMAND bash "${LIB_DIR}/winfsp/opt/cygfuse/dist/install.sh")
 	set(TARGET_fuse fuse.erofs)
-	file(GLOB fuse_srcs "${PROJECT_ROOT_DIR}/fuse/*.c")
+	set(fuse_srcs "${PROJECT_ROOT_DIR}/fuse/main_win.c")
 
 	add_executable(${TARGET_fuse} ${fuse_srcs})
 	target_include_directories(${TARGET_fuse} PRIVATE ${common_headers} "/usr/include/fuse")
