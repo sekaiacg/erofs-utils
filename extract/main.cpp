@@ -6,6 +6,7 @@
 #include <getopt.h>
 #include <erofs/io.h>
 #include <erofs/compress.h>
+#include "../lib/compressor.h"
 #include <erofs/config.h>
 #include <erofs/print.h>
 #include <sys/time.h>
@@ -23,12 +24,12 @@ using namespace skkk;
 static inline void get_available_compressors(string &ret) {
 	int i = 0;
 	bool comma = false;
-	const char *s;
+	const struct erofs_algorithm *s;
 
 	while ((s = z_erofs_list_available_compressors(&i)) != nullptr) {
 		if (comma)
 			ret.append(", ");
-		ret.append(s);
+		ret.append(s->name);
 		comma = true;
 	}
 }
@@ -39,6 +40,7 @@ static inline void usage() {
 			 BROWN "usage: [options]" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-h, --help" COLOR_NONE "              " BROWN "Display this help and exit" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-i, --image=[FILE]" COLOR_NONE "      " BROWN "Image file" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "--offset=#" COLOR_NONE "              " BROWN "skip # bytes at the beginning of IMAGE" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-p" COLOR_NONE "                      " BROWN "Print all entrys" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-P, --print=X" COLOR_NONE "           " BROWN "Print the target of path X" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-x" COLOR_NONE "                      " BROWN "Extract all items" COLOR_NONE "\n"
@@ -69,6 +71,7 @@ static struct option arg_options[] = {
 		{"help",      no_argument,       nullptr, 'h'},
 		{"version",   no_argument,       nullptr, 'V'},
 		{"image",     required_argument, nullptr, 'i'},
+		{"offset",    required_argument, nullptr, 2},
 		{"outdir",    required_argument, nullptr, 'o'},
 		{"print",     required_argument, nullptr, 'P'},
 		{"overwrite", no_argument,       nullptr, 'f'},
@@ -137,10 +140,11 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 				LOGCD("targetConfigRecurse=%d", eo->targetConfigRecurse);
 				break;
 			case 'T':
-				eo->useMultiThread = true;
 				if (optarg) {
-					unsigned int n = strtoul(optarg, nullptr, 10);
-					if (n > 0) {
+					char *endPtr;
+					uint64_t n = strtoull(optarg, &endPtr, 0);
+					if (*endPtr == '\0') {
+						eo->useMultiThread = true;
 						eo->threadNum = n;
 					}
 				}
@@ -148,6 +152,16 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 			case 1:
 				eo->extractOnlyConfAndSeLabel = true;
 				LOGCD("extractOnlyConfAndSeLabel=%d", eo->extractOnlyConfAndSeLabel);
+				break;
+			case 2:
+				if (optarg) {
+					char *endPtr;
+					uint64_t n = strtoull(optarg, &endPtr, 0);
+					if (*endPtr == '\0') {
+						sbi.diskoffset = n;
+						LOGCD("offset=%lu", sbi.diskoffset);
+					}
+				}
 				break;
 			default:
 				usage();
