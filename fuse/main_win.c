@@ -201,6 +201,7 @@ static struct options {
 	u64 offset;
 	unsigned int debug_lvl;
 	bool show_help;
+	bool show_version;
 	bool odebug;
 } fusecfg;
 
@@ -209,6 +210,7 @@ static const struct fuse_opt option_spec[] = {
 		OPTION("--offset=%lu", offset),
 		OPTION("--dbglevel=%u", debug_lvl),
 		OPTION("--help", show_help),
+		OPTION("--version", show_version),
 		FUSE_OPT_KEY("--device=", 1),
 		FUSE_OPT_END
 };
@@ -219,15 +221,17 @@ static void usage(void)
 
 	fputs("usage: [options] IMAGE MOUNTPOINT\n\n"
 		  "Options:\n"
-		  "    --offset=#             skip # bytes when reading IMAGE\n"
+		  "    --offset=#             skip # bytes at the beginning of IMAGE\n"
 		  "    --dbglevel=#           set output message level to # (maximum 9)\n"
 		  "    --device=#             specify an extra device to be used together\n"
 		  #if FUSE_MAJOR_VERSION < 3
 		  "    --help                 display this help and exit\n"
+		  "    --version              display erofsfuse version\n"
 		  #endif
 		  "\n", stderr);
 
 #if FUSE_MAJOR_VERSION >= 3
+	fputs("\nFUSE options:\n", stderr);
 	fuse_cmdline_help();
 #else
 	fuse_opt_add_arg(&args, ""); /* progname */
@@ -270,10 +274,10 @@ static int optional_opt_func(void *data, const char *arg, int key,
 		case FUSE_OPT_KEY_OPT:
 			if (!strcmp(arg, "-d"))
 				fusecfg.odebug = true;
-			break;
-		default:
-			DBG_BUGON(1);
-			break;
+			if (!strcmp(arg, "-h"))
+				fusecfg.show_help = true;
+			if (!strcmp(arg, "-V"))
+				fusecfg.show_version = true;
 	}
 	return 1;
 }
@@ -323,14 +327,14 @@ int main(int argc, char *argv[])
 	if (ret)
 		goto err;
 
-	if (fusecfg.show_help || !fusecfg.mountpoint)
+	if (fusecfg.show_help || fusecfg.show_version || !fusecfg.mountpoint)
 		usage();
 	cfg.c_dbg_lvl = fusecfg.debug_lvl;
 
 	if (fusecfg.odebug && cfg.c_dbg_lvl < EROFS_DBG)
 		cfg.c_dbg_lvl = EROFS_DBG;
 
-	cfg.c_offset = fusecfg.offset;
+	sbi.diskoffset = fusecfg.offset;
 
 	erofsfuse_dumpcfg();
 	ret = dev_open_ro(&sbi, fusecfg.disk);
