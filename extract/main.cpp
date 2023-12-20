@@ -16,7 +16,7 @@
 #include "Logging.h"
 
 #if defined(__CYGWIN__) || defined(_WIN32)
-#include "WinCaseSensitiveInfo.h"
+#include "CaseSensitiveInfo.h"
 #endif
 
 using namespace skkk;
@@ -276,7 +276,7 @@ int main(int argc, char **argv) {
 		}
 #if defined(__CYGWIN__) || defined(_WIN32)
 		// Dir must exist and empty.
-		if (setCaseSensitiveInfo(eo->getOutDir(), true) == true)
+		if (EnsureCaseSensitive(eo->getOutDir().c_str()) == 0)
 			LOGCI("Success change case sensitive.");
 		else
 			LOGCW("Failed change case sensitive.");
