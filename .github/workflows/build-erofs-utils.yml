@@ -299,7 +299,7 @@ jobs:
           export PATH="$HOME/clang/bin:$PATH"
 
           # Cygwin bug on cpuset.h
-          sed "s/__cpuset_zero_s/void __cpuset_zero_s/" -i /usr/include/sys/cpuset.h
+          #sed "s/__cpuset_zero_s/void __cpuset_zero_s/" -i /usr/include/sys/cpuset.h
 
           # Build
           git clone $(echo ${{ github.repositoryUrl }} | sed "s/git:/https:/") erofs -b $(echo ${{ github.ref }} | sed "s/refs\/heads\///")
