@@ -6,7 +6,8 @@
 	url = https://android.googlesource.com/platform/system/logging.git
 [submodule "src/lz4"]
 	path = src/lz4
-	url = https://android.googlesource.com/platform/external/lz4
+	url = https://github.com/lz4/lz4
+	branch = dev
 [submodule "src/e2fsprogs"]
 	path = src/e2fsprogs
 	url = https://android.googlesource.com/platform/external/e2fsprogs.git
