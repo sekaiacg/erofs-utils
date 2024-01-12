@@ -5,6 +5,7 @@ set(TARGET_SRC_DIR "${LIB_DIR}/zlib")
 set(TARGET_CFLAGS
 	"-DHAVE_HIDDEN"
 	"-DZLIB_CONST"
+	"-DCHROMIUM_ZLIB_NO_CASTAGNOLI"
 	"-O3"
 	"-Wall"
 	"-Werror"
