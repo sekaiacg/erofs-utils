@@ -703,7 +703,7 @@ int main(int argc, char *argv[])
 				} else {
 #if FUSE_USE_VERSION == 30
 					ret = fuse_session_loop_mt(se, opts.clone_fd);
-#elif FUSE_USE_VERSION == 32
+#elif FUSE_USE_VERSION >= 32
 					struct fuse_loop_config config = {
 						.clone_fd = opts.clone_fd,
 						.max_idle_threads = opts.max_idle_threads
