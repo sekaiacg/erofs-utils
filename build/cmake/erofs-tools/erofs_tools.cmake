@@ -73,7 +73,11 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	set(fuse_srcs "${PROJECT_ROOT_DIR}/fuse/main.c")
 
 	add_executable(${TARGET_fuse} ${fuse_srcs})
-	target_precompile_headers(${TARGET_fuse} PRIVATE "${PROJECT_ROOT_DIR}/fuse/macosx.h")
+	target_precompile_headers(${TARGET_fuse} PRIVATE
+		"${PROJECT_ROOT_DIR}/fuse/macosx.h"
+		"${LIB_DIR}/libfuse/lib/fuse_i.h"
+	)
+
 	target_include_directories(${TARGET_fuse} PRIVATE ${common_headers} ${libfuse_headers})
 	target_link_libraries(${TARGET_fuse} ${common_static_link_lib})
 	target_compile_options(${TARGET_fuse} PRIVATE
