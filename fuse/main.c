@@ -701,14 +701,21 @@ int main(int argc, char *argv[])
 				if (opts.singlethread) {
 					ret = fuse_session_loop(se);
 				} else {
-#if FUSE_USE_VERSION == 30
+#if FUSE_USE_VERSION <= 30
 					ret = fuse_session_loop_mt(se, opts.clone_fd);
-#elif FUSE_USE_VERSION >= 32
+#elif FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 2) && FUSE_USE_VERSION < FUSE_MAKE_VERSION(3, 12)
 					struct fuse_loop_config config = {
 						.clone_fd = opts.clone_fd,
 						.max_idle_threads = opts.max_idle_threads
 					};
 					ret = fuse_session_loop_mt(se, &config);
+#elif FUSE_USE_VERSION >= FUSE_MAKE_VERSION(3, 12)
+					struct fuse_loop_config *config = fuse_loop_cfg_create();
+					config->clone_fd = opts.clone_fd;
+					config->max_idle_threads = opts.max_idle_threads;
+					ret = fuse_session_loop_mt(se, config);
+					fuse_loop_cfg_destroy(config);
+					config = NULL;
 #else
 #error "FUSE_USE_VERSION not supported"
 #endif
