@@ -34,7 +34,8 @@
 	branch = main
 [submodule "src/libcxx"]
 	path = src/libcxx
-	url = https://github.com/sekaiacg/libcxx
+	url = https://github.com/topjohnwu/libcxx.git
+	branch = master
 [submodule "src/winfsp"]
 	path = src/winfsp
 	url = https://github.com/winfsp/winfsp
