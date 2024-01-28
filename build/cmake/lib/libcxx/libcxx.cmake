@@ -2,8 +2,8 @@ set(TARGET cxx)
 
 set(TARGET_SRC_DIR "${LIB_DIR}/libcxx")
 
-set(LIBCXX_VERSION_STRING "16.0.6")
-set(LIBCXX_VERSION_MARJO "16")
+set(LIBCXX_VERSION_STRING "17.0.0")
+set(LIBCXX_VERSION_MARJO "17")
 
 set(LIBCXX_SOURCES
 	algorithm.cpp
@@ -54,19 +54,20 @@ set(LIBCXX_SOURCES
 
 list(TRANSFORM LIBCXX_SOURCES PREPEND ${TARGET_SRC_DIR}/src/)
 
-set(LIBCXX_EXPORT_FLAGS)
-set(LIBCXX_FLAGS
-	-std=c++20
-	-fvisibility-global-new-delete-hidden
-	-fvisibility=hidden
-	-fvisibility-inlines-hidden
+set(LIBCXX_EXPORT_FLAGS
 	-DLIBCXX_BUILDING_LIBCXXABI
 	-D_LIBCPP_NO_EXCEPTIONS
 	-D_LIBCPP_NO_RTTI
 	-D_LIBCPP_BUILDING_LIBRARY
 	-D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS
-	-D__STDC_FORMAT_MACROS
+	-D_LIBCXXABI_NO_EXCEPTIONS
 )
+set(LIBCXX_FLAGS
+	-fvisibility-global-new-delete-hidden
+	-fvisibility=hidden
+	-fvisibility-inlines-hidden
+)
+
 set(LIBCXX_EXPORT_INCLUDES ${TARGET_SRC_DIR}/include)
 set(LIBCXX_INCLUDES ${TARGET_SRC_DIR}/src)
 
@@ -88,7 +89,6 @@ set(LIBCXXABI_SOURCES
 )
 list(TRANSFORM LIBCXXABI_SOURCES PREPEND ${TARGET_SRC_DIR}/src/abi/)
 set(LIBCXXABI_FLAGS
-	-D_LIBCXXABI_NO_EXCEPTIONS
 	-Wno-macro-redefined
 	-Wno-unknown-attributes
 	-DHAS_THREAD_LOCAL
@@ -111,8 +111,9 @@ target_include_directories(${TARGET}
 	INTERFACE $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-target_compile_options(${TARGET} PUBLIC ${LIBCXX_EXPORT_FLAGS})
-target_compile_options(${TARGET} PRIVATE ${LIBCXX_FLAGS} ${LIBCXXABI_FLAGS} -ffunction-sections -fdata-sections)
+target_compile_options(${TARGET} PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${LIBCXX_EXPORT_FLAGS}>")
+set(LIBCXX_PRIVATE_FLAGS ${LIBCXX_FLAGS} ${LIBCXXABI_FLAGS} -ffunction-sections -fdata-sections)
+target_compile_options(${TARGET} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${LIBCXX_PRIVATE_FLAGS}>")
 list(APPEND CMAKE_REQUIRED_INCLUDES ${LIBCXX_EXPORT_INCLUDES})
 
 include(CMakePackageConfigHelpers)
