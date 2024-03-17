@@ -8,6 +8,8 @@ set(common_headers
 	${libcutils_headers}
 	${libselinux_headers}
 	${libe2fsprogs_headers}
+	${liblz4_headers}
+	${liblzma_headers}
 	${libz_headers}
 )
 
