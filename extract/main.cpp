@@ -47,6 +47,7 @@ static inline void usage() {
 			 "  " GREEN2_BOLD "-X, --extract=X" COLOR_NONE "         " BROWN "Extract the target of path X" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-c, --config=[FILE]" COLOR_NONE "     " BROWN "Target of config" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-r" COLOR_NONE "                      " BROWN "When using config, recurse directories" COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-s" COLOR_NONE "                      " BROWN "Silent mode, Don't show progress" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config|file_contexts|fs_options" COLOR_NONE "\n"
@@ -85,7 +86,7 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 	int opt;
 	int rc = RET_EXTRACT_CONFIG_FAIL;
 	bool enterParseOpt = false;
-	while ((opt = getopt_long(argc, argv, "hi:pxfrc:P:T:o:X:V", arg_options, nullptr)) != -1) {
+	while ((opt = getopt_long(argc, argv, "hi:psxfrc:P:T:o:X:V", arg_options, nullptr)) != -1) {
 		enterParseOpt = true;
 		switch (opt) {
 			case 'h':
@@ -134,6 +135,10 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 				eo->isExtractTargetConfig = true;
 				if (optarg) eo->targetConfigPath = optarg;
 				LOGCD("targetConfig=%s", eo->targetConfigPath.c_str());
+				break;
+			case 's':
+				eo->isSilent = true;
+				LOGCD("isSilent=%d", eo->isSilent);
 				break;
 			case 'r':
 				eo->targetConfigRecurse = true;
@@ -282,7 +287,7 @@ int main(int argc, char **argv) {
 			LOGCW("Failed change case sensitive.");
 #endif
 		eo->extractFsConfigAndSelinuxLabelAndFsOptions();
-		eo->useMultiThread ? eo->extractErofsNodeMultiThread() : eo->extractErofsNode();
+		eo->useMultiThread ? eo->extractErofsNodeMultiThread(eo->isSilent) : eo->extractErofsNode(eo->isSilent);
 		goto end;
 	}
 

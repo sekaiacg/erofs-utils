@@ -67,6 +67,7 @@ namespace skkk {
 			string targetPath;
 			string targetConfigPath;
 			bool extractOnlyConfAndSeLabel = false;
+			bool isSilent = false;
 
 		public:
 
@@ -130,9 +131,9 @@ namespace skkk {
 
 			void extractNodeDirs() const;
 
-			void extractErofsNode() const;
+			void extractErofsNode(bool isSilent) const;
 
-			void extractErofsNodeMultiThread() const;
+			void extractErofsNodeMultiThread(bool isSilent) const;
 	};
 
 	/**
