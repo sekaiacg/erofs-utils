@@ -286,20 +286,20 @@ namespace skkk {
 		}
 	}
 
-	void ExtractOperation::extractErofsNode() const {
+	void ExtractOperation::extractErofsNode(bool isSilent) const {
 		extractNodeDirs();
 		if (!nodeOther.empty()) {
 			int nodeOtherSize = nodeOther.size();
 			for (int i = 0; i < nodeOtherSize; i++) {
 				extractNodeTask(nodeOther[i], outDir);
-				printExtractProgress(nodeOtherSize, i + 1, 2, true);
+				if (!isSilent) printExtractProgress(nodeOtherSize, i + 1, 2, true);
 			}
 		}
 		// If there is an exception
 		writeExceptionInfo2File();
 	}
 
-	void ExtractOperation::extractErofsNodeMultiThread() const {
+	void ExtractOperation::extractErofsNodeMultiThread(bool isSilent) const {
 		extractNodeDirs();
 		LOGCI(GREEN2_BOLD "Use " COLOR_NONE RED2 "%d" COLOR_NONE GREEN2_BOLD " therads" COLOR_NONE, threadNum);
 
@@ -309,16 +309,18 @@ namespace skkk {
 			tp.commit(extractNodeTaskMultiThread, eNode, outDir);
 		}
 
-		int i = 0;
-		while (extractTaskRunCount < nodeOtherSize) {
-			if (i != extractTaskRunCount) {
-				printExtractProgress(nodeOtherSize, extractTaskRunCount, 1, false);
-				i = extractTaskRunCount;
+		if (!isSilent) {
+			int i = 0;
+			while (extractTaskRunCount < nodeOtherSize) {
+				if (i != extractTaskRunCount) {
+					printExtractProgress(nodeOtherSize, extractTaskRunCount, 1, false);
+					i = extractTaskRunCount;
+				}
+				sleep(0);
 			}
-			sleep(0);
+			printExtractProgress(1, 1, 1, true);
+			LOGCD("extractTaskRunCount=%d nodeFilesSize=%d", i, nodeOtherSize, nodeOther.size());
 		}
-		printExtractProgress(1, 1, 1, true);
-		LOGCD("extractTaskRunCount=%d nodeFilesSize=%d", i, nodeOtherSize, nodeOther.size());
 
 		writeExceptionInfo2File();
 	}
