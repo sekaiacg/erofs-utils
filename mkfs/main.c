@@ -676,7 +676,7 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 #ifdef EROFS_MT_ENABLED
 		case 520: {
 			unsigned int processors;
-
+			errno = 0;
 			cfg.c_mt_workers = strtoul(optarg, &endptr, 0);
 			if (errno || *endptr != '\0') {
 				erofs_err("invalid worker number %s", optarg);
