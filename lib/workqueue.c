@@ -1,13 +1,35 @@
 // SPDX-License-Identifier: GPL-2.0+ OR Apache-2.0
-#include <pthread.h>
 #include <stdlib.h>
 #include "erofs/workqueue.h"
+
+#if defined(__BIONIC__)
+
+#include <signal.h>
+
+static inline void thread_cancel_handler(int sig)
+{
+	pthread_exit(0);
+}
+
+static inline int pthread_cancel(pthread_t thread) {
+	return pthread_kill(thread, SIGUSR1);
+}
+
+#endif
 
 static void *worker_thread(void *arg)
 {
 	struct erofs_workqueue *wq = arg;
 	struct erofs_work *work;
 	void *tlsp = NULL;
+
+#if defined(__BIONIC__)
+	struct sigaction sig = { 0 };
+	sigemptyset(&sig.sa_mask);
+	sig.sa_flags = 0;
+	sig.sa_handler = thread_cancel_handler;
+	sigaction(SIGUSR1, &sig, NULL);
+#endif
 
 	if (wq->on_start)
 		tlsp = (wq->on_start)(wq, NULL);
