@@ -10,13 +10,16 @@ set(liberofs_include_list
 	"linux/fs.h"
 	"linux/types.h"
 	"linux/xattr.h"
+	"pthread.h"
 	"sys/ioctl.h"
 	"sys/sysmacros.h"
+	"unistd.h"
 )
 
 set(liberofs_function_list
 	"backtrace"
 	"utimensat"
+	"sysconf"
 )
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	list(APPEND liberofs_include_list
@@ -67,6 +70,7 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-DHAVE_ZLIB"
 	"-DHAVE_LIBLZMA"
 	"-DWITH_ANDROID"
+	"-DEROFS_MT_ENABLED"
 	"${DARWIN_CFLAGS}"
 	CACHE INTERNAL "liberofs_static_defaults_cflags"
 )
@@ -104,6 +108,7 @@ set(liberofs_srcs
 	"${TARGET_SRC_DIR}/compressor_liblzma.c"
 	"${TARGET_SRC_DIR}/kite_deflate.c"
 	"${TARGET_SRC_DIR}/compressor_deflate.c"
+	"${TARGET_SRC_DIR}/workqueue.c"
 )
 
 include(CheckCXXCompilerFlag)
