@@ -16,8 +16,14 @@ cmake_build()
 		local MAKE_CMD="time -p make -C $OUT -j$(sysctl -n hw.logicalcpu)"
 	fi;
 
+	local PROCESSOR=""
+	[ ${ABI} == "x86_64" ] && PROCESSOR="x86_64"
+	[ ${ABI} == "aarch64" ] && PROCESSOR="arm64"
+
 	if [[ $TARGET == "Darwin" ]]; then
 		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+			-DCMAKE_SYSTEM_NAME="Darwin" \
+			-DCMAKE_SYSTEM_PROCESSOR="${PROCESSOR}" \
 			-DCMAKE_BUILD_TYPE="Release" \
 			-DCMAKE_C_COMPILER_TARGET="${ABI}-apple-darwin" \
 			-DCMAKE_CXX_COMPILER_TARGET="${ABI}-apple-darwin" \
