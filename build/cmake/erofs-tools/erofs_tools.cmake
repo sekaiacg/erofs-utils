@@ -16,7 +16,7 @@ set(common_headers
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	set(ld_start_group "-Wl,--start-group" "fuse_static")
 	set(ld_end_group "-Wl,--end-group")
-endif()
+endif ()
 
 set(common_static_link_lib
 	${ld_start_group}
@@ -28,14 +28,15 @@ set(common_static_link_lib
 	selinux
 	lz4_static
 	liblzma
-	z_stable
+	z_static
 	pcre2
 	${ld_end_group}
 )
 
+
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin|CYGWIN")
 	list(APPEND common_static_link_lib "ext2_uuid" "iconv")
-endif()
+endif ()
 
 if (CYGWIN)
 	# extract.erofs use ntdll function to change a dir case sensitive
@@ -70,7 +71,7 @@ target_compile_options(${TARGET_fsck} PRIVATE ${common_compile_flags})
 ##################################################################################
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
-###############################------fuse.erofs------###############################
+	###############################------fuse.erofs------###############################
 	set(TARGET_fuse fuse.erofs)
 	set(fuse_srcs "${PROJECT_ROOT_DIR}/fuse/main.c")
 
@@ -102,5 +103,5 @@ elseif (CYGWIN)
 		"$<$<COMPILE_LANGUAGE:C>:${LIBFUSE_DEFAULTS_CFLAGS}>"
 		"$<$<COMPILE_LANGUAGE:CXX>:${LIBFUSE_DEFAULTS_CFLAGS}>"
 	)
-##################################################################################
-endif()
+	##################################################################################
+endif ()
