@@ -20,7 +20,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         if: github.event.inputs.release == 'true' && github.event.inputs.release != 'false' && !cancelled()
 
       - name: Version
@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
@@ -69,36 +69,36 @@ jobs:
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r26c
+          ndk-version: r26d
           local-cache: false
 
-      - name: Download and install clang-16.0.4
+      - name: Download and install clang+llvm
         run: |
-          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.4/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz
-          tar -xf clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C /opt
-          echo "CUSTOM_CLANG_PATH=/opt/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04" >> $GITHUB_ENV
+          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
+          tar -xf clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C /opt
+          echo "CUSTOM_CLANG_PATH=/opt/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04" >> $GITHUB_ENV
 
       - name: Set up cache aarch64 tools
         id: cache-aarch64-tools
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path:  ${{ env.AARCH64_TOOLS_PATH }}
-          key: ${{ runner.os }}-aarch64_tools_230927
+          key: ${{ runner.os }}-aarch64_tools_231221
 
       - name: Download and install aarch64 tools
         if: steps.cache-aarch64-tools.outputs.cache-hit != 'true'
         run: |
-          wget https://github.com/sekaiacg/erofs-utils/releases/download/v1.7-230924/gcc-linaro-13.0.0-2022.11-x86_64_aarch64-linux-gnu.tar.xz
+          wget https://github.com/sekaiacg/erofs-utils/releases/download/v1.7.1-231221/gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz
           mkdir ${AARCH64_TOOLS_PATH}
-          tar -xf gcc-linaro-13.0.0-2022.11-x86_64_aarch64-linux-gnu.tar.xz -C ${AARCH64_TOOLS_PATH}
+          tar -xf gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz -C ${AARCH64_TOOLS_PATH}
 
       - name: Set up aarch64 tools
         run: |
-          echo "AARCH64_GCC_PATH=${AARCH64_TOOLS_PATH}/gcc-linaro-13.0.0-2022.11-x86_64_aarch64-linux-gnu" >> $GITHUB_ENV
+          echo "AARCH64_GCC_PATH=${AARCH64_TOOLS_PATH}/gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu" >> $GITHUB_ENV
 
       - name: Set up cache loongarch64 tools
         id: cache-loongarch64-tools
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.LOONGARCH64_TOOLS_PATH }}
           key: ${{ runner.os }}-loongarch64_tools_230927
@@ -159,56 +159,56 @@ jobs:
 
       - name: Upload erofs-utils Android_arm64-v8a
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.androidArm64v8aName }}
           path: '${{ steps.Artifact.outputs.androidArmv8aDir }}/${{ steps.Artifact.outputs.androidArm64v8aName }}/*'
 
       - name: Upload erofs-utils Android_armeabi-v7a
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.androidArmeabiv7aName }}
           path: '${{ steps.Artifact.outputs.androidArmeabiv7Dir }}/${{ steps.Artifact.outputs.androidArmeabiv7aName }}/*'
 
       - name: Upload erofs-utils Android_x86_64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.androidX86x64Name }}
           path: '${{ steps.Artifact.outputs.androidX86x64Dir }}/${{ steps.Artifact.outputs.androidX86x64Name }}/*'
 
       - name: Upload erofs-utils Android_x86
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.androidX86Name }}
           path: '${{ steps.Artifact.outputs.androidX86Dir }}/${{ steps.Artifact.outputs.androidX86Name }}/*'
 
       - name: Upload erofs-utils Linux_x86_64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.linuxX86x64Name }}
           path: '${{ steps.Artifact.outputs.linuxX86x64Dir }}/${{ steps.Artifact.outputs.linuxX86x64Name }}/*'
 
       - name: Upload erofs-utils WSL_x86_64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.wslX86x64Name }}
           path: '${{ steps.Artifact.outputs.wslX86x64Dir }}/${{ steps.Artifact.outputs.wslX86x64Name }}/*'
 
       - name: Upload erofs-utils Linux_aarch64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.linuxAarch64Name }}
           path: '${{ steps.Artifact.outputs.linuxAarch64Dir }}/${{ steps.Artifact.outputs.linuxAarch64Name }}/*'
 
       - name: Upload erofs-utils Linux_loongarch64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.Artifact.outputs.linuxLoongarch64Name }}
           path: '${{ steps.Artifact.outputs.linuxLoongarch64Dir }}/${{ steps.Artifact.outputs.linuxLoongarch64Name }}/*'
@@ -223,7 +223,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
@@ -254,14 +254,14 @@ jobs:
 
       - name: Upload erofs-utils Darwin_x86_64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.darwinX86x64Name }}
           path: '${{ steps.prepareArtifact.outputs.darwinX86x64Dir }}/${{ steps.prepareArtifact.outputs.darwinX86x64Name }}/*'
 
       - name: Upload erofs-utils Darwin_aarch64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.darwinAarch64Name }}
           path: '${{ steps.prepareArtifact.outputs.darwinAarch64Dir }}/${{ steps.prepareArtifact.outputs.darwinAarch64Name }}/*'
@@ -273,15 +273,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
 
       - name: Set up Cygwin
-        uses: egor-tensin/setup-cygwin@v3
+        uses: egor-tensin/setup-cygwin@v4
         with:
-          platform: x64
           packages: cmake ninja make gcc-g++ git libiconv-devel zip unzip gettext gettext-devel patch wget
 
       - name: Setup cygwin prebuilt clang
@@ -319,7 +318,7 @@ jobs:
 
       - name: Upload erofs-utils Cygwin_x86_64
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.prepareArtifact.outputs.cygwinX86x64Name }}
           path: 'C:/tools/cygwin/home/runneradmin/erofs/${{ steps.prepareArtifact.outputs.cygwinX86x64Dir }}/${{ steps.prepareArtifact.outputs.cygwinX86x64Name }}/*'
