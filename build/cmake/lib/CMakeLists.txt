@@ -3,7 +3,7 @@ if (NOT CYGWIN)
 	# Cygwin libcxx is not impl yet
 	# Use stdc++ instead
 	include(libcxx/libcxx.cmake)
-endif()
+endif ()
 include(libbase.cmake)
 include(libcutils.cmake)
 include(liblog.cmake)
@@ -17,7 +17,6 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin|CYGWIN")
 	include(libext2_uuid.cmake)
 endif ()
 
-# Thrid part library
 # LZ4
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(LZ4_BUILD_CLI OFF)
