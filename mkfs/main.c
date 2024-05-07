@@ -187,7 +187,7 @@ static void usage(int argc, char **argv)
 		"                       (and optionally dump the raw stream to X together)\n"
 #endif
 #ifdef EROFS_MT_ENABLED
-		" --workers=#           set the number of worker threads to # (default=1)\n"
+		" --workers=#           set the number of worker threads to # (default=%u)\n"
 #endif
 		" --xattr-prefix=X      X=extra xattr name prefix\n"
 		" --mount-point=X       X=prefix of target fs path (default: /)\n"
@@ -197,6 +197,9 @@ static void usage(int argc, char **argv)
 		" --product-out=X       X=product_out directory\n"
 		" --fs-config-file=X    X=fs_config file\n"
 		" --block-list-file=X   X=block_list file\n"
+#endif
+#ifdef EROFS_MT_ENABLED
+		, erofs_get_available_processors()
 #endif
 		);
 }
