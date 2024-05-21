@@ -20,9 +20,10 @@ cmake_build()
 
 	if [[ $TARGET == "Cygwin" ]]; then
 		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+			-DCMAKE_SYSTEM_NAME="CYGWIN" \
 			-DCMAKE_BUILD_TYPE="Release" \
-			-DCMAKE_C_COMPILER="clang" \
-			-DCMAKE_CXX_COMPILER="clang++" \
+			-DCMAKE_C_COMPILER="x86_64-pc-cygwin-clang" \
+			-DCMAKE_CXX_COMPILER="x86_64-pc-cygwin-clang++" \
 			-DCMAKE_C_FLAGS="" \
 			-DCMAKE_CXX_FLAGS="" \
 			-DENABLE_FULL_LTO="OFF" \
@@ -40,7 +41,7 @@ build()
 
 	rm -r $OUT > /dev/null 2>&1
 
-	local NINJA=`which ninja`
+	local NINJA=`which nnninja`
 	if [[ -f $NINJA ]]; then
 		local METHOD="Ninja"
 	else
@@ -50,11 +51,10 @@ build()
 	cmake_build "${TARGET}" "${METHOD}" "${ABI}" "${PLATFORM}"
 
 	local BUILD="$OUT/erofs-tools"
-	local DUMP_BIN="$BUILD/dump.erofs"
-	local FSCK_BIN="$BUILD/fsck.erofs"
-	local MKFS_BIN="$BUILD/mkfs.erofs"
-    local FUSE_BIN="$BUILD/fuse.erofs"
-	local EXTRACT_BIN="$BUILD/extract.erofs"
+	local DUMP_BIN="$BUILD/dump.erofs${EXT}"
+	local FSCK_BIN="$BUILD/fsck.erofs${EXT}"
+	local MKFS_BIN="$BUILD/mkfs.erofs${EXT}"
+	local EXTRACT_BIN="$BUILD/extract.erofs${EXT}"
 	local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
 	local TARGET_DIR_PATH="./target/${TARGET}_${ABI}/${TARGE_DIR_NAME}"
 
@@ -62,8 +62,6 @@ build()
 		echo "复制文件中..."
 		[[ ! -d "$TARGET_DIR_PATH" ]] && mkdir -p ${TARGET_DIR_PATH}
 		cp -af $BUILD/*.erofs${EXT} ${TARGET_DIR_PATH}
-		cp -af /bin/cygwin1.dll ${TARGET_DIR_PATH}
-		cp -af ./src/winfsp-x64.dll ${TARGET_DIR_PATH}
 		touch -c -d "2009-01-01 00:00:00" ${TARGET_DIR_PATH}/*
 		echo "编译成功: ${TARGE_DIR_NAME}"
 	else

@@ -36,7 +36,6 @@ endif ()
 set(GLOBAL_CFLAGS
 	"-Wformat"
 	"-Werror=format-security"
-	"-no-canonical-prefixes"
 	"-fdata-sections"
 	"-ffunction-sections"
 	"-fvisibility=hidden"
@@ -50,6 +49,7 @@ if (NOT CYGWIN)
 	# Cygwin libcxx has not impl yet.
 	list(APPEND GLOBAL_CFLAGS
 		"-nostdinc++"
+		"-no-canonical-prefixes"
 	)
 endif()
 
@@ -75,7 +75,7 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		list(APPEND GLOBAL_CFLAGS "-DANDROID" "-mllvm" "-polly")
 	endif ()
 elseif (CMAKE_SYSTEM_NAME MATCHES "CYGWIN")
-	list(APPEND GLOBAL_CFLAGS "-static")
+	list(APPEND GLOBAL_CFLAGS "-std=libc++")
 	list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-s,-x,--gc-sections" "-static")
 endif ()
 
