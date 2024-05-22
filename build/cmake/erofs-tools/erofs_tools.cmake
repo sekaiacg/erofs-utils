@@ -88,20 +88,4 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		"$<$<COMPILE_LANGUAGE:C>:${LIBFUSE_DEFAULTS_CFLAGS}>"
 		"$<$<COMPILE_LANGUAGE:CXX>:${LIBFUSE_DEFAULTS_CFLAGS}>"
 	)
-elseif (CYGWIN)
-	# use winfsp instead libfuse
-	# install winfsp to cygwin
-	execute_process(COMMAND bash "${LIB_DIR}/winfsp/opt/cygfuse/dist/install.sh")
-	set(TARGET_fuse fuse.erofs)
-	set(fuse_srcs "${PROJECT_ROOT_DIR}/fuse/main_win.c")
-
-	add_executable(${TARGET_fuse} ${fuse_srcs})
-	target_include_directories(${TARGET_fuse} PRIVATE ${common_headers} "/usr/include/fuse")
-	target_link_libraries(${TARGET_fuse} ${common_static_link_lib} "/usr/lib/libfuse-2.8.dll.a" "${LIB_DIR}/winfsp-x64.dll")
-	target_compile_options(${TARGET_fuse} PRIVATE
-		${common_compile_flags}
-		"$<$<COMPILE_LANGUAGE:C>:${LIBFUSE_DEFAULTS_CFLAGS}>"
-		"$<$<COMPILE_LANGUAGE:CXX>:${LIBFUSE_DEFAULTS_CFLAGS}>"
-	)
-	##################################################################################
 endif ()
