@@ -69,6 +69,7 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-DLZ4HC_ENABLED"
 	"-DHAVE_ZLIB"
 	"-DHAVE_LIBLZMA"
+	"-DHAVE_LIBZSTD"
 	"-DWITH_ANDROID"
 	"-DEROFS_MT_ENABLED"
 	"${DARWIN_CFLAGS}"
@@ -108,6 +109,7 @@ set(liberofs_srcs
 	"${TARGET_SRC_DIR}/compressor_liblzma.c"
 	"${TARGET_SRC_DIR}/kite_deflate.c"
 	"${TARGET_SRC_DIR}/compressor_deflate.c"
+	"${TARGET_SRC_DIR}/compressor_libzstd.c"
 	"${TARGET_SRC_DIR}/workqueue.c"
 )
 
@@ -129,6 +131,7 @@ target_include_directories(${TARGET} PRIVATE
 	${liblz4_headers}
 	${liblzma_headers}
 	${libz_headers}
+	${libzstd_headers}
 	${libpcre2_headers}
 	${libe2fsprogs_headers}
 )

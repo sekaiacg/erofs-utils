@@ -33,6 +33,16 @@ set(CREATE_LZMA_SYMLINKS OFF)
 set(ALLOW_ATTR_IFUNC OFF)
 add_subdirectory("${LIB_DIR}/xz" "xz")
 
+# ZSTD
+set(ZSTD_BUILD_STATIC ON)
+set(ZSTD_BUILD_SHARED OFF)
+set(ZSTD_BUILD_PROGRAMS OFF)
+set(ZSTD_BUILD_CONTRIB OFF)
+set(BUILD_TESTING OFF)
+set(ZSTD_MULTITHREAD_SUPPORT ON)
+set(DZSTD_LEGACY_SUPPORT ON)
+add_subdirectory("${LIB_DIR}/zstd/build/cmake" "zstd")
+
 if (CMAKE_SYSTEM_NAME MATCHES "Android")
 	include(libpackagelistparser.cmake)
 endif ()
