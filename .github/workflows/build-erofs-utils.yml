@@ -15,7 +15,7 @@ on:
 
 jobs:
   release:
-    needs: [ Build-on-Ubuntu, Build-on-macOS, Build-on-Windows ]
+    needs: [ Build-on-Ubuntu, Build-on-macOS ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -43,7 +43,7 @@ jobs:
           artifacts: "*.zip"
 
   Build-on-Ubuntu:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       TZ: UTC-8
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
@@ -52,6 +52,7 @@ jobs:
       CCACHE_HARDLINK: "true"
       AARCH64_TOOLS_PATH: "/opt/aarch64"
       LOONGARCH64_TOOLS_PATH: "/opt/loongarch64"
+      cygwin_prebuilt_packages: "deb [trusted=yes] https://github.com/affggh/deb-cygwin-debian/releases/download/snapshot-deb ./"
 
     steps:
       - name: Checkout
@@ -77,6 +78,13 @@ jobs:
           wget https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
           tar -xf clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C /opt
           echo "CUSTOM_CLANG_PATH=/opt/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04" >> $GITHUB_ENV
+
+      - name: Setup cygwin cross toolchains
+        run: |
+          echo "${{ env.cygwin_prebuilt_packages }}" > sources.list
+          sudo cp -af sources.list /etc/apt/sources.list.d/deb-cygwin.list
+          rm -f sources.list
+          sudo apt-get update && sudo apt-get install cygwin cygwin-gcc cygwin-libiconv cygwin-xclang cygwin-libc++
 
       - name: Set up cache aarch64 tools
         id: cache-aarch64-tools
@@ -128,6 +136,8 @@ jobs:
         run: |
           chmod a+x build.sh
           ./build.sh
+          chmod a+x build_cygwin.sh
+          ./build_cygwin.sh
 
       - name: Prepare artifact
         if: success()
@@ -156,6 +166,9 @@ jobs:
 
           echo "linuxLoongarch64Dir=target/Linux_loongarch64" >> $GITHUB_OUTPUT
           linuxLoongarch64Name=`ls -d target/Linux_loongarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxLoongarch64Name=$linuxLoongarch64Name" >> $GITHUB_OUTPUT
+
+          echo "cygwinX86x64Dir=target/Cygwin_x86_64" >> $GITHUB_OUTPUT
+          cygwinX86x64Name=`ls -d target/Cygwin_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "cygwinX86x64Name=$cygwinX86x64Name" >> $GITHUB_OUTPUT
 
       - name: Upload erofs-utils Android_arm64-v8a
         if: success()
@@ -213,6 +226,13 @@ jobs:
           name: ${{ steps.Artifact.outputs.linuxLoongarch64Name }}
           path: '${{ steps.Artifact.outputs.linuxLoongarch64Dir }}/${{ steps.Artifact.outputs.linuxLoongarch64Name }}/*'
 
+      - name: Upload erofs-utils Cygwin_x86_64
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.Artifact.outputs.cygwinX86x64Name }}
+          path: "${{ steps.Artifact.outputs.cygwinX86x64Dir }}/${{ steps.Artifact.outputs.cygwinX86x64Name }}/*"
+
   Build-on-macOS:
     runs-on: macos-latest
     env:
@@ -265,60 +285,3 @@ jobs:
         with:
           name: ${{ steps.prepareArtifact.outputs.darwinAarch64Name }}
           path: '${{ steps.prepareArtifact.outputs.darwinAarch64Dir }}/${{ steps.prepareArtifact.outputs.darwinAarch64Name }}/*'
-
-  Build-on-Windows:
-    runs-on: windows-latest
-    env:
-      PREBUILT_CLANG: "https://github.com/affggh/llvm-project/releases/download/clang18/clang18.0.0-cygwin64.tar.gz"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'
-          fetch-depth: 0
-
-      - name: Set up Cygwin
-        uses: egor-tensin/setup-cygwin@v4
-        with:
-          packages: cmake ninja make gcc-g++ git libiconv-devel zip unzip gettext gettext-devel patch wget
-
-      - name: Setup cygwin prebuilt clang
-        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
-        run: |
-          wget "${PREBUILT_CLANG}" -O"$HOME/clang.tar.gz"
-          mkdir clang
-          cd clang
-          tar -xvf $HOME/clang.tar.gz
-
-      - name: Clone source code and build
-        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
-        run: |
-          # Setup clang
-          export PATH="$HOME/clang/bin:$PATH"
-
-          # Cygwin bug on cpuset.h
-          #sed "s/__cpuset_zero_s/void __cpuset_zero_s/" -i /usr/include/sys/cpuset.h
-
-          # Build
-          git clone $(echo ${{ github.repositoryUrl }} | sed "s/git:/https:/") erofs -b $(echo ${{ github.ref }} | sed "s/refs\/heads\///")
-          cd erofs
-          chmod a+x build_cygwin.sh
-          ./build_cygwin.sh
-          rm -f $(which git)
-
-      - name: Prepare artifact
-        if: success()
-        id: prepareArtifact
-        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
-        run: |
-          cd erofs
-          echo "cygwinX86x64Dir=$(cygpath -w target/Cygwin_x86_64)" >> $GITHUB_OUTPUT
-          cygwinX86x64Name=`ls -d target/Cygwin_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "cygwinX86x64Name=$(cygpath -w $cygwinX86x64Name)" >> $GITHUB_OUTPUT
-
-      - name: Upload erofs-utils Cygwin_x86_64
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.prepareArtifact.outputs.cygwinX86x64Name }}
-          path: 'C:/tools/cygwin/home/runneradmin/erofs/${{ steps.prepareArtifact.outputs.cygwinX86x64Dir }}/${{ steps.prepareArtifact.outputs.cygwinX86x64Name }}/*'
