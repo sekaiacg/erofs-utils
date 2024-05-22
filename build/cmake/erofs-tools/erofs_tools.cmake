@@ -29,10 +29,10 @@ set(common_static_link_lib
 	lz4_static
 	liblzma
 	z_static
+	libzstd_static
 	pcre2
 	${ld_end_group}
 )
-
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin|CYGWIN")
 	list(APPEND common_static_link_lib "ext2_uuid" "iconv")

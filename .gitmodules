@@ -32,6 +32,10 @@
 	path = src/zlib
 	url = https://android.googlesource.com/platform/external/zlib
 	branch = main
+[submodule "src/zstd"]
+	path = src/zstd
+	url = https://github.com/facebook/zstd
+	branch = dev
 [submodule "src/libcxx"]
 	path = src/libcxx
 	url = https://github.com/topjohnwu/libcxx.git
