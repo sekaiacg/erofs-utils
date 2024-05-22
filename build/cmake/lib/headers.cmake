@@ -7,6 +7,7 @@ set(liblog_headers                "${LIB_DIR}/logging/liblog/include"           
 set(liblz4_headers                "${LIB_DIR}/lz4/lib"                              CACHE INTERNAL "liblz4_headers")
 set(liblzma_headers               "${LIB_DIR}/xz/src/liblzma/api"                   CACHE INTERNAL "liblzma_headers")
 set(libz_headers                  "${LIB_DIR}/zlib"                                 CACHE INTERNAL "libz_headers")
+set(libzstd_headers               "${LIB_DIR}/zstd/lib"                             CACHE INTERNAL "libzstd_headers")
 set(libpcre2_headers              "${LIB_DIR}/pcre/include"                         CACHE INTERNAL "libpcre2_headers")
 set(libselinux_headers            "${LIB_DIR}/selinux/libselinux/include"           CACHE INTERNAL "libselinux_headers")
 set(libfuse_headers               "${LIB_DIR}/libfuse/include"                      CACHE INTERNAL "libfuse_headers")
