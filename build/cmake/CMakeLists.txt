@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.25...3.28)
-project(erofs-utils LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.25...3.29.3)
+project(erofs-utils LANGUAGES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
