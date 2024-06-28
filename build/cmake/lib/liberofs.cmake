@@ -24,6 +24,7 @@ set(liberofs_function_list
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 	list(APPEND liberofs_include_list
 		"sys/random.h"
+		"sys/sendfile.h"
 	)
 	list(APPEND liberofs_function_list
 		"copy_file_range"
@@ -34,6 +35,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		"pread64"
 		"pwrite64"
 		"posix_fadvise"
+		"sendfile"
 		"tmpfile64"
 	)
 	if (NOT RUN_ON_WSL)

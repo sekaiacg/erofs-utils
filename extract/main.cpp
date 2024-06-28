@@ -163,8 +163,8 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 					char *endPtr;
 					uint64_t n = strtoull(optarg, &endPtr, 0);
 					if (*endPtr == '\0') {
-						sbi.diskoffset = n;
-						LOGCD("offset=%lu", sbi.diskoffset);
+						g_sbi.bdev.offset = n;
+						LOGCD("offset=%lu", g_sbi.bdev.offset);
 					}
 				}
 				break;
@@ -233,14 +233,14 @@ int main(int argc, char **argv) {
 		goto exit;
 	}
 
-	err = dev_open_ro(&sbi, eo->getImgPath().c_str());
+	err = erofs_dev_open(&g_sbi, eo->getImgPath().c_str(), O_RDONLY);
 	if (err) {
 		ret = RET_EXTRACT_INIT_FAIL;
 		LOGCE("failed to open '%s'", eo->getImgPath().c_str());
 		goto exit;
 	}
 
-	err = erofs_read_superblock(&sbi);
+	err = erofs_read_superblock(&g_sbi);
 	if (err) {
 		ret = RET_EXTRACT_INIT_FAIL;
 		LOGCE("failed to read superblock");
@@ -297,12 +297,12 @@ end:
 	printOperationTime(&start, &end);
 
 exit_dev_close:
-	dev_close(&sbi);
+	erofs_dev_close(&g_sbi);
 	LOGCD("ErofsNode size=%lu", eo->getErofsNodes().size());
 	LOGCD("main exit ret=%d", ret);
 
 exit:
-	blob_closeall(&sbi);
+	erofs_blob_closeall(&g_sbi);
 	erofs_exit_configure();
 	ExtractOperation::erofsOperationExit();
 	return ret;
