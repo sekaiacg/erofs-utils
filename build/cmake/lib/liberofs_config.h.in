@@ -11,6 +11,7 @@
 #cmakedefine HAVE_SYS_IOCTL_H 1
 #cmakedefine HAVE_SYS_SYSMACROS_H 1
 #cmakedefine HAVE_SYS_RANDOM_H 1
+#cmakedefine HAVE_SYS_SENDFILE_H 1
 #cmakedefine HAVE_UNISTD_H 1
 
 // Functions
@@ -25,6 +26,7 @@
 #cmakedefine HAVE_PREAD64 1
 #cmakedefine HAVE_PWRITE64 1
 #cmakedefine HAVE_POSIX_FADVISE 1
+#cmakedefine HAVE_SENDFILE 1
 #cmakedefine HAVE_TMPFILE64 1
 #cmakedefine HAVE_SYSCONF 1
 #cmakedefine HAVE_UTIMENSAT 1
