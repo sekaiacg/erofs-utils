@@ -215,17 +215,20 @@ namespace skkk {
 				if (fsOptionFile) {
 					auto time = (time_t) g_sbi.build_time;
 					erofs_uuid_unparse_lower(g_sbi.uuid, uuid);
+					bool isBigPcluster = le32_to_cpu(g_sbi.feature_incompat) & EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER;
 					fprintf(fsOptionFile, "Filesystem created:        %s", ctime(&time));
 					fprintf(fsOptionFile, "Filesystem UUID:           %s\n", uuid);
 					// The options are for reference only, please modify according to the actual situation.
 					fprintf(fsOptionFile, "mkfs.erofs options:        "
-										  "-zlz4hc,1 "               // default: lz4hc,1
+										  "-zlz4hc "               // default: lz4hc
+										  "%s"
 										  "-T %" PRIu64 " -U %s "
 										  "--mount-point=/%s "
 										  "--fs-config-file=%s "
 										  "--file-contexts=%s "
 										  "%s "                      //output image file
 										  "%s",                      //input dir
+							isBigPcluster ? "-C 16384 " : "",        // default 16K
 							g_sbi.build_time, uuid,
 							imgBaseName.c_str(),
 							fsConfigPath.c_str(), fsSelinuxLabelsPath.c_str(),
