@@ -120,7 +120,7 @@ namespace skkk {
 		int ret;
 
 		struct erofs_inode inode = {
-				.sbi = &sbi,
+				.sbi = &g_sbi,
 				.nid = nid
 		};
 
@@ -155,8 +155,8 @@ out:
 		bool ret = 0;
 		char pathnameBuf[PATH_MAX] = {0};
 		struct erofs_inode vi = {
-				.sbi = &sbi,
-				.nid = sbi.root_nid
+				.sbi = &g_sbi,
+				.nid = g_sbi.root_nid
 		};
 
 		ret = erofs_ilookup(path.c_str(), &vi);
@@ -165,7 +165,7 @@ out:
 			goto out;
 		}
 
-		ret = erofs_get_pathname(&sbi, vi.nid, pathnameBuf, PATH_MAX);
+		ret = erofs_get_pathname(&g_sbi, vi.nid, pathnameBuf, PATH_MAX);
 		if (ret) {
 			goto out;
 		}
@@ -709,7 +709,7 @@ again:
 		snprintf(eo->iter_path, PATH_MAX, "/");
 		eo->iter_pos = 0;
 
-		err = doInitNodeRecursive(sbi.root_nid);
+		err = doInitNodeRecursive(g_sbi.root_nid);
 		if (err) {
 			rc = RET_EXTRACT_INIT_NODE_FAIL;
 			LOGCE("failed to initialize ErofsNode!");

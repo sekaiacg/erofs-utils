@@ -213,8 +213,8 @@ namespace skkk {
 			if (!isExtractTargetConfig) {
 				fsOptionFile = fopen(fsOptionPath.c_str(), "wb");
 				if (fsOptionFile) {
-					auto time = (time_t) sbi.build_time;
-					erofs_uuid_unparse_lower(sbi.uuid, uuid);
+					auto time = (time_t) g_sbi.build_time;
+					erofs_uuid_unparse_lower(g_sbi.uuid, uuid);
 					fprintf(fsOptionFile, "Filesystem created:        %s", ctime(&time));
 					fprintf(fsOptionFile, "Filesystem UUID:           %s\n", uuid);
 					// The options are for reference only, please modify according to the actual situation.
@@ -226,7 +226,7 @@ namespace skkk {
 										  "--file-contexts=%s "
 										  "%s "                      //output image file
 										  "%s",                      //input dir
-							sbi.build_time, uuid,
+							g_sbi.build_time, uuid,
 							imgBaseName.c_str(),
 							fsConfigPath.c_str(), fsSelinuxLabelsPath.c_str(),
 							(imgBaseName + "_repack.img").c_str(),
