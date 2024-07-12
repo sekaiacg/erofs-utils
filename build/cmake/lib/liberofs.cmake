@@ -3,7 +3,6 @@ set(TARGET erofs_static)
 set(TARGET_SRC_DIR "${PROJECT_ROOT_DIR}/lib")
 
 # Check function and header
-include(check.cmake)
 set(liberofs_include_list
 	"execinfo.h"
 	"linux/falloc.h"
