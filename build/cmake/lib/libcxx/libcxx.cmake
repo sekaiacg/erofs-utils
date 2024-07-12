@@ -63,10 +63,15 @@ set(LIBCXX_EXPORT_FLAGS
 	-D_LIBCXXABI_NO_EXCEPTIONS
 )
 set(LIBCXX_FLAGS
-	-fvisibility-global-new-delete-hidden
 	-fvisibility=hidden
 	-fvisibility-inlines-hidden
 )
+check_compile_flag_supported(-fvisibility-global-new-delete=force-hidden IF_SUPPORT)
+if (IF_SUPPORT)
+	list(APPEND LIBCXX_FLAGS -fvisibility-global-new-delete=force-hidden)
+else ()
+	list(APPEND LIBCXX_FLAGS -fvisibility-global-new-delete-hidden)
+endif ()
 
 set(LIBCXX_EXPORT_INCLUDES ${TARGET_SRC_DIR}/include)
 set(LIBCXX_INCLUDES ${TARGET_SRC_DIR}/src)

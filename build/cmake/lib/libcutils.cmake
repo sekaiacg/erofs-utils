@@ -8,6 +8,7 @@ set(TARGET_CFLAGS
 	"-Werror"
 	"-Wextra"
 	"-Wno-deprecated-pragma"
+	"-Wno-missing-field-initializers"
 )
 
 set(libcutils_srcs
