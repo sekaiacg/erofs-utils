@@ -10,6 +10,10 @@ set(TARGET_CFLAGS
 	"-Wexit-time-destructors"
 	"-Wno-c99-designator"
 )
+check_compile_flag_supported(-Wno-vla-cxx-extension IF_SUPPORT)
+if (IF_SUPPORT)
+	list(APPEND TARGET_CFLAGS -Wno-vla-cxx-extension)
+endif ()
 
 if (CYGWIN)
 	list(APPEND TARGET_CFLAGS "-Doff64_t=off_t" "-Wno-format")
