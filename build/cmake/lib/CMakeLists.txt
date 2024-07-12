@@ -1,4 +1,5 @@
 include(headers.cmake)
+include(check.cmake)
 if (NOT CYGWIN)
 	# Cygwin libcxx is not impl yet
 	# Use stdc++ instead
