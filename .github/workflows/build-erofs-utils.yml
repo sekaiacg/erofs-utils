@@ -70,7 +70,7 @@ jobs:
         uses: nttld/setup-ndk@v1
         id: setup-ndk
         with:
-          ndk-version: r26d
+          ndk-version: r27c
           local-cache: false
 
       - name: Download and install clang+llvm
