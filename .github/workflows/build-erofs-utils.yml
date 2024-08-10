@@ -66,13 +66,6 @@ jobs:
           sudo apt update -y
           sudo apt install llvm ninja-build -y
 
-      - name: Install NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r27
-          local-cache: false
-
       - name: Download and install clang+llvm
         run: |
           wget https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
@@ -143,18 +136,6 @@ jobs:
         if: success()
         id: Artifact
         run: |
-          echo "androidArmv8aDir=target/Android_arm64-v8a" >> $GITHUB_OUTPUT
-          androidArm64v8aName=`ls -d target/Android_arm64-v8a/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidArm64v8aName=$androidArm64v8aName" >> $GITHUB_OUTPUT
-
-          echo "androidArmeabiv7Dir=target/Android_armeabi-v7a" >> $GITHUB_OUTPUT
-          androidArmeabiv7aName=`ls -d target/Android_armeabi-v7a/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidArmeabiv7aName=$androidArmeabiv7aName" >> $GITHUB_OUTPUT
-
-          echo "androidX86x64Dir=target/Android_x86_64" >> $GITHUB_OUTPUT
-          androidX86x64Name=`ls -d target/Android_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86x64Name=$androidX86x64Name" >> $GITHUB_OUTPUT
-
-          echo "androidX86Dir=target/Android_x86" >> $GITHUB_OUTPUT
-          androidX86Name=`ls -d target/Android_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86Name=$androidX86Name" >> $GITHUB_OUTPUT
-
           echo "linuxX86x64Dir=target/Linux_x86_64" >> $GITHUB_OUTPUT
           linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
 
@@ -169,34 +150,6 @@ jobs:
 
           echo "cygwinX86x64Dir=target/Cygwin_x86_64" >> $GITHUB_OUTPUT
           cygwinX86x64Name=`ls -d target/Cygwin_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "cygwinX86x64Name=$cygwinX86x64Name" >> $GITHUB_OUTPUT
-
-      - name: Upload erofs-utils Android_arm64-v8a
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.Artifact.outputs.androidArm64v8aName }}
-          path: '${{ steps.Artifact.outputs.androidArmv8aDir }}/${{ steps.Artifact.outputs.androidArm64v8aName }}/*'
-
-      - name: Upload erofs-utils Android_armeabi-v7a
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.Artifact.outputs.androidArmeabiv7aName }}
-          path: '${{ steps.Artifact.outputs.androidArmeabiv7Dir }}/${{ steps.Artifact.outputs.androidArmeabiv7aName }}/*'
-
-      - name: Upload erofs-utils Android_x86_64
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.Artifact.outputs.androidX86x64Name }}
-          path: '${{ steps.Artifact.outputs.androidX86x64Dir }}/${{ steps.Artifact.outputs.androidX86x64Name }}/*'
-
-      - name: Upload erofs-utils Android_x86
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.Artifact.outputs.androidX86Name }}
-          path: '${{ steps.Artifact.outputs.androidX86Dir }}/${{ steps.Artifact.outputs.androidX86Name }}/*'
 
       - name: Upload erofs-utils Linux_x86_64
         if: success()
