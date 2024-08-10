@@ -17,7 +17,6 @@ using namespace std;
 #endif
 
 namespace skkk {
-
 	/**
 	 * erofs_extract_dir
 	 * Copy from fsck.erofs
@@ -119,7 +118,6 @@ namespace skkk {
 	 * @return
 	 */
 	int initErofsNodeByTargetConfig(const string &targetPath, bool recursive = false);
-
 }
 
 #endif //EXTRACT_HELPER_H

@@ -1,7 +1,6 @@
 #include "ErofsHardlinkHandle.h"
 
 namespace skkk {
-
 	ErofsHardlinkEntry::ErofsHardlinkEntry(uint64_t _nid, const char *_path) {
 		this->nid = _nid;
 		this->path = _path;
