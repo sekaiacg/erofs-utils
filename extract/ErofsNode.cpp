@@ -7,7 +7,6 @@
 #define FS_CONFIG_BUF_SIZE (PATH_MAX + 256)
 
 namespace skkk {
-
 	ErofsNode::ErofsNode(const char *path, short typeId, struct erofs_inode *inode) {
 		this->path = path;
 		this->typeId = typeId;
@@ -139,13 +138,12 @@ namespace skkk {
 		}
 	}
 
-	int ErofsNode::writeNodeEntity2File(const string &outDir) {
+	int ErofsNode::writeNodeEntity2File(const string &outDir) const {
 		int err = RET_EXTRACT_DONE;
 		string _tmp = outDir + path;
 		const char *filePath = _tmp.c_str();
-		const char *hardlinkSrcPath;
+		const char *hardlinkSrcPath = erofsHardlinkFind(nid);
 
-		hardlinkSrcPath = erofsHardlinkFind(nid);
 		if (hardlinkSrcPath) {
 			unique_lock lock(erofsHardlinkLock);
 			return erofs_extract_hardlink(inode, (outDir + hardlinkSrcPath).c_str(), filePath);
