@@ -12,16 +12,15 @@ using namespace std;
 static mutex erofsHardlinkLock;
 
 namespace skkk {
-
 	class ErofsHardlinkEntry {
 		public:
 			uint64_t nid = 0;
 			string path;
+
 		public:
 			ErofsHardlinkEntry() = default;
 
 			ErofsHardlinkEntry(uint64_t _nid, const char *_path);
-
 	};
 
 	inline static unordered_map<uint64_t, ErofsHardlinkEntry> erofsHardlinkMap;
@@ -31,7 +30,6 @@ namespace skkk {
 	const char *erofsHardlinkFind(uint64_t nid);
 
 	void erofsHardlinkExit();
-
 }
 
 #endif // EXTRACT_EROFS_HARDLINK_HANDLE_H

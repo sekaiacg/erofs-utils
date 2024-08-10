@@ -11,7 +11,7 @@ on:
       version:
         description: 'Version'
         required: false
-        default: 'v1.7-23092300'
+        default: 'v1.8.1-24081000'
 
 jobs:
   release:
@@ -36,7 +36,7 @@ jobs:
           allowUpdates: true
           omitBodyDuringUpdate: true
           removeArtifacts: true
-          token: ${{ secrets.ACCESS_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           name: ${{ github.event.inputs.version }}
           tag: ${{ github.event.inputs.version }}
           body: This release is built by github-action.

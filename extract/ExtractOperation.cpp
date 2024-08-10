@@ -10,7 +10,6 @@
 #include "threadpool.h"
 
 namespace skkk {
-
 	void ExtractOperation::setImgPath(const char *path) {
 		imgPath = path;
 		strTrim(imgPath);
@@ -31,8 +30,7 @@ namespace skkk {
 	}
 
 	void ExtractOperation::erofsOperationExit() {
-		for_each(erofsNodes.begin(), erofsNodes.end(),
-				 [](auto *eNode) { delete eNode; });
+		ranges::for_each(erofsNodes, [](const auto *eNode) { delete eNode; });
 		erofsNodes.clear();
 		nodeDirs.clear();
 		nodeOther.clear();
@@ -132,8 +130,7 @@ namespace skkk {
 	}
 
 	int ExtractOperation::initErofsNodeAuto() const {
-		return targetPath.empty() ?
-			   initErofsNodeByRoot() : initErofsNodeByTargetPath(targetPath);
+		return targetPath.empty() ? initErofsNodeByRoot() : initErofsNodeByTargetPath(targetPath);
 	}
 
 	const ErofsNode
@@ -190,7 +187,7 @@ namespace skkk {
 	}
 
 	void ExtractOperation::printInitializedNode() {
-		for_each(erofsNodes.begin(), erofsNodes.end(), printFsConf);
+		ranges::for_each(erofsNodes, printFsConf);
 	}
 
 	void ExtractOperation::extractFsConfigAndSelinuxLabelAndFsOptions() const {
@@ -256,13 +253,13 @@ namespace skkk {
 
 	static inline void extractNodeTask(ErofsNode *eNode, const string &outdir) {
 		if (eNode->initExceptionInfo(eNode->writeNodeEntity2File(outdir)))
-			ExtractOperation::exceptionSize++;
+			++ExtractOperation::exceptionSize;
 	}
 
 	static inline void extractNodeTaskMultiThread(ErofsNode *eNode, const string &outdir) {
 		if (eNode->initExceptionInfo(eNode->writeNodeEntity2File(outdir)))
-			ExtractOperation::exceptionSize++;
-		ExtractOperation::extractTaskRunCount++;
+			++ExtractOperation::exceptionSize;
+		++ExtractOperation::extractTaskRunCount;
 	}
 
 	static inline void printExtractProgress(int totalSize, int index, int perPrint, bool hasEnter) {

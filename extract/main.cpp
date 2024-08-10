@@ -63,23 +63,23 @@ static inline void print_version() {
 	string compressors;
 	get_available_compressors(compressors);
 	printf("  " BROWN "erofs-utils:" COLOR_NONE "            " RED2_BOLD "%s" COLOR_NONE "\n", cfg.c_version);
-	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.5" COLOR_NONE "\n");
+	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.6" COLOR_NONE "\n");
 	printf("  " BROWN "Available compressors:" COLOR_NONE "  " RED2_BOLD "%s" COLOR_NONE "\n", compressors.c_str());
 	printf("  " BROWN "extract author:" COLOR_NONE "         " RED2_BOLD "skkk" COLOR_NONE "\n");
 }
 
 static struct option arg_options[] = {
-		{"help",      no_argument,       nullptr, 'h'},
-		{"version",   no_argument,       nullptr, 'V'},
-		{"image",     required_argument, nullptr, 'i'},
-		{"offset",    required_argument, nullptr, 2},
-		{"outdir",    required_argument, nullptr, 'o'},
-		{"print",     required_argument, nullptr, 'P'},
-		{"overwrite", no_argument,       nullptr, 'f'},
-		{"extract",   required_argument, nullptr, 'X'},
-		{"config",    required_argument, nullptr, 'c'},
-		{"only-cfg",  no_argument,       nullptr, 1},
-		{nullptr,     no_argument,       nullptr, 0},
+	{"help",      no_argument,       nullptr, 'h'},
+	{"version",   no_argument,       nullptr, 'V'},
+	{"image",     required_argument, nullptr, 'i'},
+	{"offset",    required_argument, nullptr, 2},
+	{"outdir",    required_argument, nullptr, 'o'},
+	{"print",     required_argument, nullptr, 'P'},
+	{"overwrite", no_argument,       nullptr, 'f'},
+	{"extract",   required_argument, nullptr, 'X'},
+	{"config",    required_argument, nullptr, 'c'},
+	{"only-cfg",  no_argument,       nullptr, 1},
+	{nullptr,     no_argument,       nullptr, 0},
 };
 
 static int parseAndCheckExtractCfg(int argc, char **argv) {
@@ -210,7 +210,7 @@ exit:
 
 static inline void printOperationTime(struct timeval *start, struct timeval *end) {
 	LOGCI(GREEN2_BOLD "The operation took: " COLOR_NONE RED2 "%.3f" COLOR_NONE "%s",
-		  (end->tv_sec - start->tv_sec) + (float) (end->tv_usec - start->tv_usec) / 1000000,
+		  (end->tv_sec - start->tv_sec) + static_cast<float>(end->tv_usec - start->tv_usec) / 1000000,
 		  GREEN2_BOLD " second(s)." COLOR_NONE
 	);
 }
