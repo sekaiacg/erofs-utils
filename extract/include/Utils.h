@@ -96,7 +96,7 @@ static inline bool CharsetConvert(const char *fromCharset, const char *toCharset
 		const char *input, size_t inputLen, const char *output, size_t *outputLen) {
 	bool ret = false;
 	iconv_t conv = iconv_open(toCharset, fromCharset);
-	if (conv != (iconv_t) -1) {
+	if (conv != reinterpret_cast<iconv_t>(-1)) {
 		char *_input = const_cast<char *>(input);
 		char *_output = const_cast<char *>(output);
 		if (iconv(conv, &_input, &inputLen, &_output, outputLen) != -1) {

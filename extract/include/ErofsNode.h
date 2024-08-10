@@ -10,7 +10,6 @@
 using namespace std;
 
 namespace skkk {
-
 	static inline void handleSpecialSymbols(string &str) {
 		strReplaceAll(str, ".", "\\.");
 		strReplaceAll(str, "+", "\\+");
@@ -19,7 +18,7 @@ namespace skkk {
 	}
 
 	static set<string> otherPathsInRootDir = {
-			"/lost+found"
+		"/lost+found"
 	};
 
 	/**
@@ -80,10 +79,9 @@ namespace skkk {
 
 			void writeSelinuxLabel2File(FILE *selinuxLabelsFile, const char *mountPoint) const;
 
-			int writeNodeEntity2File(const string &outDir);
+			int writeNodeEntity2File(const string &outDir) const;
 
 			void writeExceptionInfo2FileIfExists(FILE *infoFile) const;
-
 	};
 }
 #endif //EXTRACT_EROFS_NODE_H
