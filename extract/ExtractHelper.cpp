@@ -20,8 +20,6 @@
 #endif
 
 namespace skkk {
-
-
 	static int doInitNode(const string &path, bool recursive);
 
 	static int doInitNodeRecursive(erofs_nid_t nid);
@@ -50,7 +48,7 @@ namespace skkk {
 		if (eo->iter_path) {
 			eo->iter_path[curr_pos++] = '/';
 			strncpy(eo->iter_path + curr_pos, ctx->dname,
-					ctx->de_namelen);
+			        ctx->de_namelen);
 			curr_pos += ctx->de_namelen;
 			eo->iter_path[curr_pos] = '\0';
 		} else {
@@ -73,7 +71,7 @@ namespace skkk {
 				break;
 			case S_IFREG:
 				if (erofs_is_packed_inode(&inode)) [[unlikely]]
-					break;
+						break;
 				typeId = EROFS_FT_REG_FILE;
 				break;
 			case S_IFLNK:
@@ -100,10 +98,10 @@ namespace skkk {
 #else
 			const ErofsNode *eNode = ExtractOperation::createErofsNode(eo->iter_path, typeId, &inode);
 			LOGCD("type=%s dataLayout=%s %s %s",
-				  eNode->getTypeIdCStr(),
-				  eNode->getDataLayoutCStr(),
-				  eNode->getFsConfig().c_str(),
-				  eNode->getSelinuxLabel().c_str()
+			      eNode->getTypeIdCStr(),
+			      eNode->getDataLayoutCStr(),
+			      eNode->getFsConfig().c_str(),
+			      eNode->getSelinuxLabel().c_str()
 			);
 #endif
 		}
@@ -120,8 +118,8 @@ namespace skkk {
 		int ret;
 
 		struct erofs_inode inode = {
-				.sbi = &g_sbi,
-				.nid = nid
+			.sbi = &g_sbi,
+			.nid = nid
 		};
 
 		ret = erofs_read_inode_from_disk(&inode);
@@ -133,14 +131,14 @@ namespace skkk {
 
 		{
 			struct erofs_dir_context ctx = {
-					.dir = &inode,
-					.cb = dirent_iter
+				.dir = &inode,
+				.cb = dirent_iter
 			};
 			if (S_ISDIR(inode.i_mode)) {
 				ret = erofs_iterate_dir(&ctx, false);
 			}
 		}
-out:
+	out:
 		return ret;
 	}
 
@@ -155,8 +153,8 @@ out:
 		bool ret = 0;
 		char pathnameBuf[PATH_MAX] = {0};
 		struct erofs_inode vi = {
-				.sbi = &g_sbi,
-				.nid = g_sbi.root_nid
+			.sbi = &g_sbi,
+			.nid = g_sbi.root_nid
 		};
 
 		ret = erofs_ilookup(path.c_str(), &vi);
@@ -179,7 +177,7 @@ out:
 		} else {
 			createErofsNode(vi);
 		}
-out:
+	out:
 		return ret;
 	}
 
@@ -193,7 +191,7 @@ out:
 	 */
 	static int erofs_verify_inode_data(struct erofs_inode *inode, int outfd) {
 		struct erofs_map_blocks map = {
-				.index = UINT_MAX,
+			.index = UINT_MAX,
 		};
 		int ret = 0;
 		bool compressed;
@@ -254,7 +252,7 @@ out:
 			}
 
 			if (alloc_rawsize > raw_size) {
-				char *newraw = (char *) realloc(raw, alloc_rawsize);
+				char *newraw = static_cast<char *>(realloc(raw, alloc_rawsize));
 
 				if (!newraw) {
 					ret = -ENOMEM;
@@ -301,14 +299,14 @@ out:
 			}
 		}
 
-out:
+	out:
 		if (raw)
 			free(raw);
 		if (buffer)
 			free(buffer);
 		return ret < 0 ? ret : 0;
 
-fail_eio:
+	fail_eio:
 		ret = -EIO;
 		goto out;
 	}
@@ -323,7 +321,7 @@ fail_eio:
 	int erofs_extract_dir(const char *dirPath) {
 		bool tryagain = true;
 
-again:
+	again:
 		if (mkdirs(dirPath, 0700) < 0) {
 			struct stat st = {};
 			if (eo->overwrite && tryagain) {
@@ -361,7 +359,7 @@ again:
 		bool tryagain = true;
 		int ret, fd;
 
-again:
+	again:
 		fd = open(filePath,
 				  O_WRONLY | O_CREAT | O_NOFOLLOW |
 				  (eo->overwrite ? O_TRUNC : O_EXCL), 0700);
@@ -372,7 +370,7 @@ again:
 						return -EISDIR;
 					}
 				} else if (errno == EACCES &&
-						   chmod(filePath, 0700) < 0) {
+				           chmod(filePath, 0700) < 0) {
 					return -errno;
 				}
 				tryagain = false;
@@ -392,7 +390,6 @@ again:
 		if (close(fd))
 			return -errno;
 		return ret;
-
 	}
 
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -410,10 +407,7 @@ again:
 			return -1;
 		}
 
-		if (!CharsetConvert("UTF-8",
-				  "UTF-16LE",
-				  from, strlen(from),
-				  utf16LEBuf, &utf16Len)) {
+		if (!CharsetConvert("UTF-8", "UTF-16LE", from, strlen(from), utf16LEBuf, &utf16Len)) {
 			return -1;
 		}
 
@@ -439,9 +433,8 @@ again:
 	int erofs_extract_symlink(erofs_inode *inode, const char *filePath) {
 		bool tryagain = true;
 		int ret;
-		char *buf;
 
-		buf = (char *) malloc(inode->i_size + 1);
+		char *buf = static_cast<char *>(malloc(inode->i_size + 1));
 		if (!buf) {
 			ret = -ENOMEM;
 			goto out;
@@ -453,7 +446,7 @@ again:
 		}
 
 		buf[inode->i_size] = '\0';
-again:
+	again:
 #if !(defined(_WIN32) || defined(__CYGWIN__))
 		if (symlink(buf, filePath) < 0) {
 #else
@@ -472,7 +465,7 @@ again:
 			}
 			ret = -errno;
 		}
-out:
+	out:
 		if (buf)
 			free(buf);
 		return ret;
@@ -491,7 +484,7 @@ out:
 
 		if (!fileExists(srcPath))
 			ret = erofs_extract_file(inode, srcPath);
-again:
+	again:
 		if (strncmp(srcPath, targetPath, strlen(targetPath)) != 0 &&
 #if !(defined(_WIN32) || defined(__CYGWIN__))
 			link(srcPath, targetPath) < 0) {
@@ -511,7 +504,7 @@ again:
 			}
 			ret = -errno;
 		}
-out:
+	out:
 		return ret;
 	}
 
@@ -524,11 +517,10 @@ out:
 	 * @return
 	 */
 	int erofs_extract_special(erofs_inode *inode, const char *filePath) {
-
 		bool tryagain = true;
 		int ret = 0;
 
-again:
+	again:
 		if (mknod(filePath, inode->i_mode, inode->u.i_rdev) < 0) {
 			if (errno == EEXIST && eo->overwrite && tryagain) {
 				if (unlink(filePath) < 0) {
@@ -560,18 +552,18 @@ again:
 #ifdef HAVE_UTIMENSAT
 		if (utimensat(AT_FDCWD, path, (struct timespec[]) {
 				{
-						.tv_sec =  (time_t) inode->i_mtime,
-						.tv_nsec = (time_t) inode->i_mtime_nsec
+						.tv_sec =  static_cast<time_t>(inode->i_mtime),
+						.tv_nsec = static_cast<time_t>(inode->i_mtime_nsec)
 				},
 				{
-						.tv_sec = (time_t) inode->i_mtime,
-						.tv_nsec = (time_t) inode->i_mtime_nsec
+						.tv_sec = static_cast<time_t>(inode->i_mtime),
+						.tv_nsec = static_cast<time_t>(inode->i_mtime_nsec)
 				},
 		}, AT_SYMLINK_NOFOLLOW) < 0)
 #else
 		struct utimbuf ub = {
-				.actime = (time_t) inode->i_mtime,
-				.modtime = (time_t) inode->i_mtime
+				.actime = static_cast<time_t>(inode->i_mtime),
+				.modtime = static_cast<time_t>(inode->i_mtime)
 		};
 		if (utime(path, &ub) < 0)
 #endif
@@ -599,9 +591,8 @@ again:
 		string _tmp = outDir + eNode->getPath();
 		const char *filePath = _tmp.c_str();
 		erofs_inode *inode = eNode->getErofsInode();
-		const char *hardlinkSrcPath;
 
-		hardlinkSrcPath = erofsHardlinkFind(inode->nid);
+		const char *hardlinkSrcPath = erofsHardlinkFind(inode->nid);
 		if (hardlinkSrcPath) {
 			unique_lock lock(erofsHardlinkLock);
 			return erofs_extract_hardlink(inode, (outDir + hardlinkSrcPath).c_str(), filePath);
@@ -642,20 +633,20 @@ again:
 		len = erofs_getxattr(inode, XATTR_NAME_CAPABILITY, buf, 128);
 		if (len > 0) {
 			uint64_t capabilities = 0;
-			auto *fileCapData = (struct vfs_cap_data *) buf;
+			auto *fileCapData = reinterpret_cast<struct vfs_cap_data *>(buf);
 			uint32_t cap_version = le32_to_cpu(fileCapData->magic_etc) & VFS_CAP_REVISION_MASK;
 			// check version size
 			switch (cap_version) {
 				case VFS_CAP_REVISION_1:
 					if (len != XATTR_CAPS_SZ_1)
 						return;
-					capabilities = le32_to_cpu(fileCapData->data[0].permitted);
+					capabilities = le64_to_cpu(fileCapData->data[0].permitted);
 					break;
 				case VFS_CAP_REVISION_2:
 					if (len != XATTR_CAPS_SZ_2)
 						return;
-					capabilities = (uint64_t) le32_to_cpu(fileCapData->data[0].permitted) |
-								   ((uint64_t) le32_to_cpu(fileCapData->data[1].permitted)) << 32;
+					capabilities = le64_to_cpu(fileCapData->data[0].permitted) |
+					               le64_to_cpu(fileCapData->data[1].permitted) << 32;
 					break;
 				default:
 					return;
@@ -734,7 +725,7 @@ again:
 		}
 
 		rc = RET_EXTRACT_DONE;
-exit:
+	exit:
 		return rc;
 	}
 
