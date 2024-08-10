@@ -266,9 +266,14 @@ out:
 
 			if (compressed) {
 				if (map.m_llen > buffer_size) {
+					char *newbuffer;
 					buffer_size = map.m_llen;
-					buffer = (char *) realloc(buffer, buffer_size);
-					BUG_ON(!buffer);
+					newbuffer = static_cast<char *>(realloc(buffer, buffer_size));
+					if (!newbuffer) {
+						ret = -ENOMEM;
+						goto out;
+					}
+					buffer = newbuffer;
 				}
 				ret = z_erofs_read_one_data(inode, &map, raw, buffer,
 											0, map.m_llen, false);
