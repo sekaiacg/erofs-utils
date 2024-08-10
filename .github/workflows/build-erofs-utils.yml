@@ -48,8 +48,8 @@ jobs:
       TZ: UTC-8
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
-      CCACHE_MAXSIZE: "50M"
       CCACHE_HARDLINK: "true"
+      CCACHE_BASEDIR: "${{ github.workspace }}"
       AARCH64_TOOLS_PATH: "/opt/aarch64"
       LOONGARCH64_TOOLS_PATH: "/opt/loongarch64"
       cygwin_prebuilt_packages: "deb [trusted=yes] https://github.com/affggh/deb-cygwin-debian/releases/download/snapshot-deb ./"
@@ -124,7 +124,7 @@ jobs:
           echo "PATH=$GITHUB_WORKSPACE:${LOONGARCH64_TOOLS_PATH}/cross-tools/bin:$PATH" >> $GITHUB_ENV
           echo "LOONGARCH64_GCC_PATH=${LOONGARCH64_TOOLS_PATH}/cross-tools" >> $GITHUB_ENV
 
-      - name: Set up ccache
+      - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ runner.os }}
@@ -238,8 +238,8 @@ jobs:
     env:
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
-      CCACHE_MAXSIZE: "50M"
       CCACHE_HARDLINK: "true"
+      CCACHE_BASEDIR: "${{ github.workspace }}"
 
     steps:
       - name: Checkout
@@ -251,7 +251,7 @@ jobs:
       - name: Install dependencies
         run: brew install ccache ninja
 
-      - name: Set up ccache
+      - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ runner.os }}
