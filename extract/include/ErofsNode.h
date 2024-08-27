@@ -15,6 +15,7 @@ namespace skkk {
 		strReplaceAll(str, "+", "\\+");
 		strReplaceAll(str, "[", "\\[");
 		strReplaceAll(str, "]", "\\]");
+		strReplaceAll(str, "*", "\\*");
 	}
 
 	static set<string> otherPathsInRootDir = {
