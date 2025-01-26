@@ -31,6 +31,7 @@ set(common_static_link_lib
 	z_static
 	libzstd_static
 	pcre2
+	xxhash
 	${ld_end_group}
 )
 

@@ -73,6 +73,8 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
 	"-DHAVE_LIBZSTD"
 	"-DWITH_ANDROID"
 	"-DEROFS_MT_ENABLED"
+	"-DHAVE_XXHASH_H"
+	"-DHAVE_XXHASH"
 	"${DARWIN_CFLAGS}"
 	CACHE INTERNAL "liberofs_static_defaults_cflags"
 )
@@ -101,7 +103,6 @@ set(liberofs_srcs
 	"${TARGET_SRC_DIR}/uuid.c"
 	"${TARGET_SRC_DIR}/tar.c"
 	"${TARGET_SRC_DIR}/block_list.c"
-	"${TARGET_SRC_DIR}/xxhash.c"
 	"${TARGET_SRC_DIR}/rebuild.c"
 	"${TARGET_SRC_DIR}/diskbuf.c"
 	"${TARGET_SRC_DIR}/uuid_unparse.c"

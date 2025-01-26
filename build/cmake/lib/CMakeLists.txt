@@ -18,6 +18,12 @@ elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin|CYGWIN")
 	include(libext2_uuid.cmake)
 endif ()
 
+#XXHASH
+set(BUILD_SHARED_LIBS OFF)
+set(XXHASH_BUILD_ENABLE_INLINE_API ON)
+set(XXHASH_BUILD_XXHSUM OFF)
+add_subdirectory("${LIB_DIR}/xxHash/cmake_unofficial" "xxHash")
+
 # LZ4
 set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(LZ4_BUILD_CLI OFF)
