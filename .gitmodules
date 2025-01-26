@@ -43,3 +43,7 @@
 [submodule "src/winfsp"]
 	path = src/winfsp
 	url = https://github.com/winfsp/winfsp
+[submodule "src/xxHash"]
+	path = src/xxHash
+	url = https://github.com/Cyan4973/xxHash.git
+	branch = dev
