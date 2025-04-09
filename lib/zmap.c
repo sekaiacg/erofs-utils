@@ -282,26 +282,22 @@ static int z_erofs_extent_lookback(struct z_erofs_maprecorder *m,
 		if (err)
 			return err;
 
-		switch (m->type) {
-		case Z_EROFS_LCLUSTER_TYPE_NONHEAD:
-			lookback_distance = m->delta[0];
-			if (!lookback_distance)
-				goto err_bogus;
-			continue;
-		case Z_EROFS_LCLUSTER_TYPE_PLAIN:
-		case Z_EROFS_LCLUSTER_TYPE_HEAD1:
-		case Z_EROFS_LCLUSTER_TYPE_HEAD2:
-			m->headtype = m->type;
-			m->map->m_la = (lcn << lclusterbits) | m->clusterofs;
-			return 0;
-		default:
+		if (m->type >= Z_EROFS_LCLUSTER_TYPE_MAX) {
 			erofs_err("unknown type %u @ lcn %lu of nid %llu",
 				  m->type, lcn, vi->nid | 0ULL);
 			DBG_BUGON(1);
 			return -EOPNOTSUPP;
+		} else if (m->type == Z_EROFS_LCLUSTER_TYPE_NONHEAD) {
+			lookback_distance = m->delta[0];
+			if (!lookback_distance)
+				break;
+			continue;
+		} else {
+			m->headtype = m->type;
+			m->map->m_la = (lcn << lclusterbits) | m->clusterofs;
+			return 0;
 		}
 	}
-err_bogus:
 	erofs_err("bogus lookback distance %u @ lcn %lu of nid %llu",
 		  lookback_distance, m->lcn | 0ULL, vi->nid);
 	DBG_BUGON(1);
@@ -345,36 +341,30 @@ static int z_erofs_get_extent_compressedlen(struct z_erofs_maprecorder *m,
 	DBG_BUGON(lcn == initial_lcn &&
 		  m->type == Z_EROFS_LCLUSTER_TYPE_NONHEAD);
 
-	switch (m->type) {
-	case Z_EROFS_LCLUSTER_TYPE_PLAIN:
-	case Z_EROFS_LCLUSTER_TYPE_HEAD1:
-	case Z_EROFS_LCLUSTER_TYPE_HEAD2:
+	if (m->type == Z_EROFS_LCLUSTER_TYPE_NONHEAD) {
+		if (m->delta[0] != 1) {
+			erofs_err("bogus CBLKCNT @ lcn %lu of nid %llu",
+				  lcn, vi->nid | 0ULL);
+			DBG_BUGON(1);
+			return -EFSCORRUPTED;
+		}
+		if (m->compressedblks)
+			goto out;
+	} else if (m->type < Z_EROFS_LCLUSTER_TYPE_MAX) {
 		/*
 		 * if the 1st NONHEAD lcluster is actually PLAIN or HEAD type
 		 * rather than CBLKCNT, it's a 1 block-sized pcluster.
 		 */
 		m->compressedblks = 1;
-		break;
-	case Z_EROFS_LCLUSTER_TYPE_NONHEAD:
-		if (m->delta[0] != 1)
-			goto err_bonus_cblkcnt;
-		if (m->compressedblks)
-			break;
-		/* fallthrough */
-	default:
-		erofs_err("cannot found CBLKCNT @ lcn %lu of nid %llu",
-			  lcn, vi->nid | 0ULL);
-		DBG_BUGON(1);
-		return -EFSCORRUPTED;
+		goto out;
 	}
-out:
-	m->map->m_plen = erofs_pos(sbi, m->compressedblks);
-	return 0;
-err_bonus_cblkcnt:
-	erofs_err("bogus CBLKCNT @ lcn %lu of nid %llu",
+	erofs_err("cannot found CBLKCNT @ lcn %lu of nid %llu",
 		  lcn, vi->nid | 0ULL);
 	DBG_BUGON(1);
 	return -EFSCORRUPTED;
+out:
+	m->map->m_plen = erofs_pos(sbi, m->compressedblks);
+	return 0;
 }
 
 static int z_erofs_get_extent_decompressedlen(struct z_erofs_maprecorder *m)
@@ -402,9 +392,7 @@ static int z_erofs_get_extent_decompressedlen(struct z_erofs_maprecorder *m)
 				m->delta[1] = 1;
 				DBG_BUGON(1);
 			}
-		} else if (m->type == Z_EROFS_LCLUSTER_TYPE_PLAIN ||
-			   m->type == Z_EROFS_LCLUSTER_TYPE_HEAD1 ||
-			   m->type == Z_EROFS_LCLUSTER_TYPE_HEAD2) {
+		} else if (m->type < Z_EROFS_LCLUSTER_TYPE_MAX) {
 			if (lcn != headlcn)
 				break;	/* ends at the next HEAD lcluster */
 			m->delta[1] = 1;
