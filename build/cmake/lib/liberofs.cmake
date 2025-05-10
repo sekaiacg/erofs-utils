@@ -35,7 +35,6 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		"pwrite64"
 		"posix_fadvise"
 		"sendfile"
-		"tmpfile64"
 	)
 	if (NOT RUN_ON_WSL)
 		list(APPEND liberofs_function_list
