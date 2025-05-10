@@ -569,6 +569,12 @@ namespace skkk {
 #endif
 			LOGCW("failed to set times: %s", path);
 #ifndef __CYGWIN__
+		if (eo->preserve_owner) {
+			ret = lchown(path, inode->i_uid, inode->i_gid);
+			if (ret < 0)
+				LOGCW("failed to change ownership: %s", path);
+		}
+
 		if (!S_ISLNK(inode->i_mode)) {
 			if (eo->preserve_perms)
 				ret = chmod(path, inode->i_mode);
@@ -576,12 +582,6 @@ namespace skkk {
 				ret = chmod(path, inode->i_mode & ~eo->umask);
 			if (ret < 0)
 				LOGCW("failed to set permissions: %s", path);
-		}
-
-		if (eo->preserve_owner) {
-			ret = lchown(path, inode->i_uid, inode->i_gid);
-			if (ret < 0)
-				LOGCW("failed to change ownership: %s", path);
 		}
 #endif
 	}
