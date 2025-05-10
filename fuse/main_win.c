@@ -14,6 +14,7 @@
 #include "erofs/io.h"
 #include "erofs/dir.h"
 #include "erofs/inode.h"
+#include "erofs/fragments.h"
 
 struct erofsfuse_dir_context {
 	struct erofs_dir_context ctx;
@@ -349,8 +350,19 @@ int main(int argc, char *argv[])
 		goto err_dev_close;
 	}
 
+	if (erofs_sb_has_fragments(&g_sbi) && g_sbi.packed_nid > 0) {
+		ret = erofs_packedfile_init(&g_sbi, false);
+		if (ret) {
+			fprintf(stderr, "failed to initialize packedfile: %s",
+				  erofs_strerror(ret));
+			goto err_super_put;
+		}
+	}
+
 	ret = fuse_main(args.argc, args.argv, &erofs_ops, NULL);
 
+	erofs_packedfile_exit(&g_sbi);
+err_super_put:
 	erofs_put_super(&g_sbi);
 err_dev_close:
 	erofs_blob_closeall(&g_sbi);
