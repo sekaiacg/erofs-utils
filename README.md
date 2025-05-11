@@ -14,23 +14,30 @@
 **files_context:** `/vendor/bin/hw/android\.hardware\.bluetooth@1\.0-service-qti u:object_r:hal_bluetooth_default_exec:s0`
 
 ```
+extract.erofs --help
 usage: [options]
   -h, --help              Display this help and exit
   -i, --image=[FILE]      Image file
+  --offset=#              skip # bytes at the beginning of IMAGE
   -p                      Print all entrys
   -P, --print=X           Print the target of path X
   -x                      Extract all items
   -X, --extract=X         Extract the target of path X
   -c, --config=[FILE]     Target of config
   -r                      When using config, recurse directories
+  -s                      Silent mode, Don't show progress
   -f, --overwrite         [default: skip] overwrite files that already exist
-  -T#                     [1-X] Use # threads, -T0: X/2
+  -T#                     [1-X] Use # threads,  default: -T0, is X/2
   --only-cfg              Only extract fs_config|file_contexts|fs_options
   -o, --outdir=X          Output dir
   -V, --version           Print the version info
-  erofs-utils:            x.x-gxxxxxxxx
+```
+
+```
+  extract.erofs -V
+  erofs-utils:            x.x.x-gxxxxxxxx
   extract.erofs:          x.x.x
-  Available compressors:  lz4, lz4hc, lzma, deflate
+  Available compressors:  lz4, lz4hc, lzma, deflate, zstd
   extract author:         skkk
 
 ```
