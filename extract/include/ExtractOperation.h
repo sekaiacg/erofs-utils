@@ -59,7 +59,6 @@ namespace skkk {
 			bool isExtractTarget = false;
 			bool isExtractTargetConfig = false;
 			bool targetConfigRecurse = false;
-			bool useMultiThread = false;
 			unsigned int threadNum = 0;
 			unsigned int hardwareConcurrency = thread::hardware_concurrency();
 			unsigned int limitHardwareConcurrency = hardwareConcurrency * 2;
