@@ -5,6 +5,7 @@ set(TARGET_SRC_DIR "${PROJECT_ROOT_DIR}/lib")
 # Check function and header
 set(liberofs_include_list
 	"execinfo.h"
+	"endian.h"
 	"linux/falloc.h"
 	"linux/fs.h"
 	"linux/types.h"
