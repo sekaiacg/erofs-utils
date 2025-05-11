@@ -20,9 +20,16 @@
 #endif
 
 namespace skkk {
+	struct erofsfsck_dirstack {
+		erofs_nid_t dirs[PATH_MAX];
+		int top;
+	};
+
+	struct erofsfsck_dirstack dirstack;
+
 	static int doInitNode(const string &path, bool recursive);
 
-	static int doInitNodeRecursive(erofs_nid_t nid);
+	static int doInitNodeRecursive(erofs_nid_t pnid, erofs_nid_t nid);
 
 	/**
 	 * Copy from fsck.erofs
@@ -55,7 +62,7 @@ namespace skkk {
 			curr_pos += ctx->de_namelen;
 		}
 		eo->iter_pos = curr_pos;
-		ret = doInitNodeRecursive(ctx->de_nid);
+		ret = doInitNodeRecursive(ctx->dir->nid, ctx->de_nid);
 
 		if (eo->iter_path)
 			eo->iter_path[prev_pos] = '\0';
@@ -70,8 +77,6 @@ namespace skkk {
 				typeId = EROFS_FT_DIR;
 				break;
 			case S_IFREG:
-				if (erofs_is_packed_inode(&inode)) [[unlikely]]
-						break;
 				typeId = EROFS_FT_REG_FILE;
 				break;
 			case S_IFLNK:
@@ -114,8 +119,8 @@ namespace skkk {
 	 * @param nid
 	 * @return
 	 */
-	static int doInitNodeRecursive(erofs_nid_t nid) {
-		int ret;
+	static int doInitNodeRecursive(erofs_nid_t pnid, erofs_nid_t nid) {
+		int ret, i;
 
 		struct erofs_inode inode = {
 			.sbi = &g_sbi,
@@ -127,15 +132,26 @@ namespace skkk {
 			goto out;
 		}
 
-		createErofsNode(inode);
+		if (!erofs_is_packed_inode(&inode))
+			[[likely]]createErofsNode(inode);
 
 		{
 			struct erofs_dir_context ctx = {
 				.dir = &inode,
-				.cb = dirent_iter
+				.cb = dirent_iter,
+				.pnid = pnid,
+                .flags = EROFS_READDIR_VALID_PNID,
 			};
 			if (S_ISDIR(inode.i_mode)) {
+				/* XXX: support the deeper cases later */
+				if (dirstack.top >= ARRAY_SIZE(dirstack.dirs))
+					return -ENAMETOOLONG;
+				for (i = 0; i < dirstack.top; ++i)
+					if (inode.nid == dirstack.dirs[i])
+						return -ELOOP;
+				dirstack.dirs[dirstack.top++] = pnid;
 				ret = erofs_iterate_dir(&ctx, false);
+				--dirstack.top;
 			}
 		}
 	out:
@@ -170,7 +186,7 @@ namespace skkk {
 		eo->iter_pos = snprintf(eo->iter_path, PATH_MAX, pathnameBuf, nullptr);
 
 		if (recursive) {
-			ret = doInitNodeRecursive(vi.nid);
+			ret = doInitNodeRecursive(vi.nid, vi.nid);
 			if (ret) {
 				LOGCE("failed to initialize ErofsNode, path: '%s'", path.c_str());
 			}
@@ -193,36 +209,19 @@ namespace skkk {
 		struct erofs_map_blocks map = {
 			.index = UINT_MAX,
 		};
+		bool needdecode = eo->check_decomp && !erofs_is_packed_inode(inode);
 		int ret = 0;
 		bool compressed;
 		erofs_off_t pos = 0;
 		unsigned int raw_size = 0, buffer_size = 0;
 		char *raw = nullptr, *buffer = nullptr;
 
-		switch (inode->datalayout) {
-			case EROFS_INODE_FLAT_PLAIN:
-			case EROFS_INODE_FLAT_INLINE:
-			case EROFS_INODE_CHUNK_BASED:
-				compressed = false;
-				break;
-			case EROFS_INODE_COMPRESSED_FULL:
-			case EROFS_INODE_COMPRESSED_COMPACT:
-				compressed = true;
-				break;
-			default:
-				return -EINVAL;
-		}
-
+		compressed = erofs_inode_is_data_compressed(inode->datalayout);
 		while (pos < inode->i_size) {
 			unsigned int alloc_rawsize;
 
 			map.m_la = pos;
-			if (compressed)
-				ret = z_erofs_map_blocks_iter(inode, &map,
-											  EROFS_GET_BLOCKS_FIEMAP);
-			else
-				ret = erofs_map_blocks(inode, &map,
-									   EROFS_GET_BLOCKS_FIEMAP);
+			ret = erofs_map_blocks(inode, &map, EROFS_GET_BLOCKS_FIEMAP);
 			if (ret)
 				goto out;
 
@@ -238,8 +237,17 @@ namespace skkk {
 			pos += map.m_llen;
 
 			/* should skip decomp? */
-			if (!(map.m_flags & EROFS_MAP_MAPPED) || !eo->check_decomp)
+			if (map.m_la >= inode->i_size || !needdecode)
 				continue;
+
+			if (outfd >= 0 && !(map.m_flags & EROFS_MAP_MAPPED)) {
+				ret = lseek(outfd, map.m_llen, SEEK_CUR);
+				if (ret < 0) {
+					ret = -errno;
+					goto out;
+				}
+				continue;
+			}
 
 			if (map.m_plen > Z_EROFS_PCLUSTER_MAX_SIZE) {
 				if (compressed) {
@@ -278,7 +286,7 @@ namespace skkk {
 				if (ret)
 					goto out;
 
-				if (outfd > 0 && write(outfd, buffer, map.m_llen) < 0)
+				if (outfd >= 0 && write(outfd, buffer, map.m_llen) < 0)
 					goto fail_eio;
 			} else {
 				u64 p = 0;
@@ -291,7 +299,7 @@ namespace skkk {
 					if (ret)
 						goto out;
 
-					if (outfd > 0 && write(outfd, raw, count) < 0)
+					if (outfd >= 0 && write(outfd, raw, count) < 0)
 						goto fail_eio;
 					map.m_llen -= count;
 					p += count;
@@ -384,11 +392,7 @@ namespace skkk {
 
 		/* verify data chunk layout */
 		ret = erofs_verify_inode_data(inode, fd);
-		if (ret)
-			return ret;
-
-		if (close(fd))
-			return -errno;
+		close(fd);
 		return ret;
 	}
 
@@ -705,7 +709,7 @@ namespace skkk {
 		snprintf(eo->iter_path, PATH_MAX, "/");
 		eo->iter_pos = 0;
 
-		err = doInitNodeRecursive(g_sbi.root_nid);
+		err = doInitNodeRecursive(g_sbi.root_nid, g_sbi.root_nid);
 		if (err) {
 			rc = RET_EXTRACT_INIT_NODE_FAIL;
 			LOGCE("failed to initialize ErofsNode!");
