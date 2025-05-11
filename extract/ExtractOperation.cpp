@@ -196,7 +196,7 @@ namespace skkk {
 		string fsOptionPath = configDir + "/" + imgBaseName + "_fs_options";
 		FILE *fsConfigFile = fopen(fsConfigPath.c_str(), "wb");
 		FILE *selinuxLabelsFile = fopen(fsSelinuxLabelsPath.c_str(), "wb");
-		FILE *fsOptionFile = nullptr;
+		FILE *mkfsOptionFile = nullptr;
 		char uuid[37] = {0};
 		const char *mountPoint = imgBaseName.c_str();
 		LOGCI(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " GREEN2_BOLD "saving..." LOG_RESET_COLOR);
@@ -208,15 +208,15 @@ namespace skkk {
 					eNode->writeSelinuxLabel2File(selinuxLabelsFile, mountPoint);
 			}
 			if (!isExtractTargetConfig) {
-				fsOptionFile = fopen(fsOptionPath.c_str(), "wb");
-				if (fsOptionFile) {
-					auto time = (time_t) g_sbi.build_time;
+				mkfsOptionFile = fopen(fsOptionPath.c_str(), "wb");
+				if (mkfsOptionFile) {
+					auto time = static_cast<time_t>(g_sbi.build_time);
 					erofs_uuid_unparse_lower(g_sbi.uuid, uuid);
 					bool isBigPcluster = le32_to_cpu(g_sbi.feature_incompat) & EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER;
-					fprintf(fsOptionFile, "Filesystem created:        %s", ctime(&time));
-					fprintf(fsOptionFile, "Filesystem UUID:           %s\n", uuid);
+					fprintf(mkfsOptionFile, "Filesystem created:        %s", ctime(&time));
+					fprintf(mkfsOptionFile, "Filesystem UUID:           %s\n", uuid);
 					// The options are for reference only, please modify according to the actual situation.
-					fprintf(fsOptionFile, "mkfs.erofs options:        "
+					fprintf(mkfsOptionFile, "mkfs.erofs options:        "
 										  "-zlz4hc "               // default: lz4hc
 										  "%s"
 										  "-T %" PRIu64 " -U %s "
@@ -238,7 +238,7 @@ namespace skkk {
 			LOGCE(BROWN "fs_config|file_contexts|fs_options" LOG_RESET_COLOR "  " RED2_BOLD "fail!" LOG_RESET_COLOR);
 		if (fsConfigFile) fclose(fsConfigFile);
 		if (selinuxLabelsFile) fclose(selinuxLabelsFile);
-		if (fsOptionFile) fclose(fsOptionFile);
+		if (mkfsOptionFile) fclose(mkfsOptionFile);
 	}
 
 	void ExtractOperation::writeExceptionInfo2File() const {
