@@ -49,7 +49,7 @@ static inline void usage() {
 			 "  " GREEN2_BOLD "-r" COLOR_NONE "                      " BROWN "When using config, recurse directories" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-s" COLOR_NONE "                      " BROWN "Silent mode, Don't show progress" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, -T0: " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads,  default: -T0, is " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config|file_contexts|fs_options" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "          " BROWN "Output dir" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-V, --version" COLOR_NONE "           " BROWN "Print the version info" COLOR_NONE "\n",
@@ -63,7 +63,7 @@ static inline void print_version() {
 	string compressors;
 	get_available_compressors(compressors);
 	printf("  " BROWN "erofs-utils:" COLOR_NONE "            " RED2_BOLD "%s" COLOR_NONE "\n", cfg.c_version);
-	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.6" COLOR_NONE "\n");
+	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.7" COLOR_NONE "\n");
 	printf("  " BROWN "Available compressors:" COLOR_NONE "  " RED2_BOLD "%s" COLOR_NONE "\n", compressors.c_str());
 	printf("  " BROWN "extract author:" COLOR_NONE "         " RED2_BOLD "skkk" COLOR_NONE "\n");
 }
@@ -149,7 +149,6 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 					char *endPtr;
 					uint64_t n = strtoull(optarg, &endPtr, 0);
 					if (*endPtr == '\0') {
-						eo->useMultiThread = true;
 						eo->threadNum = n;
 					}
 				}
@@ -189,16 +188,15 @@ static int parseAndCheckExtractCfg(int argc, char **argv) {
 		}
 		LOGCD("outDir=%s confDir=%s", eo->getOutDir().c_str(), eo->getConfDir().c_str());
 
-		if (eo->useMultiThread) {
-			if (eo->threadNum > eo->limitHardwareConcurrency) {
-				rc = RET_EXTRACT_THREAD_NUM_ERROR;
-				LOGCE("Threads min: 1 , max: %u", eo->limitHardwareConcurrency);
-				goto exit;
-			} else if (eo->threadNum == 0) {
-				eo->threadNum = eo->hardwareConcurrency;
-			}
-			LOGCD("Threads num=%u", eo->threadNum);
+		if (eo->threadNum > eo->limitHardwareConcurrency) {
+			rc = RET_EXTRACT_THREAD_NUM_ERROR;
+			LOGCE("Threads min: 1 , max: %u", eo->limitHardwareConcurrency);
+			goto exit;
+		} else if (eo->threadNum == 0) {
+			eo->threadNum = eo->hardwareConcurrency;
 		}
+		LOGCD("Threads num=%u", eo->threadNum);
+
 		rc = RET_EXTRACT_CONFIG_DONE;
 	} else {
 		usage();
@@ -287,7 +285,11 @@ int main(int argc, char **argv) {
 			LOGCW("Failed change case sensitive.");
 #endif
 		eo->extractFsConfigAndSelinuxLabelAndFsOptions();
-		eo->useMultiThread ? eo->extractErofsNodeMultiThread(eo->isSilent) : eo->extractErofsNode(eo->isSilent);
+		if (eo->threadNum == 1) {
+			eo->extractErofsNode(eo->isSilent);
+		} else {
+			eo->extractErofsNodeMultiThread(eo->isSilent);
+		}
 		goto end;
 	}
 
