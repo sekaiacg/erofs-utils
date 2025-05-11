@@ -3,6 +3,7 @@
 
 // Includes
 #cmakedefine HAVE_EXECINFO_H 1
+#cmakedefine HAVE_ENDIAN_H 1
 #cmakedefine HAVE_LINUX_FALLOC_H 1
 #cmakedefine HAVE_LINUX_FS_H 1
 #cmakedefine HAVE_LINUX_TYPES_H 1
