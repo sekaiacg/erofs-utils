@@ -693,6 +693,9 @@ namespace skkk {
 
 		if (filePath && !filePath->empty()) {
 			getFileDirPath(*filePath, tmpStr);
+			if (!tmpStr.empty()) {
+				dirs.insert(tmpStr);
+			}
 		}
 
 		if (!dirs.empty()) {
