@@ -301,7 +301,7 @@ namespace skkk {
 
 	void ExtractOperation::extractErofsNodeMultiThread(bool isSilent) const {
 		extractNodeDirs();
-		LOGCI(GREEN2_BOLD "Use " COLOR_NONE RED2 "%d" COLOR_NONE GREEN2_BOLD " therads" COLOR_NONE, threadNum);
+		LOGCI(GREEN2_BOLD "Using " COLOR_NONE RED2 "%d" COLOR_NONE GREEN2_BOLD " threads" COLOR_NONE, threadNum);
 
 		int nodeOtherSize = nodeOther.size();
 		threadpool tp(threadNum);
