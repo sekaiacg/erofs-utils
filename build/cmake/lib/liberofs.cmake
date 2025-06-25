@@ -12,7 +12,9 @@ set(liberofs_include_list
 	"linux/xattr.h"
 	"pthread.h"
 	"sys/ioctl.h"
+	"sys/random.h"
 	"sys/resource.h"
+	"sys/sendfile.h"
 	"sys/sysmacros.h"
 	"sys/uio.h"
 	"unistd.h"
@@ -20,24 +22,20 @@ set(liberofs_include_list
 
 set(liberofs_function_list
 	"backtrace"
-	"utimensat"
+	"fallocate"
+	"ftello64"
+	"getrlimit"
+	"pwritev"
 	"sysconf"
+	"utimensat"
 )
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
-	list(APPEND liberofs_include_list
-		"sys/random.h"
-		"sys/sendfile.h"
-	)
 	list(APPEND liberofs_function_list
 		"copy_file_range"
-		"fallocate"
-		"ftello64"
-		"getrlimit"
 		"lseek64"
 		"memrchr"
 		"pread64"
 		"pwrite64"
-		"pwritev"
 		"posix_fadvise"
 		"sendfile"
 	)
@@ -47,9 +45,12 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 			"llistxattr"
 		)
 	endif ()
-elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+endif ()
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
 	set(DARWIN_CFLAGS "-DHAVE_LIBUUID")
 endif ()
+
 check_include(liberofs_include_list)
 check_fun(liberofs_function_list)
 check_symbol_exists(lseek64 "unistd.h" HAVE_LSEEK64_PROTOTYPE)
