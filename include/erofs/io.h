@@ -17,7 +17,9 @@ extern "C"
 #endif
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
+#endif
 #include "defs.h"
 
 #ifndef O_BINARY
