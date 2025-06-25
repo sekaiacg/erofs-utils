@@ -13,6 +13,7 @@ set(liberofs_include_list
 	"pthread.h"
 	"sys/ioctl.h"
 	"sys/sysmacros.h"
+	"sys/uio.h"
 	"unistd.h"
 )
 
@@ -34,6 +35,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		"memrchr"
 		"pread64"
 		"pwrite64"
+		"pwritev"
 		"posix_fadvise"
 		"sendfile"
 	)

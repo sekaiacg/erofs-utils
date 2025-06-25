@@ -16,7 +16,9 @@ extern "C"
 #define _GNU_SOURCE
 #endif
 #include <unistd.h>
+#ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
+#endif
 #include "defs.h"
 
 #ifndef O_BINARY
