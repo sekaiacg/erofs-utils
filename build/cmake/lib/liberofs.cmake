@@ -112,6 +112,7 @@ set(liberofs_srcs
 	"${TARGET_SRC_DIR}/diskbuf.c"
 	"${TARGET_SRC_DIR}/bitops.c"
 	"${TARGET_SRC_DIR}/dedupe_ext.c"
+	"${TARGET_SRC_DIR}/vmdk.c"
 	"${TARGET_SRC_DIR}/uuid_unparse.c"
 	"${TARGET_SRC_DIR}/compressor_lz4.c"
 	"${TARGET_SRC_DIR}/compressor_lz4hc.c"
