@@ -113,7 +113,7 @@ struct erofs_dentry *erofs_rebuild_get_dentry(struct erofs_inode *pwd,
 					*opq = true;
 					break;
 				}
-				if (!strcmp(s, AUFS_WH_PFX)) {
+				if (!strncmp(s, AUFS_WH_PFX, sizeof(AUFS_WH_PFX) - 1)) {
 					s += sizeof(AUFS_WH_PFX) - 1;
 					*whout = true;
 				}
