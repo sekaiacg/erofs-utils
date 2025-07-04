@@ -603,18 +603,18 @@ int erofs_iflush(struct erofs_inode *inode)
 	    S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode))
 		u1.rdev = cpu_to_le32(inode->u.i_rdev);
 	else if (is_inode_layout_compression(inode))
-		u1.compressed_blocks = cpu_to_le32(inode->u.i_blocks);
+		u1.blocks_lo = cpu_to_le32(inode->u.i_blocks);
 	else if (inode->datalayout == EROFS_INODE_CHUNK_BASED)
 		u1.c.format = cpu_to_le16(inode->u.chunkformat);
 	else
-		u1.raw_blkaddr = cpu_to_le32(inode->u.i_blkaddr);
+		u1.startblk_lo = cpu_to_le32(inode->u.i_blkaddr);
 
 	switch (inode->inode_isize) {
 	case sizeof(struct erofs_inode_compact):
 		u.dic.i_format = cpu_to_le16(0 | (inode->datalayout << 1));
 		u.dic.i_xattr_icount = cpu_to_le16(icount);
 		u.dic.i_mode = cpu_to_le16(inode->i_mode);
-		u.dic.i_nlink = cpu_to_le16(inode->i_nlink);
+		u.dic.i_nb.nlink = cpu_to_le16(inode->i_nlink);
 		u.dic.i_size = cpu_to_le32((u32)inode->i_size);
 
 		u.dic.i_ino = cpu_to_le32(inode->i_ino[0]);

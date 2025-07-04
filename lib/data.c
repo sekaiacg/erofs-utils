@@ -117,14 +117,14 @@ int __erofs_map_blocks(struct erofs_inode *inode,
 	}
 	/* parse chunk indexes */
 	idx = (void *)buf + erofs_blkoff(sbi, pos);
-	switch (le32_to_cpu(idx->blkaddr)) {
+	switch (le32_to_cpu(idx->startblk_lo)) {
 	case EROFS_NULL_ADDR:
 		map->m_flags = 0;
 		break;
 	default:
 		map->m_deviceid = le16_to_cpu(idx->device_id) &
 			sbi->device_id_mask;
-		map->m_pa = erofs_pos(sbi, le32_to_cpu(idx->blkaddr));
+		map->m_pa = erofs_pos(sbi, le32_to_cpu(idx->startblk_lo));
 		map->m_flags = EROFS_MAP_MAPPED;
 		break;
 	}
@@ -154,9 +154,9 @@ int erofs_map_dev(struct erofs_sb_info *sbi, struct erofs_map_dev *map)
 			erofs_off_t startoff, length;
 
 			dif = sbi->devs + id;
-			if (!dif->mapped_blkaddr)
+			if (!dif->uniaddr)
 				continue;
-			startoff = erofs_pos(sbi, dif->mapped_blkaddr);
+			startoff = erofs_pos(sbi, dif->uniaddr);
 			length = erofs_pos(sbi, dif->blocks);
 
 			if (map->m_pa >= startoff &&

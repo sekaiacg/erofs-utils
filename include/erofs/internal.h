@@ -60,8 +60,8 @@ struct erofs_bufmgr;
 struct erofs_device_info {
 	char *src_path;
 	u8 tag[64];
-	u32 blocks;
-	u32 mapped_blkaddr;
+	erofs_blk_t blocks;
+	erofs_blk_t uniaddr;
 };
 
 /* all filesystem-wide lz4 configurations */

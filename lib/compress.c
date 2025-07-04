@@ -137,7 +137,7 @@ struct z_erofs_mgr {
 
 static bool z_erofs_mt_enabled;
 
-#define Z_EROFS_LEGACY_MAP_HEADER_SIZE	Z_EROFS_FULL_INDEX_ALIGN(0)
+#define Z_EROFS_LEGACY_MAP_HEADER_SIZE	Z_EROFS_FULL_INDEX_START(0)
 
 static void z_erofs_fini_full_indexes(struct z_erofs_compress_ictx *ctx)
 {

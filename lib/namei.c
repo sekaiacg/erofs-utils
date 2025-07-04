@@ -77,7 +77,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 		iu = dic->i_u;
 		vi->i_uid = le16_to_cpu(dic->i_uid);
 		vi->i_gid = le16_to_cpu(dic->i_gid);
-		vi->i_nlink = le16_to_cpu(dic->i_nlink);
+		vi->i_nlink = le16_to_cpu(dic->i_nb.nlink);
 
 		vi->i_mtime = sbi->build_time;
 		vi->i_mtime_nsec = sbi->build_time_nsec;
@@ -94,7 +94,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	case S_IFREG:
 	case S_IFDIR:
 	case S_IFLNK:
-		vi->u.i_blkaddr = le32_to_cpu(iu.raw_blkaddr);
+		vi->u.i_blkaddr = le32_to_cpu(iu.startblk_lo);
 		break;
 	case S_IFCHR:
 	case S_IFBLK:
