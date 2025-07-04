@@ -289,7 +289,7 @@ static void z_erofs_commit_extent(struct z_erofs_compress_sctx *ctx,
 static int z_erofs_compress_dedupe(struct z_erofs_compress_sctx *ctx)
 {
 	struct erofs_inode *inode = ctx->ictx->inode;
-	const unsigned int lclustermask = (1 << inode->z_logical_clusterbits) - 1;
+	const unsigned int lclustermask = (1 << inode->z_lclusterbits) - 1;
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct z_erofs_extent_item *ei = ctx->pivot;
 
@@ -422,7 +422,7 @@ static int write_uncompressed_extents(struct z_erofs_compress_sctx *ctx,
 				      char *dst)
 {
 	struct erofs_inode *inode = ctx->ictx->inode;
-	unsigned int lclustersize = 1 << inode->z_logical_clusterbits;
+	unsigned int lclustersize = 1 << inode->z_lclusterbits;
 	struct z_erofs_extent_item *ei;
 	int count;
 
@@ -889,7 +889,7 @@ int z_erofs_convert_to_compacted_format(struct erofs_inode *inode,
 	const unsigned int totalidx = (legacymetasize -
 			Z_EROFS_LEGACY_MAP_HEADER_SIZE) /
 				sizeof(struct z_erofs_lcluster_index);
-	const unsigned int logical_clusterbits = inode->z_logical_clusterbits;
+	const unsigned int logical_clusterbits = inode->z_lclusterbits;
 	u8 *out, *in;
 	struct z_erofs_compressindex_vec cv[16];
 	struct erofs_sb_info *sbi = inode->sbi;
@@ -998,7 +998,7 @@ static void z_erofs_write_mapheader(struct erofs_inode *inode,
 		.h_algorithmtype = inode->z_algorithmtype[1] << 4 |
 				   inode->z_algorithmtype[0],
 		/* lclustersize */
-		.h_clusterbits = inode->z_logical_clusterbits - sbi->blkszbits,
+		.h_clusterbits = inode->z_lclusterbits - sbi->blkszbits,
 	};
 
 	if (inode->z_advise & Z_EROFS_ADVISE_FRAGMENT_PCLUSTER)
@@ -1025,8 +1025,8 @@ static void *z_erofs_write_indexes(struct z_erofs_compress_ictx *ctx)
 	if (inode->fragment_size && inode->fragmentoff >> 32) {
 		inode->datalayout = EROFS_INODE_COMPRESSED_FULL;
 	} else if (!cfg.c_legacy_compress && !ctx->dedupe &&
-	    inode->z_logical_clusterbits <= 14) {
-		if (inode->z_logical_clusterbits <= 12)
+	    inode->z_lclusterbits <= 14) {
+		if (inode->z_lclusterbits <= 12)
 			inode->z_advise |= Z_EROFS_ADVISE_COMPACTED_2B;
 		inode->datalayout = EROFS_INODE_COMPRESSED_COMPACT;
 	} else {
@@ -1634,7 +1634,7 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 
 	/* initialize per-file compression setting */
 	inode->z_advise = 0;
-	inode->z_logical_clusterbits = sbi->blkszbits;
+	inode->z_lclusterbits = sbi->blkszbits;
 	if (cfg.c_fragments && !cfg.c_dedupe)
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 

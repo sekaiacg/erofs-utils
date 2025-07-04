@@ -549,7 +549,7 @@ static int erofs_verify_inode_data(struct erofs_inode *inode, int outfd)
 		}
 
 		if (map.m_plen > Z_EROFS_PCLUSTER_MAX_SIZE) {
-			if (compressed) {
+			if (compressed && !(map.m_flags & __EROFS_MAP_FRAGMENT)) {
 				erofs_err("invalid pcluster size %" PRIu64 " @ offset %" PRIu64 " of nid %" PRIu64,
 					  map.m_plen, map.m_la,
 					  inode->nid | 0ULL);

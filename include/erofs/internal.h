@@ -266,11 +266,12 @@ struct erofs_inode {
 		struct {
 			uint16_t z_advise;
 			uint8_t  z_algorithmtype[2];
-			uint8_t  z_logical_clusterbits;
+			uint8_t  z_lclusterbits;
 			uint8_t  z_physical_clusterblks;
 			union {
 				uint64_t z_tailextent_headlcn;
 				erofs_off_t fragment_size;
+				u64		z_extents;
 			};
 			union {
 				erofs_off_t	fragmentoff;
