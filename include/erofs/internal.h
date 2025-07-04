@@ -44,9 +44,6 @@ typedef u64 erofs_nid_t;
 /* data type for filesystem-wide blocks number */
 typedef u32 erofs_blk_t;
 
-#define NULL_ADDR	((unsigned int)-1)
-#define NULL_ADDR_UL	((unsigned long)-1)
-
 /* global sbi */
 extern struct erofs_sb_info g_sbi;
 

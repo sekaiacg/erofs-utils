@@ -252,7 +252,7 @@ static int erofs_rebuild_update_inode(struct erofs_sb_info *dst_sb,
 		break;
 	case S_IFREG:
 		if (!inode->i_size) {
-			inode->u.i_blkaddr = NULL_ADDR;
+			inode->u.i_blkaddr = EROFS_NULL_ADDR;
 			break;
 		}
 		if (datamode == EROFS_REBUILD_DATA_BLOB_INDEX)

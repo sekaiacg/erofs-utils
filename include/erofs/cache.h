@@ -107,8 +107,8 @@ static inline erofs_off_t erofs_btell(struct erofs_buffer_head *bh, bool end)
 	struct erofs_bufmgr *bmgr =
 			(struct erofs_bufmgr *)bb->buffers.fsprivate;
 
-	if (bb->blkaddr == NULL_ADDR)
-		return NULL_ADDR_UL;
+	if (bb->blkaddr == EROFS_NULL_ADDR)
+		return EROFS_NULL_ADDR;
 
 	return erofs_pos(bmgr->sbi, bb->blkaddr) +
 		(end ? list_next_entry(bh, list)->off : bh->off);

@@ -49,7 +49,7 @@ struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
 		}
 	}
 	init_list_head(&bmgr->blkh.list);
-	bmgr->blkh.blkaddr = NULL_ADDR;
+	bmgr->blkh.blkaddr = EROFS_NULL_ADDR;
 	bmgr->tail_blkaddr = startblk;
 	bmgr->last_mapped_block = &bmgr->blkh;
 	bmgr->metablkcnt = 0;
@@ -80,7 +80,7 @@ static void erofs_update_bwatermeter(struct erofs_buffer_block *bb, bool free)
 	struct erofs_bufmgr *bmgr = bb->buffers.fsprivate;
 	struct erofs_sb_info *sbi = bmgr->sbi;
 	unsigned int blksiz = erofs_blksiz(sbi);
-	bool mapped = bb->blkaddr != NULL_ADDR;
+	bool mapped = bb->blkaddr != EROFS_NULL_ADDR;
 	struct list_head *h = bmgr->watermeter[bb->type][mapped];
 	unsigned int nr;
 
@@ -128,12 +128,12 @@ static int __erofs_battach(struct erofs_buffer_block *bb,
 	oob = cmpsgn(alignedoffset + incr + inline_ext,
 		     bb->buffers.nblocks << sbi->blkszbits);
 	if (oob >= 0) {
-		/* the next buffer block should be NULL_ADDR all the time */
-		if (oob && list_next_entry(bb, list)->blkaddr != NULL_ADDR)
+		/* the next buffer block should be EROFS_NULL_ADDR all the time */
+		if (oob && list_next_entry(bb, list)->blkaddr != EROFS_NULL_ADDR)
 			return -EINVAL;
 
 		blkaddr = bb->blkaddr;
-		if (blkaddr != NULL_ADDR) {
+		if (blkaddr != EROFS_NULL_ADDR) {
 			tailupdate = (bmgr->tail_blkaddr == blkaddr +
 				      bb->buffers.nblocks);
 			if (oob && !tailupdate)
@@ -245,7 +245,7 @@ static int erofs_bfind_for_attach(struct erofs_bufmgr *bmgr,
 
 			/* skip the last mapped block */
 			if (mapped &&
-			    list_next_entry(cur, list)->blkaddr == NULL_ADDR) {
+			    list_next_entry(cur, list)->blkaddr == EROFS_NULL_ADDR) {
 				DBG_BUGON(cur != bmgr->last_mapped_block);
 				cur = list_next_entry(cur, sibling);
 				if (&cur->sibling == bt)
@@ -253,7 +253,7 @@ static int erofs_bfind_for_attach(struct erofs_bufmgr *bmgr,
 			}
 
 			DBG_BUGON(cur->type != type);
-			DBG_BUGON((cur->blkaddr != NULL_ADDR) ^ mapped);
+			DBG_BUGON((cur->blkaddr != EROFS_NULL_ADDR) ^ mapped);
 			DBG_BUGON(used != (cur->buffers.off & blkmask));
 
 			ret = __erofs_battach(cur, NULL, size, alignsize,
@@ -328,7 +328,7 @@ struct erofs_buffer_head *erofs_balloc(struct erofs_bufmgr *bmgr,
 			return ERR_PTR(-ENOMEM);
 
 		bb->type = type;
-		bb->blkaddr = NULL_ADDR;
+		bb->blkaddr = EROFS_NULL_ADDR;
 		bb->buffers.off = 0;
 		bb->buffers.nblocks = 0;
 		bb->buffers.fsprivate = bmgr;
@@ -389,7 +389,7 @@ static void __erofs_mapbh(struct erofs_buffer_block *bb)
 	struct erofs_bufmgr *bmgr = bb->buffers.fsprivate;
 	erofs_blk_t blkaddr = bmgr->tail_blkaddr;
 
-	if (bb->blkaddr == NULL_ADDR) {
+	if (bb->blkaddr == EROFS_NULL_ADDR) {
 		bb->blkaddr = blkaddr;
 		if (__erofs_unlikely(bmgr->dsunit > 1) && bb->type == DATA) {
 			struct erofs_buffer_block *pb = list_prev_entry(bb, list);
@@ -419,14 +419,14 @@ erofs_blk_t erofs_mapbh(struct erofs_bufmgr *bmgr,
 		bmgr = bb->buffers.fsprivate;
 	t = bmgr->last_mapped_block;
 
-	if (bb && bb->blkaddr != NULL_ADDR)
+	if (bb && bb->blkaddr != EROFS_NULL_ADDR)
 		return bb->blkaddr;
 	do {
 		t = list_next_entry(t, list);
 		if (t == &bmgr->blkh)
 			break;
 
-		DBG_BUGON(t->blkaddr != NULL_ADDR);
+		DBG_BUGON(t->blkaddr != EROFS_NULL_ADDR);
 		__erofs_mapbh(t);
 	} while (t != bb);
 	return bmgr->tail_blkaddr;
@@ -502,7 +502,7 @@ void erofs_bdrop(struct erofs_buffer_head *bh, bool tryrevoke)
 	bool rollback = false;
 
 	/* tail_blkaddr could be rolled back after revoking all bhs */
-	if (tryrevoke && blkaddr != NULL_ADDR &&
+	if (tryrevoke && blkaddr != EROFS_NULL_ADDR &&
 	    bmgr->tail_blkaddr == blkaddr + bb->buffers.nblocks)
 		rollback = true;
 
