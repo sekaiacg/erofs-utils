@@ -139,10 +139,11 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 	struct erofs_sb_info *sbi = inode->sbi;
 	erofs_blk_t remaining_blks = BLK_ROUND_UP(sbi, inode->i_size);
 	struct erofs_inode_chunk_index idx = {0};
+	erofs_blk_t extent_end = EROFS_NULL_ADDR, chunkblks, addrmask;
 	erofs_blk_t extent_start = EROFS_NULL_ADDR;
-	erofs_blk_t extent_end, chunkblks;
 	erofs_off_t source_offset;
 	unsigned int dst, src, unit, zeroedlen;
+	bool _48bit;
 
 	if (inode->u.chunkformat & EROFS_CHUNK_FORMAT_INDEXES)
 		unit = sizeof(struct erofs_inode_chunk_index);
@@ -150,36 +151,42 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 		unit = EROFS_BLOCK_MAP_ENTRY_SIZE;
 
 	chunkblks = 1U << (inode->u.chunkformat & EROFS_CHUNK_FORMAT_BLKBITS_MASK);
+	_48bit = inode->u.chunkformat & EROFS_CHUNK_FORMAT_48BIT;
 	for (dst = src = 0; dst < inode->extent_isize;
 	     src += sizeof(void *), dst += unit) {
 		struct erofs_blobchunk *chunk;
+		erofs_blk_t startblk;
 
 		chunk = *(void **)(inode->chunkindexes + src);
 
 		if (chunk->blkaddr == EROFS_NULL_ADDR) {
-			idx.startblk_lo = (u32)EROFS_NULL_ADDR;
+			startblk = EROFS_NULL_ADDR;
 		} else if (chunk->device_id) {
 			DBG_BUGON(!(inode->u.chunkformat & EROFS_CHUNK_FORMAT_INDEXES));
-			idx.startblk_lo = chunk->blkaddr;
+			startblk = chunk->blkaddr;
 			extent_start = EROFS_NULL_ADDR;
 		} else {
-			idx.startblk_lo = remapped_base + chunk->blkaddr;
+			startblk = remapped_base + chunk->blkaddr;
 		}
 
-		if (extent_start == EROFS_NULL_ADDR ||
-		    idx.startblk_lo != extent_end) {
+		if (extent_start == EROFS_NULL_ADDR || startblk != extent_end) {
 			if (extent_start != EROFS_NULL_ADDR) {
 				remaining_blks -= extent_end - extent_start;
 				tarerofs_blocklist_write(extent_start,
 						extent_end - extent_start,
 						source_offset, 0);
 			}
-			extent_start = idx.startblk_lo;
+			extent_start = startblk;
 			source_offset = chunk->sourceoffset;
 		}
-		extent_end = idx.startblk_lo + chunkblks;
+		extent_end = startblk + chunkblks;
+
+		addrmask = _48bit ? BIT_ULL(48) - 1 : BIT_ULL(32) - 1;
+		startblk &= addrmask;
 		idx.device_id = cpu_to_le16(chunk->device_id);
-		idx.startblk_lo = cpu_to_le32(idx.startblk_lo);
+		idx.startblk_lo = cpu_to_le32(startblk);
+		idx.startblk_hi = cpu_to_le32(startblk >> 32);
+		DBG_BUGON(!_48bit && idx.startblk_hi);
 
 		if (unit == EROFS_BLOCK_MAP_ENTRY_SIZE)
 			memcpy(inode->chunkindexes + dst, &idx.startblk_lo, unit);
@@ -187,8 +194,8 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 			memcpy(inode->chunkindexes + dst, &idx, sizeof(idx));
 	}
 	off = roundup(off, unit);
-	extent_end = min(extent_end, extent_start + remaining_blks);
 	if (extent_start != EROFS_NULL_ADDR) {
+		extent_end = min(extent_end, extent_start + remaining_blks);
 		zeroedlen = inode->i_size & (erofs_blksiz(sbi) - 1);
 		if (zeroedlen)
 			zeroedlen = erofs_blksiz(sbi) - zeroedlen;
@@ -355,6 +362,10 @@ int erofs_blob_write_chunked_file(struct erofs_inode *inode, int fd,
 			goto err;
 		}
 
+		/* FIXME! `chunk->blkaddr` is not the final blkaddr here */
+		if (chunk->blkaddr != EROFS_NULL_ADDR &&
+		    chunk->blkaddr >= UINT32_MAX)
+			inode->u.chunkformat |= EROFS_CHUNK_FORMAT_48BIT;
 		if (!erofs_blob_can_merge(sbi, lastch, chunk)) {
 			erofs_update_minextblks(sbi, interval_start, pos,
 						&minextblks);

@@ -192,6 +192,11 @@ int erofs_writesb(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh)
 	int ret;
 
 	sb.blocks_lo	= cpu_to_le32(sbi->primarydevice_blocks);
+	if (sbi->primarydevice_blocks > UINT32_MAX ||
+	    sbi->root_nid > UINT16_MAX) {
+		sb.rb.blocks_hi = cpu_to_le16(sbi->primarydevice_blocks >> 32);
+		sb.rootnid_8b = cpu_to_le64(sbi->root_nid);
+	}
 	memcpy(sb.uuid, sbi->uuid, sizeof(sb.uuid));
 	memcpy(sb.volume_name, sbi->volume_name, sizeof(sb.volume_name));
 
