@@ -28,9 +28,9 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	char buf[sizeof(struct erofs_inode_extended)];
 	erofs_off_t inode_loc = erofs_iloc(vi);
 	struct erofs_sb_info *sbi = vi->sbi;
+	erofs_blk_t addrmask = BIT_ULL(48) - 1;
+	struct erofs_inode_extended *die, copied;
 	struct erofs_inode_compact *dic;
-	struct erofs_inode_extended *die;
-	union erofs_inode_i_u iu;
 
 	DBG_BUGON(!sbi);
 	ret = erofs_dev_read(sbi, 0, buf, inode_loc, sizeof(*dic));
@@ -60,7 +60,8 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 		vi->xattr_isize = erofs_xattr_ibody_size(die->i_xattr_icount);
 		vi->i_mode = le16_to_cpu(die->i_mode);
 		vi->i_ino[0] = le32_to_cpu(die->i_ino);
-		iu = die->i_u;
+		copied.i_u = die->i_u;
+		copied.i_nb = die->i_nb;
 		vi->i_uid = le32_to_cpu(die->i_uid);
 		vi->i_gid = le32_to_cpu(die->i_gid);
 		vi->i_nlink = le32_to_cpu(die->i_nlink);
@@ -74,13 +75,21 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 		vi->xattr_isize = erofs_xattr_ibody_size(dic->i_xattr_icount);
 		vi->i_mode = le16_to_cpu(dic->i_mode);
 		vi->i_ino[0] = le32_to_cpu(dic->i_ino);
-		iu = dic->i_u;
+		copied.i_u = dic->i_u;
+		copied.i_nb = dic->i_nb;
 		vi->i_uid = le16_to_cpu(dic->i_uid);
 		vi->i_gid = le16_to_cpu(dic->i_gid);
-		vi->i_nlink = le16_to_cpu(dic->i_nb.nlink);
-
-		vi->i_mtime = sbi->build_time;
-		vi->i_mtime_nsec = sbi->build_time_nsec;
+		if (!S_ISDIR(vi->i_mode) &&
+		    ((ifmt >> EROFS_I_NLINK_1_BIT) & 1)) {
+			vi->i_nlink = 1;
+			copied.i_nb = dic->i_nb;
+		} else {
+			vi->i_nlink = le16_to_cpu(dic->i_nb.nlink);
+			copied.i_nb.startblk_hi = 0;
+			addrmask = BIT_ULL(32) - 1;
+		}
+		vi->i_mtime = sbi->epoch + le32_to_cpu(dic->i_mtime);
+		vi->i_mtime_nsec = sbi->fixed_nsec;
 
 		vi->i_size = le32_to_cpu(dic->i_size);
 		break;
@@ -94,11 +103,15 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	case S_IFREG:
 	case S_IFDIR:
 	case S_IFLNK:
-		vi->u.i_blkaddr = le32_to_cpu(iu.startblk_lo);
+		vi->u.i_blkaddr = le32_to_cpu(copied.i_u.startblk_lo) |
+			((u64)le16_to_cpu(copied.i_nb.startblk_hi) << 32);
+		if (vi->datalayout == EROFS_INODE_FLAT_PLAIN &&
+		    !((vi->u.i_blkaddr ^ EROFS_NULL_ADDR) & addrmask))
+			vi->u.i_blkaddr = EROFS_NULL_ADDR;
 		break;
 	case S_IFCHR:
 	case S_IFBLK:
-		vi->u.i_rdev = erofs_new_decode_dev(le32_to_cpu(iu.rdev));
+		vi->u.i_rdev = erofs_new_decode_dev(le32_to_cpu(copied.i_u.rdev));
 		break;
 	case S_IFIFO:
 	case S_IFSOCK:
@@ -113,7 +126,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	vi->flags = 0;
 	if (vi->datalayout == EROFS_INODE_CHUNK_BASED) {
 		/* fill chunked inode summary info */
-		vi->u.chunkformat = le16_to_cpu(iu.c.format);
+		vi->u.chunkformat = le16_to_cpu(copied.i_u.c.format);
 		if (vi->u.chunkformat & ~EROFS_CHUNK_FORMAT_ALL) {
 			erofs_err("unsupported chunk format %x of nid %llu",
 				  vi->u.chunkformat, vi->nid | 0ULL);

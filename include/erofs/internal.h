@@ -41,15 +41,14 @@ typedef unsigned short umode_t;
 
 typedef u64 erofs_off_t;
 typedef u64 erofs_nid_t;
-/* data type for filesystem-wide blocks number */
-typedef u32 erofs_blk_t;
+typedef u64 erofs_blk_t;
 
 /* global sbi */
 extern struct erofs_sb_info g_sbi;
 
 #define erofs_blksiz(sbi)	(1u << (sbi)->blkszbits)
-#define erofs_blknr(sbi, addr)  ((addr) >> (sbi)->blkszbits)
-#define erofs_blkoff(sbi, addr) ((addr) & (erofs_blksiz(sbi) - 1))
+#define erofs_blknr(sbi, pos)	((pos) >> (sbi)->blkszbits)
+#define erofs_blkoff(sbi, pos)	((pos) & (erofs_blksiz(sbi) - 1))
 #define erofs_pos(sbi, nr)      ((erofs_off_t)(nr) << (sbi)->blkszbits)
 #define BLK_ROUND_UP(sbi, addr)	\
 	(roundup(addr, erofs_blksiz(sbi)) >> (sbi)->blkszbits)
@@ -90,8 +89,8 @@ struct erofs_sb_info {
 	u64 total_blocks;
 	u64 primarydevice_blocks;
 
-	erofs_blk_t meta_blkaddr;
-	erofs_blk_t xattr_blkaddr;
+	u32 meta_blkaddr;
+	u32 xattr_blkaddr;
 
 	u32 feature_compat;
 	u32 feature_incompat;
@@ -100,8 +99,9 @@ struct erofs_sb_info {
 	unsigned char blkszbits;
 
 	u32 sb_size;			/* total superblock size */
-	u32 build_time_nsec;
-	u64 build_time;
+	u32 build_time;
+	u32 fixed_nsec;
+	u64 epoch;
 
 	/* what we really care is nid, rather than ino.. */
 	erofs_nid_t root_nid;
@@ -174,6 +174,7 @@ EROFS_FEATURE_FUNCS(ztailpacking, incompat, INCOMPAT_ZTAILPACKING)
 EROFS_FEATURE_FUNCS(fragments, incompat, INCOMPAT_FRAGMENTS)
 EROFS_FEATURE_FUNCS(dedupe, incompat, INCOMPAT_DEDUPE)
 EROFS_FEATURE_FUNCS(xattr_prefixes, incompat, INCOMPAT_XATTR_PREFIXES)
+EROFS_FEATURE_FUNCS(48bit, incompat, INCOMPAT_48BIT)
 EROFS_FEATURE_FUNCS(sb_chksum, compat, COMPAT_SB_CHKSUM)
 EROFS_FEATURE_FUNCS(xattr_filter, compat, COMPAT_XATTR_FILTER)
 
@@ -218,8 +219,8 @@ struct erofs_inode {
 	u32 i_nlink;
 
 	union {
-		u32 i_blkaddr;
-		u32 i_blocks;
+		erofs_blk_t i_blkaddr;
+		erofs_blk_t i_blocks;
 		u32 i_rdev;
 		struct {
 			unsigned short	chunkformat;

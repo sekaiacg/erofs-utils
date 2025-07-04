@@ -38,9 +38,9 @@ void tarerofs_blocklist_write(erofs_blk_t blkaddr, erofs_blk_t nblocks,
 		return;
 
 	if (zeroedlen)
-		fprintf(block_list_fp, "%08x %8x %08" PRIx64 " %08u\n",
-			blkaddr, nblocks, srcoff, zeroedlen);
+		fprintf(block_list_fp, "%08llx %8llx %08" PRIx64 " %08u\n",
+			blkaddr | 0ULL, nblocks | 0ULL, srcoff, zeroedlen);
 	else
-		fprintf(block_list_fp, "%08x %8x %08" PRIx64 "\n",
-			blkaddr, nblocks, srcoff);
+		fprintf(block_list_fp, "%08llx %8llx %08" PRIx64 "\n",
+			blkaddr | 0ULL, nblocks | 0ULL, srcoff);
 }

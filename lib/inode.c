@@ -923,8 +923,8 @@ static bool erofs_should_use_inode_extended(struct erofs_inode *inode,
 	if (inode->i_nlink > USHRT_MAX)
 		return true;
 	if (path != EROFS_PACKED_INODE &&
-	    (inode->i_mtime != inode->sbi->build_time ||
-	     inode->i_mtime_nsec != inode->sbi->build_time_nsec) &&
+	    (inode->i_mtime != inode->sbi->epoch ||
+	     inode->i_mtime_nsec != inode->sbi->fixed_nsec) &&
 	    !cfg.c_ignore_mtime)
 		return true;
 	return false;
@@ -1016,8 +1016,8 @@ int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 	inode->i_gid += cfg.c_gid_offset;
 
 	if (path == EROFS_PACKED_INODE) {
-		inode->i_mtime = sbi->build_time;
-		inode->i_mtime_nsec = sbi->build_time_nsec;
+		inode->i_mtime = sbi->epoch + sbi->build_time;
+		inode->i_mtime_nsec = sbi->fixed_nsec;
 		return 0;
 	}
 	inode->i_mtime = st->st_mtime;
@@ -1025,11 +1025,11 @@ int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 
 	switch (cfg.c_timeinherit) {
 	case TIMESTAMP_CLAMPING:
-		if (inode->i_mtime < sbi->build_time)
+		if (inode->i_mtime < sbi->epoch + sbi->build_time)
 			break;
 	case TIMESTAMP_FIXED:
-		inode->i_mtime = sbi->build_time;
-		inode->i_mtime_nsec = sbi->build_time_nsec;
+		inode->i_mtime = sbi->epoch + sbi->build_time;
+		inode->i_mtime_nsec = sbi->fixed_nsec;
 	default:
 		break;
 	}
@@ -2048,8 +2048,8 @@ struct erofs_inode *erofs_rebuild_make_root(struct erofs_sb_info *sbi)
 	root->i_srcpath = strdup("/");
 	root->i_mode = S_IFDIR | 0777;
 	root->i_parent = root;
-	root->i_mtime = root->sbi->build_time;
-	root->i_mtime_nsec = root->sbi->build_time_nsec;
+	root->i_mtime = root->sbi->epoch + root->sbi->build_time;
+	root->i_mtime_nsec = root->sbi->fixed_nsec;
 	erofs_init_empty_dir(root);
 	return root;
 }

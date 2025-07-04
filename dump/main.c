@@ -104,6 +104,7 @@ static struct erofsdump_feature feature_lists[] = {
 	{ false, EROFS_FEATURE_INCOMPAT_FRAGMENTS, "fragments" },
 	{ false, EROFS_FEATURE_INCOMPAT_DEDUPE, "dedupe" },
 	{ false, EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES, "xattr_prefixes" },
+	{ false, EROFS_FEATURE_INCOMPAT_48BIT, "48bit" },
 };
 
 static int erofsdump_readdir(struct erofs_dir_context *ctx);
@@ -623,7 +624,7 @@ static void erofsdump_print_supported_compressors(FILE *f, unsigned int mask)
 
 static void erofsdump_show_superblock(void)
 {
-	time_t time = g_sbi.build_time;
+	time_t time = g_sbi.epoch + g_sbi.build_time;
 	char uuid_str[37];
 	int i = 0;
 

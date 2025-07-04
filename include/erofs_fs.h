@@ -256,7 +256,7 @@ static inline unsigned int erofs_xattr_entry_size(struct erofs_xattr_entry *e)
 }
 
 /* represent a zeroed chunk (hole) */
-#define EROFS_NULL_ADDR			-1
+#define EROFS_NULL_ADDR			-1ULL
 
 /* 4-byte block address array */
 #define EROFS_BLOCK_MAP_ENTRY_SIZE	sizeof(__le32)
