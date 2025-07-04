@@ -14,6 +14,23 @@ struct erofs_libdeflate_context {
 	size_t last_uncompressed_size;
 };
 
+static int libdeflate_compress(const struct erofs_compress *c,
+			       const void *src, unsigned int srcsize,
+			       void *dst, unsigned int dstcapacity)
+{
+	struct erofs_libdeflate_context *ctx = c->private_data;
+	size_t csize;
+
+	csize = libdeflate_deflate_compress(ctx->strm, src, srcsize,
+					    dst, dstcapacity);
+	if (!csize)
+		return -ENOSPC;
+	/* See the comment in libdeflate_compress_destsize() */
+	if (!((u8 *)dst)[0])
+		((u8 *)dst)[0] = 1 << (2 + 1);
+	return csize;
+}
+
 static int libdeflate_compress_destsize(const struct erofs_compress *c,
 				        const void *src, unsigned int *srcsize,
 				        void *dst, unsigned int dstsize)
@@ -149,5 +166,6 @@ const struct erofs_compressor erofs_compressor_libdeflate = {
 	.exit = compressor_libdeflate_exit,
 	.reset = compressor_libdeflate_reset,
 	.setlevel = erofs_compressor_libdeflate_setlevel,
+	.compress = libdeflate_compress,
 	.compress_destsize = libdeflate_compress_destsize,
 };

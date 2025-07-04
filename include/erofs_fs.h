@@ -413,8 +413,9 @@ struct z_erofs_lcluster_index {
 	} di_u;
 };
 
+#define Z_EROFS_MAP_HEADER_START(end)	round_up(end, 8)
 #define Z_EROFS_MAP_HEADER_END(end)	\
-	(round_up(end, 8) + sizeof(struct z_erofs_map_header))
+	(Z_EROFS_MAP_HEADER_START(end) + sizeof(struct z_erofs_map_header))
 #define Z_EROFS_FULL_INDEX_START(end)	(Z_EROFS_MAP_HEADER_END(end) + 8)
 
 #define Z_EROFS_EXTENT_PLEN_PARTIAL	BIT(27)

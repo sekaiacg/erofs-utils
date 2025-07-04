@@ -85,6 +85,17 @@ int erofs_compress_destsize(const struct erofs_compress *c,
 	return c->alg->c->compress_destsize(c, src, srcsize, dst, dstsize);
 }
 
+int erofs_compress(const struct erofs_compress *c,
+		   const void *src, unsigned int srcsize,
+		   void *dst, unsigned int dstcapacity)
+{
+	DBG_BUGON(!c->alg);
+	if (!c->alg->c->compress)
+		return -EOPNOTSUPP;
+
+	return c->alg->c->compress(c, src, srcsize, dst, dstcapacity);
+}
+
 int erofs_compressor_init(struct erofs_sb_info *sbi, struct erofs_compress *c,
 			  char *alg_name, int compression_level, u32 dict_size)
 {

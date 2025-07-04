@@ -26,6 +26,9 @@ struct erofs_compressor {
 	int (*compress_destsize)(const struct erofs_compress *c,
 				 const void *src, unsigned int *srcsize,
 				 void *dst, unsigned int dstsize);
+	int (*compress)(const struct erofs_compress *c,
+			const void *src, unsigned int srcsize,
+			void *dst, unsigned int dstcapacity);
 };
 
 struct erofs_algorithm {
@@ -60,6 +63,9 @@ int z_erofs_get_compress_algorithm_id(const struct erofs_compress *c);
 int erofs_compress_destsize(const struct erofs_compress *c,
 			    const void *src, unsigned int *srcsize,
 			    void *dst, unsigned int dstsize);
+int erofs_compress(const struct erofs_compress *c,
+		   const void *src, unsigned int srcsize,
+		   void *dst, unsigned int dstcapacity);
 
 int erofs_compressor_init(struct erofs_sb_info *sbi, struct erofs_compress *c,
 			  char *alg_name, int compression_level, u32 dict_size);

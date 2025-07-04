@@ -14,6 +14,23 @@ struct erofs_libzstd_context {
 	unsigned int fitblk_bufsiz;
 };
 
+static int libzstd_compress(const struct erofs_compress *c,
+			    const void *src, unsigned int srcsize,
+			    void *dst, unsigned int dstcapacity)
+{
+	struct erofs_libzstd_context *ctx = c->private_data;
+	size_t csize;
+
+	csize = ZSTD_compress2(ctx->cctx, dst, dstcapacity, src, srcsize);
+	if (ZSTD_isError(csize)) {
+		if (ZSTD_getErrorCode(csize) == ZSTD_error_dstSize_tooSmall)
+			return -ENOSPC;
+		erofs_err("Zstd compress failed: %s", ZSTD_getErrorName(csize));
+		return -EFAULT;
+	}
+	return csize;
+}
+
 static int libzstd_compress_destsize(const struct erofs_compress *c,
 				     const void *src, unsigned int *srcsize,
 				     void *dst, unsigned int dstsize)
@@ -176,5 +193,6 @@ const struct erofs_compressor erofs_compressor_libzstd = {
 	.exit = compressor_libzstd_exit,
 	.setlevel = erofs_compressor_libzstd_setlevel,
 	.setdictsize = erofs_compressor_libzstd_setdictsize,
+	.compress = libzstd_compress,
 	.compress_destsize = libzstd_compress_destsize,
 };
