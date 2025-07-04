@@ -150,6 +150,8 @@ int erofs_iterate_dir(struct erofs_dir_context *ctx, bool fsck)
 		return -ENOTDIR;
 
 	ctx->flags &= ~EROFS_READDIR_ALL_SPECIAL_FOUND;
+	if (dir->dot_omitted)
+		ctx->flags |= EROFS_READDIR_DOT_FOUND;
 	pos = 0;
 	while (pos < dir->i_size) {
 		erofs_blk_t lblk = erofs_blknr(sbi, pos);

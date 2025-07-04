@@ -243,6 +243,7 @@ struct erofs_inode {
 	bool opaque;
 	/* OVL: non-merge dir that may contain whiteout entries */
 	bool whiteouts;
+	bool dot_omitted;
 
 	unsigned int xattr_isize;
 	unsigned int extent_isize;

@@ -253,21 +253,29 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 {
 	struct erofs_sb_info *sbi = dir->sbi;
 	struct erofs_dentry *d, *n, **sorted_d;
+	bool dot_omitted = cfg.c_dot_omitted;
 	unsigned int i;
 	unsigned int d_size = 0;
 
 	sorted_d = malloc(nr_subdirs * sizeof(d));
 	if (!sorted_d)
 		return -ENOMEM;
+
+	dir->dot_omitted = dot_omitted;
 	i = 0;
 	list_for_each_entry_safe(d, n, &dir->i_subdirs, d_child) {
 		list_del(&d->d_child);
+		if (dot_omitted && !strcmp(d->name, ".")) {
+			erofs_iput(d->inode);
+			free(d);
+			continue;
+		}
 		sorted_d[i++] = d;
 	}
-	DBG_BUGON(i != nr_subdirs);
-	qsort(sorted_d, nr_subdirs, sizeof(d), comp_subdir);
-	for (i = 0; i < nr_subdirs; i++)
-		list_add_tail(&sorted_d[i]->d_child, &dir->i_subdirs);
+	DBG_BUGON(i + dot_omitted != nr_subdirs);
+	qsort(sorted_d, i, sizeof(d), comp_subdir);
+	while (i)
+		list_add(&sorted_d[--i]->d_child, &dir->i_subdirs);
 	free(sorted_d);
 
 	/* let's calculate dir size */
@@ -644,10 +652,12 @@ int erofs_iflush(struct erofs_inode *inode)
 		nlink_1 = false;
 		nb = (union erofs_inode_i_nb){};
 	}
+	fmt = S_ISDIR(inode->i_mode) && inode->dot_omitted ?
+		1 << EROFS_I_DOT_OMITTED_BIT : 0;
 
 	switch (inode->inode_isize) {
 	case sizeof(struct erofs_inode_compact):
-		fmt = 0 | (inode->datalayout << 1);
+		fmt |= 0 | (inode->datalayout << 1);
 		u.dic.i_xattr_icount = cpu_to_le16(icount);
 		u.dic.i_mode = cpu_to_le16(inode->i_mode);
 		u.dic.i_nb.nlink = cpu_to_le16(inode->i_nlink);
@@ -672,7 +682,8 @@ int erofs_iflush(struct erofs_inode *inode)
 		u.dic.i_format = cpu_to_le16(fmt);
 		break;
 	case sizeof(struct erofs_inode_extended):
-		u.die.i_format = cpu_to_le16(1 | (inode->datalayout << 1));
+		fmt |= 1 | (inode->datalayout << 1);
+		u.die.i_format = cpu_to_le16(fmt);
 		u.die.i_xattr_icount = cpu_to_le16(icount);
 		u.die.i_mode = cpu_to_le16(inode->i_mode);
 		u.die.i_nlink = cpu_to_le32(inode->i_nlink);
@@ -1563,13 +1574,17 @@ static int erofs_mkfs_handle_directory(struct erofs_inode *dir)
 
 	/*
 	 * if there're too many subdirs as compact form, set nlink=1
-	 * rather than upgrade to use extented form instead.
+	 * rather than upgrade to use extented form instead if possible.
 	 */
 	if (i_nlink > USHRT_MAX &&
-	    dir->inode_isize == sizeof(struct erofs_inode_compact))
-		dir->i_nlink = 1;
-	else
+	    dir->inode_isize == sizeof(struct erofs_inode_compact)) {
+		if (dir->dot_omitted)
+			dir->inode_isize = sizeof(struct erofs_inode_extended);
+		else
+			dir->i_nlink = 1;
+	} else {
 		dir->i_nlink = i_nlink;
+	}
 
 	return erofs_mkfs_go(sbi, EROFS_MKFS_JOB_DIR, &dir, sizeof(dir));
 

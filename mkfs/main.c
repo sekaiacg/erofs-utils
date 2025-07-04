@@ -345,6 +345,16 @@ static int erofs_mkfs_feat_set_48bit(bool en, const char *val,
 	return 0;
 }
 
+static int erofs_mkfs_feat_set_dot_omitted(bool en, const char *val,
+					   unsigned int vallen)
+{
+	if (vallen)
+		return -EINVAL;
+
+	cfg.c_dot_omitted = en;
+	return 0;
+}
+
 static struct {
 	char *feat;
 	int (*set)(bool en, const char *val, unsigned int len);
@@ -356,6 +366,7 @@ static struct {
 	{"dedupe", erofs_mkfs_feat_set_dedupe},
 	{"fragdedupe", erofs_mkfs_feat_set_fragdedupe},
 	{"48bit", erofs_mkfs_feat_set_48bit},
+	{"dot-omitted", erofs_mkfs_feat_set_dot_omitted},
 	{NULL, NULL},
 };
 
@@ -1292,6 +1303,9 @@ int main(int argc, char **argv)
 	} else {
 		g_sbi.epoch = mkfs_time;
 	}
+
+	if (cfg.c_dot_omitted)
+		erofs_sb_set_48bit(&g_sbi);
 
 	err = erofs_dev_open(&g_sbi, cfg.c_img_path, O_RDWR |
 				(incremental_mode ? 0 : O_TRUNC));
