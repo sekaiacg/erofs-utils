@@ -603,7 +603,7 @@ static int z_erofs_map_blocks_ext(struct erofs_inode *vi,
 		}
 		last = (lstart >= round_up(lend, 1 << vi->z_lclusterbits));
 		lend = min(lstart, lend);
-		lstart -= 1 << vi->z_lclusterbits;
+		lstart -= 1ULL << vi->z_lclusterbits;
 	} else {
 		lstart = lend;
 		for (l = 0, r = vi->z_extents; l < r; ) {

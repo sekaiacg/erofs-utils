@@ -150,7 +150,7 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 	else
 		unit = EROFS_BLOCK_MAP_ENTRY_SIZE;
 
-	chunkblks = 1U << (inode->u.chunkformat & EROFS_CHUNK_FORMAT_BLKBITS_MASK);
+	chunkblks = 1ULL << (inode->u.chunkformat & EROFS_CHUNK_FORMAT_BLKBITS_MASK);
 	_48bit = inode->u.chunkformat & EROFS_CHUNK_FORMAT_48BIT;
 	for (dst = src = 0; dst < inode->extent_isize;
 	     src += sizeof(void *), dst += unit) {
