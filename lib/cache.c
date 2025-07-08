@@ -488,7 +488,8 @@ int erofs_bflush(struct erofs_bufmgr *bmgr,
 
 		if (p->type != DATA)
 			bmgr->metablkcnt += p->buffers.nblocks;
-		erofs_dbg("block %u to %u flushed", p->blkaddr, blkaddr - 1);
+		erofs_dbg("block %llu to %llu flushed", p->blkaddr | 0ULL,
+			  (blkaddr - 1) | 0ULL);
 		erofs_bfree(p);
 	}
 	return 0;

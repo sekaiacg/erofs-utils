@@ -73,8 +73,8 @@ static struct erofs_blobchunk *erofs_blob_getchunk(struct erofs_sb_info *sbi,
 			chunk = &erofs_holechunk;
 			erofs_dbg("Found duplicated hole chunk");
 		} else {
-			erofs_dbg("Found duplicated chunk at %u",
-				  chunk->blkaddr);
+			erofs_dbg("Found duplicated chunk at %llu",
+				  chunk->blkaddr | 0ULL);
 		}
 		return chunk;
 	}
@@ -94,8 +94,8 @@ static struct erofs_blobchunk *erofs_blob_getchunk(struct erofs_sb_info *sbi,
 		chunk->device_id = 0;
 	chunk->blkaddr = erofs_blknr(sbi, blkpos);
 
-	erofs_dbg("Writing chunk (%llu bytes) to %u", chunksize | 0ULL,
-		  chunk->blkaddr);
+	erofs_dbg("Writing chunk (%llu bytes) to %llu", chunksize | 0ULL,
+		  chunk->blkaddr | 0ULL);
 	ret = __erofs_io_write(blobfile, buf, chunksize);
 	if (ret == chunksize) {
 		padding = erofs_blkoff(sbi, chunksize);

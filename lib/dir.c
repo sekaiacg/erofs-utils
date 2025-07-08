@@ -18,7 +18,7 @@ static bool erofs_validate_filename(const char *dname, int size)
 }
 
 static int traverse_dirents(struct erofs_dir_context *ctx,
-			    void *dentry_blk, unsigned int lblk,
+			    void *dentry_blk, erofs_off_t lblk,
 			    unsigned int next_nameoff, unsigned int maxsize,
 			    bool fsck)
 {
@@ -132,8 +132,8 @@ static int traverse_dirents(struct erofs_dir_context *ctx,
 	}
 out:
 	if (ret && !silent)
-		erofs_err("%s @ nid %llu, lblk %u, index %lu",
-			  errmsg, ctx->dir->nid | 0ULL, lblk,
+		erofs_err("%s @ nid %llu, lblk %llu, index %lu",
+			  errmsg, ctx->dir->nid | 0ULL, lblk | 0ULL,
 			  (de - (struct erofs_dirent *)dentry_blk) | 0UL);
 	return ret;
 }
@@ -162,16 +162,17 @@ int erofs_iterate_dir(struct erofs_dir_context *ctx, bool fsck)
 
 		err = erofs_pread(dir, buf, maxsize, pos);
 		if (err) {
-			erofs_err("I/O error occurred when reading dirents @ nid %llu, lblk %u: %d",
-				  dir->nid | 0ULL, lblk, err);
+			erofs_err("I/O error when reading dirents @ nid %llu, lblk %llu: %s",
+				  dir->nid | 0ULL, lblk | 0ULL,
+				  erofs_strerror(err));
 			return err;
 		}
 
 		nameoff = le16_to_cpu(de->nameoff);
 		if (nameoff < sizeof(struct erofs_dirent) ||
 		    nameoff >= erofs_blksiz(sbi)) {
-			erofs_err("invalid de[0].nameoff %u @ nid %llu, lblk %u",
-				  nameoff, dir->nid | 0ULL, lblk);
+			erofs_err("invalid de[0].nameoff %u @ nid %llu, lblk %llu",
+				  nameoff, dir->nid | 0ULL, lblk | 0ULL);
 			return -EFSCORRUPTED;
 		}
 		err = traverse_dirents(ctx, buf, lblk, nameoff, maxsize, fsck);
