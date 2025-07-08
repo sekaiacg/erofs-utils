@@ -369,6 +369,12 @@ unsigned long __roundup_pow_of_two(unsigned long n)
 #define __erofs_likely(x)      __builtin_expect(!!(x), 1)
 #define __erofs_unlikely(x)    __builtin_expect(!!(x), 0)
 
+#if __has_attribute(__fallthrough__)
+# define fallthrough	__attribute__((__fallthrough__))
+#else
+# define fallthrough	do {} while (0)  /* fallthrough */
+#endif
+
 #ifdef __cplusplus
 }
 #endif

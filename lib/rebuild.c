@@ -231,7 +231,7 @@ static int erofs_rebuild_update_inode(struct erofs_sb_info *dst_sb,
 	case S_IFCHR:
 		if (erofs_inode_is_whiteout(inode))
 			inode->i_parent->whiteouts = true;
-		/* fallthrough */
+		fallthrough;
 	case S_IFBLK:
 	case S_IFIFO:
 	case S_IFSOCK:
