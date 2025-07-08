@@ -579,18 +579,15 @@ static int __z_erofs_compress_one(struct z_erofs_compress_sctx *ctx,
 	if (len <= ctx->pclustersize) {
 		if (!final || !len)
 			return 1;
-		if (may_packing) {
-			if (inode->fragment_size && !ictx->fix_dedupedfrag) {
-				ctx->pclustersize = roundup(len, blksz);
-				goto fix_dedupedfrag;
-			}
-			e->length = len;
+		if (may_packing && inode->fragment_size && !ictx->fix_dedupedfrag) {
+			ctx->pclustersize = roundup(len, blksz);
+			goto fix_dedupedfrag;
+		}
+		e->length = len;
+		if (may_packing)
 			goto frag_packing;
-		}
-		if (!may_inline && len <= blksz) {
-			e->length = len;
+		if (!may_inline && len <= blksz)
 			goto nocompression;
-		}
 	}
 
 	e->length = min(len, cfg.c_max_decompressed_extent_bytes);
@@ -629,7 +626,7 @@ retry_aligned:
 		} else {
 			may_inline = false;
 			may_packing = false;
-			e->length = min_t(u32, e->length, ret);
+			e->length = min_t(u32, e->length, ctx->pclustersize);
 nocompression:
 			if (cfg.c_dedupe)
 				ret = write_uncompressed_block(ctx, len, dst);
