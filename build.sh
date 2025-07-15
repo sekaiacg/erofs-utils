@@ -61,6 +61,7 @@ cmake_build()
 				-DCMAKE_SYSROOT="${AARCH64_GCC_PATH}/aarch64-linux-gnu/libc" \
 				-DCMAKE_C_COMPILER_TARGET="aarch64-linux-gnu" \
 				-DCMAKE_CXX_COMPILER_TARGET="aarch64-linux-gnu" \
+				-DCMAKE_ASM_COMPILER_TARGET="aarch64-linux-gnu" \
 				-DCMAKE_C_FLAGS="--gcc-toolchain=${AARCH64_GCC_PATH}" \
 				-DCMAKE_CXX_FLAGS="--gcc-toolchain=${AARCH64_GCC_PATH}" \
 				-DENABLE_FULL_LTO="ON" \
