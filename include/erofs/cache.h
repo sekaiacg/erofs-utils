@@ -61,7 +61,6 @@ struct erofs_bufmgr {
 
 	/* buckets for all buffer blocks to boost up allocation */
 	struct list_head watermeter[META + 1][2][EROFS_MAX_BLOCK_SIZE];
-	unsigned long bktmap[META + 1][2][EROFS_MAX_BLOCK_SIZE / BITS_PER_LONG];
 
 	struct erofs_buffer_block blkh;
 	erofs_blk_t tail_blkaddr, metablkcnt;
