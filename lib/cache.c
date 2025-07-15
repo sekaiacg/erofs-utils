@@ -32,7 +32,6 @@ struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
 				       erofs_blk_t startblk,
 				       struct erofs_vfile *vf)
 {
-	unsigned int blksiz = erofs_blksiz(sbi);
 	struct erofs_bufmgr *bmgr;
 	int i, j, k;
 
@@ -40,66 +39,31 @@ struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
 	if (!bmgr)
 		return NULL;
 
-	bmgr->sbi = sbi;
-	for (i = 0; i < ARRAY_SIZE(bmgr->watermeter); i++) {
-		for (j = 0; j < ARRAY_SIZE(bmgr->watermeter[0]); j++) {
-			for (k = 0; k < blksiz; k++)
-				init_list_head(&bmgr->watermeter[i][j][k]);
-			memset(bmgr->bktmap[i][j], 0, blksiz / BITS_PER_LONG);
-		}
-	}
 	init_list_head(&bmgr->blkh.list);
 	bmgr->blkh.blkaddr = EROFS_NULL_ADDR;
-	bmgr->tail_blkaddr = startblk;
 	bmgr->last_mapped_block = &bmgr->blkh;
+
+	for (i = 0; i < ARRAY_SIZE(bmgr->watermeter); i++)
+		for (j = 0; j < ARRAY_SIZE(bmgr->watermeter[0]); j++)
+			for (k = 0; k < (1 << sbi->blkszbits); k++)
+				init_list_head(&bmgr->watermeter[i][j][k]);
+	bmgr->tail_blkaddr = startblk;
+	bmgr->sbi = sbi;
 	bmgr->metablkcnt = 0;
 	bmgr->vf = vf ?: &sbi->bdev;
 	return bmgr;
 }
 
-static void erofs_clear_bbktmap(struct erofs_bufmgr *bmgr, int type,
-				bool mapped, int nr)
-{
-	int bit = erofs_blksiz(bmgr->sbi) - (nr + 1);
-
-	DBG_BUGON(bit < 0);
-	__erofs_clear_bit(bit, bmgr->bktmap[type][mapped]);
-}
-
-static void erofs_set_bbktmap(struct erofs_bufmgr *bmgr, int type,
-			      bool mapped, int nr)
-{
-	int bit = erofs_blksiz(bmgr->sbi) - (nr + 1);
-
-	DBG_BUGON(bit < 0);
-	__erofs_set_bit(bit, bmgr->bktmap[type][mapped]);
-}
-
-static void erofs_update_bwatermeter(struct erofs_buffer_block *bb, bool free)
+static void erofs_update_bwatermeter(struct erofs_buffer_block *bb)
 {
 	struct erofs_bufmgr *bmgr = bb->buffers.fsprivate;
 	struct erofs_sb_info *sbi = bmgr->sbi;
-	unsigned int blksiz = erofs_blksiz(sbi);
-	bool mapped = bb->blkaddr != EROFS_NULL_ADDR;
-	struct list_head *h = bmgr->watermeter[bb->type][mapped];
-	unsigned int nr;
+	struct list_head *bkt;
 
-	if (bb->sibling.next == bb->sibling.prev) {
-		if ((uintptr_t)(bb->sibling.next - h) < blksiz) {
-			nr = bb->sibling.next - h;
-			erofs_clear_bbktmap(bmgr, bb->type, mapped, nr);
-		} else if (bb->sibling.next != &bb->sibling) {
-			nr = bb->sibling.next -
-				bmgr->watermeter[bb->type][!mapped];
-			erofs_clear_bbktmap(bmgr, bb->type, !mapped, nr);
-		}
-	}
+	bkt = bmgr->watermeter[bb->type][bb->blkaddr != EROFS_NULL_ADDR] +
+		(bb->buffers.off & (erofs_blksiz(sbi) - 1));
 	list_del(&bb->sibling);
-	if (free)
-		return;
-	nr = bb->buffers.off & (blksiz - 1);
-	list_add_tail(&bb->sibling, h + nr);
-	erofs_set_bbktmap(bmgr, bb->type, mapped, nr);
+	list_add_tail(&bb->sibling, bkt);
 }
 
 /* return occupied bytes in specific buffer block if succeed */
@@ -154,7 +118,7 @@ static int __erofs_battach(struct erofs_buffer_block *bb,
 		/* need to update the tail_blkaddr */
 		if (tailupdate)
 			bmgr->tail_blkaddr = blkaddr + bb->buffers.nblocks;
-		erofs_update_bwatermeter(bb, false);
+		erofs_update_bwatermeter(bb);
 	}
 	return ((alignedoffset + incr + blkmask) & blkmask) + 1;
 }
@@ -168,36 +132,6 @@ int erofs_bh_balloon(struct erofs_buffer_head *bh, erofs_off_t incr)
 		return -EINVAL;
 
 	return __erofs_battach(bb, NULL, incr, 1, 0, false);
-}
-
-static bool __find_next_bucket(struct erofs_bufmgr *bmgr, int type, bool mapped,
-			       unsigned int *index, unsigned int end)
-{
-	const unsigned int blksiz = erofs_blksiz(bmgr->sbi);
-	const unsigned int blkmask = blksiz - 1;
-	unsigned int l = *index, r;
-
-	if (l <= end) {
-		DBG_BUGON(l < end);
-		return false;
-	}
-
-	l = blkmask - (l & blkmask);
-	r = blkmask - (end & blkmask);
-	if (l >= r) {
-		l = erofs_find_next_bit(bmgr->bktmap[type][mapped], blksiz, l);
-		if (l < blksiz) {
-			*index = round_down(*index, blksiz) + blkmask - l;
-			return true;
-		}
-		l = 0;
-		*index -= blksiz;
-	}
-	l = erofs_find_next_bit(bmgr->bktmap[type][mapped], r, l);
-	if (l >= r)
-		return false;
-	*index = round_down(*index, blksiz) + blkmask - l;
-	return true;
 }
 
 static int erofs_bfind_for_attach(struct erofs_bufmgr *bmgr,
@@ -233,13 +167,13 @@ static int erofs_bfind_for_attach(struct erofs_bufmgr *bmgr,
 
 	while (mapped) {
 		--mapped;
-		for (; __find_next_bucket(bmgr, type, mapped, &index, end);
-		     --index) {
+		for (; index > end; --index) {
 			struct list_head *bt;
 
 			used = index & blkmask;
 			bt = bmgr->watermeter[type][mapped] + used;
-			DBG_BUGON(list_empty(bt));
+			if (list_empty(bt))
+				continue;
 			cur = list_first_entry(bt, struct erofs_buffer_block,
 					       sibling);
 
@@ -402,7 +336,7 @@ static void __erofs_mapbh(struct erofs_buffer_block *bb)
 			}
 		}
 		bmgr->last_mapped_block = bb;
-		erofs_update_bwatermeter(bb, false);
+		erofs_update_bwatermeter(bb);
 	}
 
 	blkaddr = bb->blkaddr + bb->buffers.nblocks;
@@ -441,7 +375,7 @@ static void erofs_bfree(struct erofs_buffer_block *bb)
 	if (bb == bmgr->last_mapped_block)
 		bmgr->last_mapped_block = list_prev_entry(bb, list);
 
-	erofs_update_bwatermeter(bb, true);
+	list_del(&bb->sibling);
 	list_del(&bb->list);
 	free(bb);
 }
