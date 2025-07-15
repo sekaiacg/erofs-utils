@@ -59,8 +59,8 @@ struct erofs_buffer_block {
 struct erofs_bufmgr {
 	struct erofs_sb_info *sbi;
 
-	/* buckets for all buffer blocks to boost up allocation */
-	struct list_head watermeter[META + 1][2][EROFS_MAX_BLOCK_SIZE];
+	/* buckets for all mapped buffer blocks to boost up allocation */
+	struct list_head watermeter[META + 1][EROFS_MAX_BLOCK_SIZE];
 
 	struct erofs_buffer_block blkh;
 	erofs_blk_t tail_blkaddr, metablkcnt;
