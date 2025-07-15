@@ -37,6 +37,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
 		"pread64"
 		"pwrite64"
 		"posix_fadvise"
+		"getrandom"
 		"sendfile"
 	)
 	if (NOT RUN_ON_WSL)
