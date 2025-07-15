@@ -250,7 +250,7 @@ namespace skkk {
 			}
 
 			if (map.m_plen > Z_EROFS_PCLUSTER_MAX_SIZE) {
-				if (compressed) {
+				if (compressed && !(map.m_flags & __EROFS_MAP_FRAGMENT)) {
 					ret = -EFSCORRUPTED;
 					goto out;
 				}
