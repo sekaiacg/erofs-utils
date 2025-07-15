@@ -26,13 +26,13 @@ namespace skkk {
 				 inode->i_mode & 0777
 		);
 		this->fsConfig = buf;
-		this->inode = new erofs_inode;
+		this->inode = static_cast<struct erofs_inode *>(calloc(1, sizeof(struct erofs_inode)));
 		this->inode->sbi = inode->sbi;
 		this->inode->nid = inode->nid;
 		erofs_read_inode_from_disk(this->inode);
 	}
 
-	ErofsNode::~ErofsNode() { delete inode; }
+	ErofsNode::~ErofsNode() { free(inode); }
 
 	const string &ErofsNode::getPath() const { return path; }
 
