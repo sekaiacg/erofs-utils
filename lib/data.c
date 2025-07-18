@@ -10,6 +10,42 @@
 #include "erofs/decompress.h"
 #include "erofs/fragments.h"
 
+void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
+{
+	struct erofs_sb_info *sbi = buf->sbi;
+	u32 blksiz = erofs_blksiz(sbi);
+	erofs_blk_t blknr;
+	int err;
+
+	if (!need_kmap)
+		return NULL;
+	blknr = erofs_blknr(sbi, offset);
+	if (blknr != buf->blocknr) {
+		buf->blocknr = ~0ULL;
+		err = erofs_io_pread(buf->vf, buf->base, blksiz,
+				     round_down(offset, blksiz));
+		if (err < 0)
+			return ERR_PTR(err);
+		if (err != blksiz)
+			return ERR_PTR(-EIO);
+		buf->blocknr = blknr;
+	}
+	return buf->base + erofs_blkoff(sbi, offset);
+}
+
+void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi)
+{
+	buf->sbi = sbi;
+	buf->vf = &sbi->bdev;
+}
+
+void *erofs_read_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
+			 erofs_off_t offset)
+{
+	erofs_init_metabuf(buf, sbi);
+	return erofs_bread(buf, offset, true);
+}
+
 int __erofs_map_blocks(struct erofs_inode *inode,
 		       struct erofs_map_blocks *map, int flags)
 {

@@ -46,6 +46,14 @@ typedef u64 erofs_blk_t;
 /* global sbi */
 extern struct erofs_sb_info g_sbi;
 
+struct erofs_buf {
+	struct erofs_sb_info *sbi;
+	struct erofs_vfile *vf;
+	erofs_blk_t blocknr;
+	u8 base[EROFS_MAX_BLOCK_SIZE];
+};
+#define __EROFS_BUF_INITIALIZER ((struct erofs_buf){.blocknr = ~0ULL})
+
 #define erofs_blksiz(sbi)	(1u << (sbi)->blkszbits)
 #define erofs_blknr(sbi, pos)	((pos) >> (sbi)->blkszbits)
 #define erofs_blkoff(sbi, pos)	((pos) & (erofs_blksiz(sbi) - 1))
@@ -427,6 +435,12 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi);
 int erofs_ilookup(const char *path, struct erofs_inode *vi);
 
 /* data.c */
+static inline void erofs_unmap_metabuf(struct erofs_buf *buf) {}
+static inline void erofs_put_metabuf(struct erofs_buf *buf) {}
+void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap);
+void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi);
+void *erofs_read_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
+			 erofs_off_t offset);
 int erofs_pread(struct erofs_inode *inode, char *buf,
 		erofs_off_t count, erofs_off_t offset);
 int erofs_map_blocks(struct erofs_inode *inode,
