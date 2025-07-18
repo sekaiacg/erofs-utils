@@ -510,6 +510,7 @@ static void *erofs_packedfile_preload(struct erofs_inode *pi,
 	struct erofs_sb_info *sbi = pi->sbi;
 	struct erofs_packed_inode *epi = sbi->packedinode;
 	unsigned int bsz = erofs_blksiz(sbi);
+	struct erofs_vfile vf;
 	char *buffer;
 	erofs_off_t pos, end;
 	ssize_t err;
@@ -529,13 +530,17 @@ static void *erofs_packedfile_preload(struct erofs_inode *pi,
 	else
 		DBG_BUGON(map->m_la > pos);
 
+	err = erofs_iopen(&vf, pi);
+	if (err)
+		return ERR_PTR(err);
+
 	map->m_llen = end - map->m_la;
 	DBG_BUGON(!map->m_llen);
 	buffer = malloc(map->m_llen);
 	if (!buffer)
 		return ERR_PTR(-ENOMEM);
 
-	err = erofs_pread(pi, buffer, map->m_llen, map->m_la);
+	err = erofs_pread(&vf, buffer, map->m_llen, map->m_la);
 	if (err)
 		goto err_out;
 
@@ -572,13 +577,17 @@ int erofs_packedfile_read(struct erofs_sb_info *sbi,
 	struct erofs_map_blocks map = { .buf = __EROFS_BUF_INITIALIZER };
 	unsigned int bsz = erofs_blksiz(sbi);
 	erofs_off_t end = pos + len;
+	struct erofs_vfile vf;
 	char *buffer = NULL;
 	int err;
 
 	if (!epi) {
 		err = erofs_load_packedinode_from_disk(&pi);
-		if (!err)
-			err = erofs_pread(&pi, buf, len, pos);
+		if (!err) {
+			err = erofs_iopen(&vf, &pi);
+			if (!err)
+				err = erofs_pread(&vf, buf, len, pos);
+		}
 		return err;
 	}
 
@@ -632,8 +641,11 @@ int erofs_packedfile_read(struct erofs_sb_info *sbi,
 			} else {
 fallback:
 				err = erofs_load_packedinode_from_disk(&pi);
+				if (err)
+					break;
+				err = erofs_iopen(&vf, &pi);
 				if (!err)
-					err = erofs_pread(&pi, buf, len, pos);
+					err = erofs_pread(&vf, buf, len, pos);
 				if (err)
 					break;
 			}

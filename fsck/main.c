@@ -775,6 +775,7 @@ again:
 
 static inline int erofs_extract_symlink(struct erofs_inode *inode)
 {
+	struct erofs_vfile vf;
 	bool tryagain = true;
 	int ret;
 	char *buf = NULL;
@@ -792,7 +793,11 @@ static inline int erofs_extract_symlink(struct erofs_inode *inode)
 		goto out;
 	}
 
-	ret = erofs_pread(inode, buf, inode->i_size, 0);
+	ret = erofs_iopen(&vf, inode);
+	if (ret)
+		goto out;
+
+	ret = erofs_pread(&vf, buf, inode->i_size, 0);
 	if (ret) {
 		erofs_err("I/O error occurred when reading symlink @ nid %llu: %d",
 			  inode->nid | 0ULL, ret);

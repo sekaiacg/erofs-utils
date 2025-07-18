@@ -243,13 +243,19 @@ static int erofs_rebuild_update_inode(struct erofs_sb_info *dst_sb,
 	case S_IFDIR:
 		inode->i_nlink = 2;
 		break;
-	case S_IFLNK:
+	case S_IFLNK: {
+		struct erofs_vfile vf;
+
 		inode->i_link = malloc(inode->i_size + 1);
 		if (!inode->i_link)
 			return -ENOMEM;
-		err = erofs_pread(inode, inode->i_link, inode->i_size, 0);
+		err = erofs_iopen(&vf, inode);
+		if (err)
+			return err;
+		err = erofs_pread(&vf, inode->i_link, inode->i_size, 0);
 		erofs_dbg("\tsymlink: %s -> %s", inode->i_srcpath, inode->i_link);
 		break;
+	}
 	case S_IFREG:
 		if (!inode->i_size) {
 			inode->u.i_blkaddr = EROFS_NULL_ADDR;

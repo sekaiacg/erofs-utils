@@ -366,11 +366,17 @@ out:
 static void erofsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 			   off_t off, struct fuse_file_info *fi)
 {
-	int ret;
-	char *buf = NULL;
 	struct erofs_inode *vi = (struct erofs_inode *)fi->fh;
+	struct erofs_vfile vf;
+	char *buf = NULL;
+	int ret;
 
 	erofs_dbg("read(%llu): size = %zu, off = %lu", ino | 0ULL, size, off);
+	ret = erofs_iopen(&vf, vi);
+	if (ret) {
+		fuse_reply_err(req, -ret);
+		return;
+	}
 
 	buf = malloc(size);
 	if (!buf) {
@@ -378,7 +384,7 @@ static void erofsfuse_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 		return;
 	}
 
-	ret = erofs_pread(vi, buf, size, off);
+	ret = erofs_pread(&vf, buf, size, off);
 	if (ret) {
 		fuse_reply_err(req, -ret);
 		goto out;
@@ -398,12 +404,19 @@ out:
 
 static void erofsfuse_readlink(fuse_req_t req, fuse_ino_t ino)
 {
-	int ret;
-	char *buf = NULL;
 	struct erofs_inode vi = { .sbi = &g_sbi, .nid = erofsfuse_to_nid(ino) };
+	struct erofs_vfile vf;
+	char *buf = NULL;
+	int ret;
 
 	ret = erofs_read_inode_from_disk(&vi);
 	if (ret < 0) {
+		fuse_reply_err(req, -ret);
+		return;
+	}
+
+	ret = erofs_iopen(&vf, &vi);
+	if (ret) {
 		fuse_reply_err(req, -ret);
 		return;
 	}
@@ -414,7 +427,7 @@ static void erofsfuse_readlink(fuse_req_t req, fuse_ino_t ino)
 		return;
 	}
 
-	ret = erofs_pread(&vi, buf, vi.i_size, 0);
+	ret = erofs_pread(&vf, buf, vi.i_size, 0);
 	if (ret < 0) {
 		fuse_reply_err(req, -ret);
 		goto out;

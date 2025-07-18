@@ -22,12 +22,10 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
 	blknr = erofs_blknr(sbi, offset);
 	if (blknr != buf->blocknr) {
 		buf->blocknr = ~0ULL;
-		err = erofs_io_pread(buf->vf, buf->base, blksiz,
-				     round_down(offset, blksiz));
-		if (err < 0)
+		err = erofs_pread(buf->vf, buf->base, blksiz,
+				  round_down(offset, blksiz));
+		if (err)
 			return ERR_PTR(err);
-		if (err != blksiz)
-			return ERR_PTR(-EIO);
 		buf->blocknr = blknr;
 	}
 	return buf->base + erofs_blkoff(sbi, offset);
@@ -364,27 +362,31 @@ static int z_erofs_read_data(struct erofs_inode *inode, char *buffer,
 	return ret < 0 ? ret : 0;
 }
 
-int erofs_pread(struct erofs_inode *inode, char *buf,
-		erofs_off_t count, erofs_off_t offset)
+ssize_t erofs_preadi(struct erofs_vfile *vf, void *buf, size_t len, u64 offset)
 {
-	switch (inode->datalayout) {
-	case EROFS_INODE_FLAT_PLAIN:
-	case EROFS_INODE_FLAT_INLINE:
-	case EROFS_INODE_CHUNK_BASED:
-		return erofs_read_raw_data(inode, buf, count, offset);
-	case EROFS_INODE_COMPRESSED_FULL:
-	case EROFS_INODE_COMPRESSED_COMPACT:
-		return z_erofs_read_data(inode, buf, count, offset);
-	default:
-		break;
-	}
-	return -EINVAL;
+	struct erofs_inode *inode = *(struct erofs_inode **)vf->payload;
+
+	if (erofs_inode_is_data_compressed(inode->datalayout))
+		return z_erofs_read_data(inode, buf, len, offset) ?: len;
+	return erofs_read_raw_data(inode, buf, len, offset) ?: len;
+}
+
+int erofs_iopen(struct erofs_vfile *vf, struct erofs_inode *inode)
+{
+	static struct erofs_vfops ops = {
+		.pread = erofs_preadi,
+	};
+
+	vf->ops = &ops;
+	*(struct erofs_inode **)vf->payload = inode;
+	return 0;
 }
 
 static void *erofs_read_metadata_nid(struct erofs_sb_info *sbi, erofs_nid_t nid,
 				     erofs_off_t *offset, int *lengthp)
 {
 	struct erofs_inode vi = { .sbi = sbi, .nid = nid };
+	struct erofs_vfile vf;
 	__le16 __len;
 	int ret, len;
 	char *buffer;
@@ -393,8 +395,12 @@ static void *erofs_read_metadata_nid(struct erofs_sb_info *sbi, erofs_nid_t nid,
 	if (ret)
 		return ERR_PTR(ret);
 
+	ret = erofs_iopen(&vf, &vi);
+	if (ret)
+		return ERR_PTR(ret);
+
 	*offset = round_up(*offset, 4);
-	ret = erofs_pread(&vi, (void *)&__len, sizeof(__le16), *offset);
+	ret = erofs_pread(&vf, (void *)&__len, sizeof(__le16), *offset);
 	if (ret)
 		return ERR_PTR(ret);
 
@@ -408,7 +414,7 @@ static void *erofs_read_metadata_nid(struct erofs_sb_info *sbi, erofs_nid_t nid,
 	*offset += sizeof(__le16);
 	*lengthp = len;
 
-	ret = erofs_pread(&vi, buffer, len, *offset);
+	ret = erofs_pread(&vf, buffer, len, *offset);
 	if (ret) {
 		free(buffer);
 		return ERR_PTR(ret);

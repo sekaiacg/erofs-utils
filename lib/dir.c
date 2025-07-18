@@ -142,9 +142,10 @@ int erofs_iterate_dir(struct erofs_dir_context *ctx, bool fsck)
 {
 	struct erofs_inode *dir = ctx->dir;
 	struct erofs_sb_info *sbi = dir->sbi;
-	int err = 0;
+	struct erofs_vfile vf;
 	erofs_off_t pos;
 	char buf[EROFS_MAX_BLOCK_SIZE];
+	int err = 0;
 
 	if (!S_ISDIR(dir->i_mode))
 		return -ENOTDIR;
@@ -152,15 +153,18 @@ int erofs_iterate_dir(struct erofs_dir_context *ctx, bool fsck)
 	ctx->flags &= ~EROFS_READDIR_ALL_SPECIAL_FOUND;
 	if (dir->dot_omitted)
 		ctx->flags |= EROFS_READDIR_DOT_FOUND;
-	pos = 0;
-	while (pos < dir->i_size) {
+	err = erofs_iopen(&vf, dir);
+	if (err)
+		return err;
+
+	for (pos = 0; pos < dir->i_size; ) {
 		erofs_blk_t lblk = erofs_blknr(sbi, pos);
 		erofs_off_t maxsize = min_t(erofs_off_t,
 					dir->i_size - pos, erofs_blksiz(sbi));
 		const struct erofs_dirent *de = (const void *)buf;
 		unsigned int nameoff;
 
-		err = erofs_pread(dir, buf, maxsize, pos);
+		err = erofs_pread(&vf, buf, maxsize, pos);
 		if (err) {
 			erofs_err("I/O error when reading dirents @ nid %llu, lblk %llu: %s",
 				  dir->nid | 0ULL, lblk | 0ULL,

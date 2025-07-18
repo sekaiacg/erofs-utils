@@ -679,6 +679,7 @@ static void erofsdump_show_file_content(void)
 	erofs_off_t pending_size;
 	erofs_off_t read_offset;
 	erofs_off_t read_size;
+	struct erofs_vfile vf;
 
 	if (dumpcfg.inode_path) {
 		err = erofs_ilookup(dumpcfg.inode_path, &inode);
@@ -694,6 +695,10 @@ static void erofsdump_show_file_content(void)
 		}
 	}
 
+	err = erofs_iopen(&vf, &inode);
+	if (err)
+		return;
+
 	buffer_size = erofs_blksiz(inode.sbi);
 	buffer_ptr = malloc(buffer_size);
 	if (!buffer_ptr) {
@@ -704,8 +709,9 @@ static void erofsdump_show_file_content(void)
 	pending_size = inode.i_size;
 	read_offset = 0;
 	while (pending_size > 0) {
-		read_size = pending_size > buffer_size? buffer_size: pending_size;
-		err = erofs_pread(&inode, buffer_ptr, read_size, read_offset);
+		read_size = pending_size > buffer_size ?
+			buffer_size : pending_size;
+		err = erofs_pread(&vf, buffer_ptr, read_size, read_offset);
 		if (err) {
 			erofs_err("read file failed @ nid %llu", inode.nid | 0ULL);
 			goto out;

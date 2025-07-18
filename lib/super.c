@@ -81,7 +81,8 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 	read = erofs_io_pread(&sbi->bdev, data, EROFS_MAX_BLOCK_SIZE, 0);
 	if (read < EROFS_SUPER_END) {
 		ret = read < 0 ? read : -EIO;
-		erofs_err("cannot read erofs superblock: %d", ret);
+		erofs_err("cannot read erofs superblock: %s",
+			  erofs_strerror(ret));
 		return ret;
 	}
 	dsb = (struct erofs_super_block *)(data + EROFS_SUPER_OFFSET);

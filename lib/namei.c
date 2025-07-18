@@ -224,9 +224,14 @@ int erofs_namei(struct nameidata *nd, const char *name, unsigned int len)
 	char buf[EROFS_MAX_BLOCK_SIZE];
 	struct erofs_sb_info *sbi = nd->sbi;
 	struct erofs_inode vi = { .sbi = sbi, .nid = nid };
+	struct erofs_vfile vf;
 	erofs_off_t offset;
 
 	ret = erofs_read_inode_from_disk(&vi);
+	if (ret)
+		return ret;
+
+	ret = erofs_iopen(&vf, &vi);
 	if (ret)
 		return ret;
 
@@ -237,7 +242,7 @@ int erofs_namei(struct nameidata *nd, const char *name, unsigned int len)
 		struct erofs_dirent *de = (void *)buf;
 		unsigned int nameoff;
 
-		ret = erofs_pread(&vi, buf, maxsize, offset);
+		ret = erofs_pread(&vf, buf, maxsize, offset);
 		if (ret)
 			return ret;
 

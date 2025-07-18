@@ -416,6 +416,7 @@ static int erofs_rebuild_inode_fix_pnid(struct erofs_inode *parent,
 	};
 	unsigned int bsz = erofs_blksiz(dir.sbi);
 	unsigned int err, isz;
+	struct erofs_vfile vf;
 	erofs_off_t boff, off;
 	erofs_nid_t pnid;
 	bool fixed = false;
@@ -431,6 +432,10 @@ static int erofs_rebuild_inode_fix_pnid(struct erofs_inode *parent,
 	    dir.datalayout != EROFS_INODE_FLAT_PLAIN)
 		return -EOPNOTSUPP;
 
+	err = erofs_iopen(&vf, &dir);
+	if (err)
+		return err;
+
 	pnid = erofs_lookupnid(parent);
 	isz = dir.inode_isize + dir.xattr_isize;
 	boff = erofs_pos(dir.sbi, dir.u.i_blkaddr);
@@ -440,7 +445,7 @@ static int erofs_rebuild_inode_fix_pnid(struct erofs_inode *parent,
 		unsigned int nameoff, count, de_nameoff;
 
 		count = min_t(erofs_off_t, bsz, dir.i_size - off);
-		err = erofs_pread(&dir, buf, count, off);
+		err = erofs_pread(&vf, buf, count, off);
 		if (err)
 			return err;
 

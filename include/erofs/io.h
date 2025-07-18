@@ -70,6 +70,17 @@ ssize_t erofs_copy_file_range(int fd_in, u64 *off_in, int fd_out, u64 *off_out,
 int erofs_io_xcopy(struct erofs_vfile *vout, off_t pos,
 		   struct erofs_vfile *vin, unsigned int len, bool noseek);
 
+static inline int erofs_pread(struct erofs_vfile *vf, void *buf,
+			      size_t len, u64 offset)
+{
+	ssize_t read;
+
+	read = erofs_io_pread(vf, buf, len, offset);
+	if (read < 0)
+		return read;
+	return read != len ? -EIO : 0;
+}
+
 #ifdef __cplusplus
 }
 #endif

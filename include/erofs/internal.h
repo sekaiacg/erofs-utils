@@ -440,8 +440,7 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap);
 void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi);
 void *erofs_read_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
 			 erofs_off_t offset);
-int erofs_pread(struct erofs_inode *inode, char *buf,
-		erofs_off_t count, erofs_off_t offset);
+int erofs_iopen(struct erofs_vfile *vf, struct erofs_inode *inode);
 int erofs_map_blocks(struct erofs_inode *inode,
 		struct erofs_map_blocks *map, int flags);
 int erofs_map_dev(struct erofs_sb_info *sbi, struct erofs_map_dev *map);
