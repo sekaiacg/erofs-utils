@@ -196,7 +196,7 @@ int erofs_io_ftruncate(struct erofs_vfile *vf, u64 length)
 	return ftruncate(vf->fd, length);
 }
 
-ssize_t erofs_io_pread(struct erofs_vfile *vf, void *buf, u64 pos, size_t len)
+ssize_t erofs_io_pread(struct erofs_vfile *vf, void *buf, size_t len, u64 pos)
 {
 	ssize_t ret, read = 0;
 
@@ -204,7 +204,7 @@ ssize_t erofs_io_pread(struct erofs_vfile *vf, void *buf, u64 pos, size_t len)
 		return 0;
 
 	if (vf->ops)
-		return vf->ops->pread(vf, buf, pos, len);
+		return vf->ops->pread(vf, buf, len, pos);
 
 	pos += vf->offset;
 	do {
@@ -403,9 +403,9 @@ ssize_t erofs_dev_read(struct erofs_sb_info *sbi, int device_id,
 		}
 		read = erofs_io_pread(&((struct erofs_vfile) {
 				.fd = sbi->blobfd[device_id - 1],
-			}), buf, offset, len);
+			}), buf, len, offset);
 	} else {
-		read = erofs_io_pread(&sbi->bdev, buf, offset, len);
+		read = erofs_io_pread(&sbi->bdev, buf, len, offset);
 	}
 
 	if (read < 0)
