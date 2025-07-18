@@ -95,7 +95,6 @@ struct erofs_sb_info {
 	u32 feature_compat;
 	u32 feature_incompat;
 
-	unsigned char islotbits;
 	unsigned char blkszbits;
 
 	u32 sb_size;			/* total superblock size */
@@ -293,7 +292,7 @@ static inline erofs_off_t erofs_iloc(struct erofs_inode *inode)
 	struct erofs_sb_info *sbi = inode->sbi;
 
 	return erofs_pos(sbi, sbi->meta_blkaddr) +
-			(inode->nid << sbi->islotbits);
+			(inode->nid << EROFS_ISLOTBITS);
 }
 
 static inline bool is_inode_layout_compression(struct erofs_inode *inode)

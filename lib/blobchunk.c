@@ -193,7 +193,6 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 		else
 			memcpy(inode->chunkindexes + dst, &idx, sizeof(idx));
 	}
-	off = roundup(off, unit);
 	if (extent_start != EROFS_NULL_ADDR) {
 		extent_end = min(extent_end, extent_start + remaining_blks);
 		zeroedlen = inode->i_size & (erofs_blksiz(sbi) - 1);
@@ -202,8 +201,9 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 		tarerofs_blocklist_write(extent_start, extent_end - extent_start,
 					 source_offset, zeroedlen);
 	}
-	return erofs_dev_write(inode->sbi, inode->chunkindexes, off,
-			       inode->extent_isize);
+	off = roundup(off, unit);
+	return erofs_io_pwrite(&sbi->bdev, inode->chunkindexes,
+			       off, inode->extent_isize);
 }
 
 int erofs_blob_mergechunks(struct erofs_inode *inode, unsigned int chunkbits,

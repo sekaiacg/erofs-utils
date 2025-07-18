@@ -654,22 +654,23 @@ int erofs_write_unencoded_file(struct erofs_inode *inode, int fd, u64 fpos)
 
 int erofs_iflush(struct erofs_inode *inode)
 {
-	const u16 icount = EROFS_INODE_XATTR_ICOUNT(inode->xattr_isize);
+	u16 icount = EROFS_INODE_XATTR_ICOUNT(inode->xattr_isize);
 	struct erofs_sb_info *sbi = inode->sbi;
-	erofs_off_t off;
+	struct erofs_buffer_head *bh = inode->bh;
+	erofs_off_t off = erofs_iloc(inode);
 	union {
 		struct erofs_inode_compact dic;
 		struct erofs_inode_extended die;
 	} u = {};
 	union erofs_inode_i_u u1;
 	union erofs_inode_i_nb nb;
+	unsigned int iovcnt = 0;
+	struct iovec iov[2];
+	char *xattrs = NULL;
 	bool nlink_1 = true;
 	int ret, fmt;
 
-	if (inode->bh)
-		off = erofs_btell(inode->bh, false);
-	else
-		off = erofs_iloc(inode);
+	DBG_BUGON(bh && erofs_btell(bh, false) != off);
 
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
 	    S_ISFIFO(inode->i_mode) || S_ISSOCK(inode->i_mode))
@@ -747,41 +748,41 @@ int erofs_iflush(struct erofs_inode *inode)
 	default:
 		erofs_err("unsupported on-disk inode version of nid %llu",
 			  (unsigned long long)inode->nid);
-		BUG_ON(1);
+		DBG_BUGON(1);
+		return -EOPNOTSUPP;
 	}
 
-	ret = erofs_dev_write(sbi, &u, off, inode->inode_isize);
-	if (ret)
-		return ret;
-	off += inode->inode_isize;
-
+	iov[iovcnt++] = (struct iovec){ .iov_base = &u,
+					.iov_len = inode->inode_isize };
 	if (inode->xattr_isize) {
-		char *xattrs = erofs_export_xattr_ibody(inode);
-
+		xattrs = erofs_export_xattr_ibody(inode);
 		if (IS_ERR(xattrs))
 			return PTR_ERR(xattrs);
-
-		ret = erofs_dev_write(sbi, xattrs, off, inode->xattr_isize);
-		free(xattrs);
-		if (ret)
-			return ret;
-
-		off += inode->xattr_isize;
+		iov[iovcnt++] = (struct iovec){ .iov_base = xattrs,
+						.iov_len = inode->xattr_isize };
 	}
 
+	ret = erofs_io_pwritev(&sbi->bdev, iov, iovcnt, off);
+	free(xattrs);
+	if (ret != inode->inode_isize + inode->xattr_isize)
+		return ret < 0 ? ret : -EIO;
+
+	off += ret;
 	if (inode->extent_isize) {
 		if (inode->datalayout == EROFS_INODE_CHUNK_BASED) {
 			ret = erofs_blob_write_chunk_indexes(inode, off);
-			if (ret)
-				return ret;
-		} else {
-			/* write compression metadata */
+		} else {	/* write compression metadata */
 			off = roundup(off, 8);
-			ret = erofs_dev_write(sbi, inode->compressmeta, off,
-					      inode->extent_isize);
-			if (ret)
-				return ret;
+			ret = erofs_io_pwrite(&sbi->bdev, inode->compressmeta,
+					      off, inode->extent_isize);
 		}
+		if (ret != inode->extent_isize)
+			return ret < 0 ? ret : -EIO;
+	}
+	if (bh) {
+		inode->bh = NULL;
+		erofs_iput(inode);
+		return erofs_bh_flush_generic_end(bh);
 	}
 	return 0;
 }
@@ -789,15 +790,9 @@ int erofs_iflush(struct erofs_inode *inode)
 static int erofs_bh_flush_write_inode(struct erofs_buffer_head *bh)
 {
 	struct erofs_inode *inode = bh->fsprivate;
-	int ret;
 
 	DBG_BUGON(inode->bh != bh);
-	ret = erofs_iflush(inode);
-	if (ret)
-		return ret;
-	inode->bh = NULL;
-	erofs_iput(inode);
-	return erofs_bh_flush_generic_end(bh);
+	return erofs_iflush(inode);
 }
 
 static struct erofs_bhops erofs_write_inode_bhops = {

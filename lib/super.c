@@ -114,7 +114,6 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 	sbi->xattr_blkaddr = le32_to_cpu(dsb->xattr_blkaddr);
 	sbi->xattr_prefix_start = le32_to_cpu(dsb->xattr_prefix_start);
 	sbi->xattr_prefix_count = dsb->xattr_prefix_count;
-	sbi->islotbits = EROFS_ISLOTBITS;
 	if (erofs_sb_has_48bit(sbi) && dsb->rootnid_8b) {
 		sbi->root_nid = le64_to_cpu(dsb->rootnid_8b);
 		sbi->primarydevice_blocks = (sbi->primarydevice_blocks << 32) |
