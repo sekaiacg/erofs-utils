@@ -375,7 +375,7 @@ static void erofsdump_show_fileinfo(bool show_extent)
 	char timebuf[128] = {0};
 	unsigned int extent_count = 0;
 	struct erofs_map_blocks map = {
-		.index = UINT_MAX,
+		.buf = __EROFS_BUF_INITIALIZER,
 		.m_la = 0,
 	};
 

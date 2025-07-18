@@ -499,7 +499,7 @@ out:
 static int erofs_verify_inode_data(struct erofs_inode *inode, int outfd)
 {
 	struct erofs_map_blocks map = {
-		.index = UINT_MAX,
+		.buf = __EROFS_BUF_INITIALIZER,
 	};
 	bool needdecode = fsckcfg.check_decomp && !erofs_is_packed_inode(inode);
 	int ret = 0;

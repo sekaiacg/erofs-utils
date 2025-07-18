@@ -194,7 +194,7 @@ static int erofs_rebuild_write_blob_index(struct erofs_sb_info *dst_sb,
 	for (i = 0; i < count; i++) {
 		struct erofs_blobchunk *chunk;
 		struct erofs_map_blocks map = {
-			.index = UINT_MAX,
+			.buf = __EROFS_BUF_INITIALIZER,
 		};
 
 		map.m_la = i << chunkbits;

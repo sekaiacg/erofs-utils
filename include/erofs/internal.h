@@ -390,7 +390,7 @@ enum {
 #define EROFS_MAP_FRAGMENT	(EROFS_MAP_MAPPED | __EROFS_MAP_FRAGMENT)
 
 struct erofs_map_blocks {
-	char mpage[EROFS_MAX_BLOCK_SIZE];
+	struct erofs_buf buf;
 
 	erofs_off_t m_pa, m_la;
 	u64 m_plen, m_llen;
@@ -398,7 +398,6 @@ struct erofs_map_blocks {
 	unsigned short m_deviceid;
 	char m_algorithmformat;
 	unsigned int m_flags;
-	erofs_blk_t index;
 };
 
 /*

@@ -197,7 +197,7 @@ static int erofs_read_raw_data(struct erofs_inode *inode, char *buffer,
 			       erofs_off_t size, erofs_off_t offset)
 {
 	struct erofs_map_blocks map = {
-		.index = UINT_MAX,
+		.buf = __EROFS_BUF_INITIALIZER,
 	};
 	int ret;
 	erofs_off_t ptr = offset;
@@ -300,7 +300,7 @@ static int z_erofs_read_data(struct erofs_inode *inode, char *buffer,
 {
 	erofs_off_t end, length, skip;
 	struct erofs_map_blocks map = {
-		.index = UINT_MAX,
+		.buf = __EROFS_BUF_INITIALIZER,
 	};
 	bool trimmed;
 	unsigned int bufsize = 0;

@@ -569,9 +569,7 @@ int erofs_packedfile_read(struct erofs_sb_info *sbi,
 	struct erofs_inode pi = {
 		.sbi = sbi,
 	};
-	struct erofs_map_blocks map = {
-		.index = UINT_MAX,
-	};
+	struct erofs_map_blocks map = { .buf = __EROFS_BUF_INITIALIZER };
 	unsigned int bsz = erofs_blksiz(sbi);
 	erofs_off_t end = pos + len;
 	char *buffer = NULL;
