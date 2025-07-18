@@ -29,7 +29,8 @@ const struct erofs_bhops erofs_skip_write_bhops = {
 };
 
 struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
-				       erofs_blk_t startblk)
+				       erofs_blk_t startblk,
+				       struct erofs_vfile *vf)
 {
 	unsigned int blksiz = erofs_blksiz(sbi);
 	struct erofs_bufmgr *bmgr;
@@ -54,6 +55,7 @@ struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
 	bmgr->last_mapped_block = &bmgr->blkh;
 	bmgr->metablkcnt = 0;
 	bmgr->dsunit = 0;
+	bmgr->vf = vf ?: &sbi->bdev;
 	return bmgr;
 }
 
@@ -482,9 +484,13 @@ int erofs_bflush(struct erofs_bufmgr *bmgr,
 			continue;
 
 		padding = blksiz - (p->buffers.off & (blksiz - 1));
-		if (padding != blksiz)
-			erofs_dev_fillzero(sbi, erofs_pos(sbi, blkaddr) - padding,
+		if (padding != blksiz) {
+			ret = erofs_io_fallocate(bmgr->vf,
+					   erofs_pos(sbi, blkaddr) - padding,
 					   padding, true);
+			if (ret < 0)
+				return ret;
+		}
 
 		if (p->type != DATA)
 			bmgr->metablkcnt += p->buffers.nblocks;

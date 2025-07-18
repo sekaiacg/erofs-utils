@@ -1377,7 +1377,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!incremental_mode) {
-		g_sbi.bmgr = erofs_buffer_init(&g_sbi, 0);
+		g_sbi.bmgr = erofs_buffer_init(&g_sbi, 0, NULL);
 		if (!g_sbi.bmgr) {
 			err = -ENOMEM;
 			goto exit;
@@ -1405,7 +1405,7 @@ int main(int argc, char **argv)
 			u.startblk = DIV_ROUND_UP(u.st.st_size, erofs_blksiz(&g_sbi));
 		else
 			u.startblk = g_sbi.primarydevice_blocks;
-		g_sbi.bmgr = erofs_buffer_init(&g_sbi, u.startblk);
+		g_sbi.bmgr = erofs_buffer_init(&g_sbi, u.startblk, NULL);
 		if (!g_sbi.bmgr) {
 			err = -ENOMEM;
 			goto exit;

@@ -147,8 +147,8 @@ int erofs_io_fsync(struct erofs_vfile *vf)
 	return 0;
 }
 
-ssize_t erofs_io_fallocate(struct erofs_vfile *vf, u64 offset,
-			   size_t len, bool zeroout)
+int erofs_io_fallocate(struct erofs_vfile *vf, u64 offset,
+		       size_t len, bool zeroout)
 {
 	static const char zero[EROFS_MAX_BLOCK_SIZE] = {0};
 	ssize_t ret;
@@ -167,7 +167,7 @@ ssize_t erofs_io_fallocate(struct erofs_vfile *vf, u64 offset,
 	while (len > EROFS_MAX_BLOCK_SIZE) {
 		ret = erofs_io_pwrite(vf, zero, offset, EROFS_MAX_BLOCK_SIZE);
 		if (ret < 0)
-			return ret;
+			return (int)ret;
 		len -= ret;
 		offset += ret;
 	}

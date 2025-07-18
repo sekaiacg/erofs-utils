@@ -57,18 +57,18 @@ struct erofs_buffer_block {
 };
 
 struct erofs_bufmgr {
-	struct erofs_sb_info *sbi;
-
 	/* buckets for all buffer blocks to boost up allocation */
 	struct list_head watermeter[META + 1][2][EROFS_MAX_BLOCK_SIZE];
 	unsigned long bktmap[META + 1][2][EROFS_MAX_BLOCK_SIZE / BITS_PER_LONG];
 
 	struct erofs_buffer_block blkh;
-	erofs_blk_t tail_blkaddr, metablkcnt;
+	struct erofs_sb_info *sbi;
+	struct erofs_vfile *vf;
 
 	/* last mapped buffer block to accelerate erofs_mapbh() */
 	struct erofs_buffer_block *last_mapped_block;
 
+	erofs_blk_t tail_blkaddr, metablkcnt;
 	/* align data block addresses to multiples of `dsunit` */
 	unsigned int dsunit;
 };
@@ -122,7 +122,8 @@ static inline int erofs_bh_flush_generic_end(struct erofs_buffer_head *bh)
 }
 
 struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
-				       erofs_blk_t startblk);
+				       erofs_blk_t startblk,
+				       struct erofs_vfile *vf);
 int erofs_bh_balloon(struct erofs_buffer_head *bh, erofs_off_t incr);
 
 struct erofs_buffer_head *erofs_balloc(struct erofs_bufmgr *bmgr,

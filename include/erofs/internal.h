@@ -487,12 +487,6 @@ static inline int erofs_dev_write(struct erofs_sb_info *sbi, const void *buf,
 	return 0;
 }
 
-static inline int erofs_dev_fillzero(struct erofs_sb_info *sbi, u64 offset,
-				     size_t len, bool pad)
-{
-	return erofs_io_fallocate(&sbi->bdev, offset, len, pad);
-}
-
 static inline int erofs_dev_resize(struct erofs_sb_info *sbi,
 				   erofs_blk_t blocks)
 {
