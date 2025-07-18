@@ -1142,7 +1142,8 @@ static void *z_erofs_write_indexes(struct z_erofs_compress_ictx *ctx)
 	struct z_erofs_extent_item *ei, *n;
 	void *metabuf;
 
-	if (erofs_sb_has_48bit(sbi)) {
+	/* TODO: support writing encoded extents for ztailpacking later. */
+	if (erofs_sb_has_48bit(sbi) && !inode->idata_size) {
 		metabuf = z_erofs_write_extents(ctx);
 		if (metabuf != ERR_PTR(-EAGAIN)) {
 			if (IS_ERR(metabuf))
@@ -1181,6 +1182,8 @@ static void *z_erofs_write_indexes(struct z_erofs_compress_ictx *ctx)
 	ctx->metacur = metabuf + Z_EROFS_LEGACY_MAP_HEADER_SIZE;
 	ctx->clusterofs = 0;
 	list_for_each_entry_safe(ei, n, &ctx->extents, list) {
+		DBG_BUGON(ei->list.next != &ctx->extents &&
+			  ctx->clusterofs + ei->e.length < erofs_blksiz(sbi));
 		z_erofs_write_full_indexes(ctx, &ei->e);
 
 		list_del(&ei->list);
