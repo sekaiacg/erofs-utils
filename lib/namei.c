@@ -24,39 +24,67 @@ static dev_t erofs_new_decode_dev(u32 dev)
 
 int erofs_read_inode_from_disk(struct erofs_inode *vi)
 {
-	int ret, ifmt;
-	char buf[sizeof(struct erofs_inode_extended)];
-	erofs_off_t inode_loc = erofs_iloc(vi);
 	struct erofs_sb_info *sbi = vi->sbi;
+	erofs_blk_t blkaddr = erofs_blknr(sbi, erofs_iloc(vi));
+	unsigned int ofs = erofs_blkoff(sbi, erofs_iloc(vi));
+	struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
 	erofs_blk_t addrmask = BIT_ULL(48) - 1;
 	struct erofs_inode_extended *die, copied;
 	struct erofs_inode_compact *dic;
+	unsigned int ifmt;
+	void *ptr;
+	int err = 0;
 
-	DBG_BUGON(!sbi);
-	ret = erofs_dev_read(sbi, 0, buf, inode_loc, sizeof(*dic));
-	if (ret < 0)
-		return -EIO;
+	ptr = erofs_read_metabuf(&buf, sbi, erofs_pos(sbi, blkaddr));
+	if (IS_ERR(ptr)) {
+		err = PTR_ERR(ptr);
+		erofs_err("failed to get inode (nid: %llu) page, err %d",
+			  vi->nid, err);
+		goto err_out;
+	}
 
-	dic = (struct erofs_inode_compact *)buf;
+	dic = ptr + ofs;
 	ifmt = le16_to_cpu(dic->i_format);
+	if (ifmt & ~EROFS_I_ALL) {
+		erofs_err("unsupported i_format %u of nid %llu",
+			  ifmt, vi->nid);
+		err = -EOPNOTSUPP;
+		goto err_out;
+	}
 
 	vi->datalayout = erofs_inode_datalayout(ifmt);
 	if (vi->datalayout >= EROFS_INODE_DATALAYOUT_MAX) {
 		erofs_err("unsupported datalayout %u of nid %llu",
 			  vi->datalayout, vi->nid | 0ULL);
-		return -EOPNOTSUPP;
+		err = -EOPNOTSUPP;
+		goto err_out;
 	}
+
 	switch (erofs_inode_version(ifmt)) {
 	case EROFS_INODE_LAYOUT_EXTENDED:
 		vi->inode_isize = sizeof(struct erofs_inode_extended);
+		/* check if the extended inode acrosses block boundary */
+		if (ofs + vi->inode_isize <= erofs_blksiz(sbi)) {
+			ofs += vi->inode_isize;
+			die = (struct erofs_inode_extended *)dic;
+			copied.i_u = die->i_u;
+			copied.i_nb = die->i_nb;
+		} else {
+			const unsigned int gotten = erofs_blksiz(sbi) - ofs;
 
-		ret = erofs_dev_read(sbi, 0, buf + sizeof(*dic),
-			       inode_loc + sizeof(*dic),
-			       sizeof(*die) - sizeof(*dic));
-		if (ret < 0)
-			return -EIO;
-
-		die = (struct erofs_inode_extended *)buf;
+			memcpy(&copied, dic, gotten);
+			ptr = erofs_read_metabuf(&buf, sbi,
+					erofs_pos(sbi, blkaddr + 1));
+			if (IS_ERR(ptr)) {
+				err = PTR_ERR(ptr);
+				erofs_err("failed to get inode payload block (nid: %llu), err %d",
+					  vi->nid, err);
+				goto err_out;
+			}
+			ofs = vi->inode_isize - gotten;
+			memcpy((u8 *)&copied + gotten, ptr, ofs);
+			die = &copied;
+		}
 		vi->xattr_isize = erofs_xattr_ibody_size(die->i_xattr_icount);
 		vi->i_mode = le16_to_cpu(die->i_mode);
 		vi->i_ino[0] = le32_to_cpu(die->i_ino);
@@ -72,6 +100,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 		break;
 	case EROFS_INODE_LAYOUT_COMPACT:
 		vi->inode_isize = sizeof(struct erofs_inode_compact);
+		ofs += vi->inode_isize;
 		vi->xattr_isize = erofs_xattr_ibody_size(dic->i_xattr_icount);
 		vi->i_mode = le16_to_cpu(dic->i_mode);
 		vi->i_ino[0] = le32_to_cpu(dic->i_ino);
@@ -96,7 +125,8 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	default:
 		erofs_err("unsupported on-disk inode version %u of nid %llu",
 			  erofs_inode_version(ifmt), vi->nid | 0ULL);
-		return -EOPNOTSUPP;
+		err = -EOPNOTSUPP;
+		goto err_out;
 	}
 
 	switch (vi->i_mode & S_IFMT) {
@@ -122,7 +152,8 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	default:
 		erofs_err("bogus i_mode (%o) @ nid %llu", vi->i_mode,
 			  vi->nid | 0ULL);
-		return -EFSCORRUPTED;
+		err = -EFSCORRUPTED;
+		goto err_out;
 	}
 
 	vi->flags = 0;
@@ -132,12 +163,15 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 		if (vi->u.chunkformat & ~EROFS_CHUNK_FORMAT_ALL) {
 			erofs_err("unsupported chunk format %x of nid %llu",
 				  vi->u.chunkformat, vi->nid | 0ULL);
-			return -EOPNOTSUPP;
+			err = -EOPNOTSUPP;
+			goto err_out;
 		}
 		vi->u.chunkbits = sbi->blkszbits +
 			(vi->u.chunkformat & EROFS_CHUNK_FORMAT_BLKBITS_MASK);
 	}
-	return 0;
+err_out:
+	erofs_put_metabuf(&buf);
+	return err;
 }
 
 struct erofs_dirent *find_target_dirent(erofs_nid_t pnid,
