@@ -67,9 +67,6 @@ struct erofs_bufmgr {
 
 	/* last mapped buffer block to accelerate erofs_mapbh() */
 	struct erofs_buffer_block *last_mapped_block;
-
-	/* align data block addresses to multiples of `dsunit` */
-	unsigned int dsunit;
 };
 
 static inline const int get_alignsize(struct erofs_sb_info *sbi, int type,

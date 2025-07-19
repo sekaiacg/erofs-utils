@@ -87,7 +87,7 @@ static int __erofs_battach(struct erofs_buffer_block *bb,
 			+ inline_ext > blkmask)
 		return -ENOSPC;
 
-	oob = cmpsgn(alignedoffset + incr + inline_ext,
+	oob = cmpsgn(roundup(boff, alignsize) + incr + inline_ext,
 		     bb->buffers.nblocks << sbi->blkszbits);
 	if (oob >= 0) {
 		/* the next buffer block should be EROFS_NULL_ADDR all the time */
@@ -157,13 +157,10 @@ static int erofs_bfind_for_attach(struct erofs_bufmgr *bmgr,
 	bb = NULL;
 
 	/* try to find a most-fit mapped buffer block first */
-	if (__erofs_unlikely(bmgr->dsunit > 1))
-		used_before = blksiz - alignsize;
-	else if (size + inline_ext >= blksiz)
+	if (size + inline_ext >= blksiz)
 		goto skip_mapped;
-	else
-		used_before = rounddown(blksiz - (size + inline_ext), alignsize);
 
+	used_before = rounddown(blksiz - (size + inline_ext), alignsize);
 	for (; used_before; --used_before) {
 		struct list_head *bt = bmgr->mapped_buckets[type] + used_before;
 
@@ -185,7 +182,7 @@ static int erofs_bfind_for_attach(struct erofs_bufmgr *bmgr,
 		ret = __erofs_battach(cur, NULL, size, alignsize,
 				      inline_ext, true);
 		if (ret < 0) {
-			DBG_BUGON(!(bmgr->dsunit > 1));
+			DBG_BUGON(1);
 			continue;
 		}
 
@@ -328,20 +325,10 @@ struct erofs_buffer_head *erofs_battach(struct erofs_buffer_head *bh,
 static void __erofs_mapbh(struct erofs_buffer_block *bb)
 {
 	struct erofs_bufmgr *bmgr = bb->buffers.fsprivate;
-	erofs_blk_t blkaddr = bmgr->tail_blkaddr;
+	erofs_blk_t blkaddr;
 
 	if (bb->blkaddr == EROFS_NULL_ADDR) {
-		bb->blkaddr = blkaddr;
-		if (__erofs_unlikely(bmgr->dsunit > 1) && bb->type == DATA) {
-			struct erofs_buffer_block *pb = list_prev_entry(bb, list);
-
-			bb->blkaddr = roundup(blkaddr, bmgr->dsunit);
-			if (pb != &bmgr->blkh &&
-			    pb->blkaddr + pb->buffers.nblocks >= blkaddr) {
-				DBG_BUGON(pb->blkaddr + pb->buffers.nblocks > blkaddr);
-				pb->buffers.nblocks = bb->blkaddr - pb->blkaddr;
-			}
-		}
+		bb->blkaddr = bmgr->tail_blkaddr;
 		bmgr->last_mapped_block = bb;
 		erofs_bupdate_mapped(bb);
 	}
