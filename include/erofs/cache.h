@@ -48,7 +48,7 @@ struct erofs_buffer_head {
 
 struct erofs_buffer_block {
 	struct list_head list;
-	struct list_head sibling;	/* blocks of the same waterline */
+	struct list_head mapped_list;
 
 	erofs_blk_t blkaddr;
 	int type;
@@ -60,7 +60,7 @@ struct erofs_bufmgr {
 	struct erofs_sb_info *sbi;
 
 	/* buckets for all mapped buffer blocks to boost up allocation */
-	struct list_head watermeter[META + 1][EROFS_MAX_BLOCK_SIZE];
+	struct list_head mapped_buckets[META + 1][EROFS_MAX_BLOCK_SIZE];
 
 	struct erofs_buffer_block blkh;
 	erofs_blk_t tail_blkaddr, metablkcnt;
