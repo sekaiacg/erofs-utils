@@ -434,7 +434,6 @@ int erofs_mkfs_format_fs(struct erofs_sb_info *sbi, unsigned int blkszbits,
 	if (!bmgr)
 		return -ENOMEM;
 	sbi->bmgr = bmgr;
-	bmgr->dsunit = dsunit;
 	if (metazone)
 		sbi->meta_blkaddr = EROFS_META_NEW_ADDR;
 	else
@@ -474,6 +473,5 @@ int erofs_mkfs_load_fs(struct erofs_sb_info *sbi, unsigned int dsunit)
 	if (!bmgr)
 		return -ENOMEM;
 	sbi->bmgr = bmgr;
-	bmgr->dsunit = dsunit;
 	return 0;
 }

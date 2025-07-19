@@ -88,7 +88,6 @@ static struct option long_options[] = {
 	{"all-time", no_argument, NULL, 526},
 	{"sort", required_argument, NULL, 527},
 	{"hard-dereference", no_argument, NULL, 528},
-	{"dsunit", required_argument, NULL, 529},
 #ifdef EROFS_MT_ENABLED
 	{"async-queue-limit", required_argument, NULL, 530},
 #endif
@@ -189,7 +188,6 @@ static void usage(int argc, char **argv)
 		"                       X = data|rvsp|0 (data: full data, rvsp: space fallocated\n"
 		"                                        0: inodes zeroed)\n"
 		" --compress-hints=X    specify a file to configure per-file compression strategy\n"
-		" --dsunit=#            align all data block addresses to multiples of #\n"
 		" --exclude-path=X      avoid including file X (X = exact literal path)\n"
 		" --exclude-regex=X     avoid including files that match X (X = regular expression)\n"
 #ifdef HAVE_LIBSELINUX
@@ -313,7 +311,6 @@ static unsigned int rebuild_src_count, total_ccfgs;
 static LIST_HEAD(rebuild_src_list);
 static u8 fixeduuid[16];
 static bool valid_fixeduuid;
-static unsigned int dsunit;
 static int tarerofs_decoder;
 static FILE *vmdk_dcf;
 static char *mkfs_aws_zinfo_file;
@@ -1368,13 +1365,6 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 		case 528:
 			params->hard_dereference = true;
 			break;
-		case 529:
-			dsunit = strtoul(optarg, &endptr, 0);
-			if (*endptr != '\0') {
-				erofs_err("invalid dsunit %s", optarg);
-				return -EINVAL;
-			}
-			break;
 #ifdef EROFS_MT_ENABLED
 		case 530:
 			params->mt_async_queue_limit = strtoul(optarg, &endptr, 0);
@@ -1793,10 +1783,10 @@ int main(int argc, char **argv)
 	}
 
 	if (!incremental_mode)
-		err = erofs_mkfs_format_fs(&g_sbi, mkfs_blkszbits, dsunit,
+		err = erofs_mkfs_format_fs(&g_sbi, mkfs_blkszbits, 0,
 					   mkfscfg.inode_metazone);
 	else
-		err = erofs_mkfs_load_fs(&g_sbi, dsunit);
+		err = erofs_mkfs_load_fs(&g_sbi, 0);
 	if (err)
 		goto exit;
 
