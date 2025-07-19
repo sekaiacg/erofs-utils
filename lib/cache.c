@@ -45,8 +45,7 @@ struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
 		for (j = 0; j < ARRAY_SIZE(bmgr->watermeter[0]); j++) {
 			for (k = 0; k < blksiz; k++)
 				init_list_head(&bmgr->watermeter[i][j][k]);
-			memset(bmgr->bktmap[i][j], 0,
-			       (blksiz / BITS_PER_LONG) * sizeof(unsigned long));
+			memset(bmgr->bktmap[i][j], 0, blksiz / BITS_PER_LONG);
 		}
 	}
 	init_list_head(&bmgr->blkh.list);
@@ -54,7 +53,6 @@ struct erofs_bufmgr *erofs_buffer_init(struct erofs_sb_info *sbi,
 	bmgr->tail_blkaddr = startblk;
 	bmgr->last_mapped_block = &bmgr->blkh;
 	bmgr->metablkcnt = 0;
-	bmgr->dsunit = 0;
 	bmgr->vf = vf ?: &sbi->bdev;
 	return bmgr;
 }
