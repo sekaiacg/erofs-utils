@@ -59,7 +59,7 @@ static struct erofs_dentry *erofs_rebuild_mkdir(struct erofs_inode *dir,
 	inode->i_mtime = dir->i_mtime;
 	inode->i_mtime_nsec = dir->i_mtime_nsec;
 	inode->dev = dir->dev;
-	erofs_init_empty_dir(inode);
+	inode->i_nlink = 2;
 
 	d = erofs_d_alloc(dir, s);
 	if (IS_ERR(d)) {
@@ -241,7 +241,7 @@ static int erofs_rebuild_update_inode(struct erofs_sb_info *dst_sb,
 		inode->u.i_rdev = erofs_new_encode_dev(inode->u.i_rdev);
 		break;
 	case S_IFDIR:
-		err = erofs_init_empty_dir(inode);
+		inode->i_nlink = 2;
 		break;
 	case S_IFLNK:
 		inode->i_link = malloc(inode->i_size + 1);

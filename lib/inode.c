@@ -226,9 +226,14 @@ static int comp_subdir(const void *a, const void *b)
 	return cmpsgn(da->namelen, db->namelen);
 }
 
-int erofs_init_empty_dir(struct erofs_inode *dir)
+static int erofs_prepare_dir_file(struct erofs_inode *dir,
+				  unsigned int nr_subdirs)
 {
-	struct erofs_dentry *d;
+	struct erofs_sb_info *sbi = dir->sbi;
+	struct erofs_dentry *d, *n, **sorted_d;
+	bool dot_omitted = cfg.c_dot_omitted;
+	unsigned int i;
+	unsigned int d_size = 0;
 
 	/* dot is pointed to the current dir inode */
 	d = erofs_d_alloc(dir, ".");
@@ -244,18 +249,7 @@ int erofs_init_empty_dir(struct erofs_inode *dir)
 	d->inode = erofs_igrab(erofs_parent_inode(dir));
 	d->type = EROFS_FT_DIR;
 
-	dir->i_nlink = 2;
-	return 0;
-}
-
-static int erofs_prepare_dir_file(struct erofs_inode *dir,
-				  unsigned int nr_subdirs)
-{
-	struct erofs_sb_info *sbi = dir->sbi;
-	struct erofs_dentry *d, *n, **sorted_d;
-	bool dot_omitted = cfg.c_dot_omitted;
-	unsigned int i;
-	unsigned int d_size = 0;
+	nr_subdirs += 2;
 
 	sorted_d = malloc(nr_subdirs * sizeof(d));
 	if (!sorted_d)
@@ -1564,11 +1558,7 @@ static int erofs_mkfs_handle_directory(struct erofs_inode *dir)
 	}
 	closedir(_dir);
 
-	ret = erofs_init_empty_dir(dir);
-	if (ret)
-		return ret;
-
-	ret = erofs_prepare_dir_file(dir, nr_subdirs + 2); /* sort subdirs */
+	ret = erofs_prepare_dir_file(dir, nr_subdirs); /* sort subdirs */
 	if (ret)
 		return ret;
 
@@ -1615,6 +1605,13 @@ bool erofs_dentry_is_wht(struct erofs_sb_info *sbi, struct erofs_dentry *d)
 	return false;
 }
 
+static void erofs_dentry_kill(struct erofs_dentry *d)
+{
+	list_del(&d->d_child);
+	erofs_d_invalidate(d);
+	free(d);
+}
+
 static int erofs_rebuild_handle_directory(struct erofs_inode *dir,
 					  bool incremental)
 {
@@ -1625,22 +1622,23 @@ static int erofs_rebuild_handle_directory(struct erofs_inode *dir,
 	int ret;
 
 	nr_subdirs = 0;
-	i_nlink = 0;
+	i_nlink = 2;
 
 	list_for_each_entry_safe(d, n, &dir->i_subdirs, d_child) {
+		if (is_dot_dotdot(d->name)) {
+			DBG_BUGON(1);
+			erofs_dentry_kill(d);
+			continue;
+		}
 		if (delwht && erofs_dentry_is_wht(sbi, d)) {
 			erofs_dbg("remove whiteout %s", d->inode->i_srcpath);
-			list_del(&d->d_child);
-			erofs_d_invalidate(d);
-			free(d);
+			erofs_dentry_kill(d);
 			continue;
 		}
 		i_nlink += (d->type == EROFS_FT_DIR);
 		++nr_subdirs;
 	}
-
-	DBG_BUGON(i_nlink < 2);		/* should have `.` and `..` */
-	DBG_BUGON(nr_subdirs < i_nlink);
+	DBG_BUGON(nr_subdirs + 2 < i_nlink);
 	ret = erofs_prepare_dir_file(dir, nr_subdirs);
 	if (ret)
 		return ret;
@@ -2134,6 +2132,6 @@ struct erofs_inode *erofs_rebuild_make_root(struct erofs_sb_info *sbi)
 	root->i_parent = root;
 	root->i_mtime = root->sbi->epoch + root->sbi->build_time;
 	root->i_mtime_nsec = root->sbi->fixed_nsec;
-	erofs_init_empty_dir(root);
+	root->i_nlink = 2;
 	return root;
 }

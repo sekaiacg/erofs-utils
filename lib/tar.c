@@ -1122,9 +1122,7 @@ new_inode:
 		}
 		inode->i_nlink++;
 	} else if (!inode->i_nlink) {
-		ret = erofs_init_empty_dir(inode);
-		if (ret)
-			goto out;
+		inode->i_nlink = 2;
 	}
 
 	ret = tarerofs_merge_xattrs(&eh.xattrs, &tar->global.xattrs);
