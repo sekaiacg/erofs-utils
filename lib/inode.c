@@ -235,12 +235,15 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 	unsigned int i;
 	unsigned int d_size = 0;
 
-	/* dot is pointed to the current dir inode */
-	d = erofs_d_alloc(dir, ".");
-	if (IS_ERR(d))
-		return PTR_ERR(d);
-	d->inode = erofs_igrab(dir);
-	d->type = EROFS_FT_DIR;
+	if (!dot_omitted) {
+		/* dot is pointed to the current dir inode */
+		d = erofs_d_alloc(dir, ".");
+		if (IS_ERR(d))
+			return PTR_ERR(d);
+		d->inode = erofs_igrab(dir);
+		d->type = EROFS_FT_DIR;
+	}
+	dir->dot_omitted = dot_omitted;
 
 	/* dotdot is pointed to the parent dir */
 	d = erofs_d_alloc(dir, "..");
@@ -249,24 +252,17 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 	d->inode = erofs_igrab(erofs_parent_inode(dir));
 	d->type = EROFS_FT_DIR;
 
-	nr_subdirs += 2;
-
+	nr_subdirs += 1 + !dot_omitted;
 	sorted_d = malloc(nr_subdirs * sizeof(d));
 	if (!sorted_d)
 		return -ENOMEM;
 
-	dir->dot_omitted = dot_omitted;
 	i = 0;
 	list_for_each_entry_safe(d, n, &dir->i_subdirs, d_child) {
 		list_del(&d->d_child);
-		if (dot_omitted && !strcmp(d->name, ".")) {
-			erofs_iput(d->inode);
-			free(d);
-			continue;
-		}
 		sorted_d[i++] = d;
 	}
-	DBG_BUGON(i + dot_omitted != nr_subdirs);
+	DBG_BUGON(i != nr_subdirs);
 	qsort(sorted_d, i, sizeof(d), comp_subdir);
 	while (i)
 		list_add(&sorted_d[--i]->d_child, &dir->i_subdirs);
