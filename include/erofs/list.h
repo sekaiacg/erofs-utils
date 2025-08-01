@@ -130,6 +130,11 @@ static inline void list_splice_tail(struct list_head *list,
 	     &pos->member != (head);                                           \
 	     pos = n, n = list_next_entry(n, member))
 
+#define list_for_each_entry_safe_from(pos, n, head, member)		\
+	for (n = list_next_entry(pos, member);				\
+	     &pos->member != (head);					\
+	     pos = n, n = list_next_entry(n, member))
+
 #ifdef __cplusplus
 }
 #endif

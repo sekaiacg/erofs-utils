@@ -211,28 +211,90 @@ int erofs_allocate_inode_bh_data(struct erofs_inode *inode, erofs_blk_t nblocks)
 	return 0;
 }
 
-static int comp_subdir(const void *a, const void *b)
-{
-	const struct erofs_dentry *da, *db;
-	int commonlen, sign;
+#define EROFS_DENTRY_MERGESORT_STEP	1
 
-	da = *((const struct erofs_dentry **)a);
-	db = *((const struct erofs_dentry **)b);
-	commonlen = min(round_up(da->namelen, EROFS_DENTRY_NAME_ALIGNMENT),
-			round_up(db->namelen, EROFS_DENTRY_NAME_ALIGNMENT));
-	sign = memcmp(da->name, db->name, commonlen);
-	if (sign)
-		return sign;
-	return cmpsgn(da->namelen, db->namelen);
+static void erofs_dentry_mergesort(struct list_head *entries, int k)
+{
+	struct list_head *great = entries->next;
+
+	BUILD_BUG_ON(EROFS_DENTRY_MERGESORT_STEP > EROFS_DENTRY_NAME_ALIGNMENT);
+	entries->prev->next = NULL;
+	init_list_head(entries);
+	do {
+		struct list_head **greatp = &great;
+		struct erofs_dentry *e0, *d, *n;
+		struct list_head le[2];
+		int cmp, k1;
+		bool brk;
+
+		e0 = list_entry(great, struct erofs_dentry, d_child);
+		great = great->next;
+		init_list_head(&le[0]);
+		le[1] = (struct list_head)LIST_HEAD_INIT(e0->d_child);
+		e0->d_child.prev = e0->d_child.next = &le[1];
+
+		do {
+			d = list_entry(*greatp, struct erofs_dentry, d_child);
+			cmp = memcmp(d->name + k, e0->name + k,
+				     EROFS_DENTRY_MERGESORT_STEP);
+
+			if (cmp > 0) {
+				greatp = &d->d_child.next;
+				continue;
+			}
+			*greatp = d->d_child.next;
+			list_add_tail(&d->d_child, &le[!cmp]);
+		} while (*greatp);
+
+		k1 = k + EROFS_DENTRY_MERGESORT_STEP;
+		brk = great || !list_empty(&le[0]);
+		while (e0->name[k1 - 1] != '\0') {
+			if (__erofs_likely(brk)) {
+				if (le[1].prev != le[1].next)
+					erofs_dentry_mergesort(&le[1], k1);
+				break;
+			}
+			e0 = list_first_entry(&le[1],
+				struct erofs_dentry, d_child);
+			d = list_next_entry(e0, d_child);
+			list_for_each_entry_safe_from(d, n, &le[1], d_child) {
+				cmp = memcmp(d->name + k1, e0->name + k1,
+					     EROFS_DENTRY_MERGESORT_STEP);
+				if (!cmp)
+					continue;
+
+				__list_del(d->d_child.prev, d->d_child.next);
+				if (cmp < 0) {
+					list_add_tail(&d->d_child, &le[0]);
+				} else {
+					*greatp = &d->d_child;
+					d->d_child.next = NULL;
+					greatp = &d->d_child.next;
+				}
+				brk = true;
+			}
+			k = k1;
+			k1 += EROFS_DENTRY_MERGESORT_STEP;
+		}
+
+		if (!list_empty(&le[0])) {
+			if (le[0].prev != le[0].next)
+				erofs_dentry_mergesort(&le[0], k);
+			__list_splice(&le[0], entries->prev, entries);
+		}
+		__list_splice(&le[1], entries->prev, entries);
+	} while (great && great->next);
+
+	if (great)
+		list_add_tail(great, entries);
 }
 
 static int erofs_prepare_dir_file(struct erofs_inode *dir,
 				  unsigned int nr_subdirs)
 {
-	struct erofs_sb_info *sbi = dir->sbi;
-	struct erofs_dentry *d, *n, **sorted_d;
 	bool dot_omitted = cfg.c_dot_omitted;
-	unsigned int i;
+	struct erofs_sb_info *sbi = dir->sbi;
+	struct erofs_dentry *d;
 	unsigned int d_size = 0;
 
 	if (!dot_omitted) {
@@ -252,21 +314,9 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 	d->inode = erofs_igrab(erofs_parent_inode(dir));
 	d->type = EROFS_FT_DIR;
 
+	if (nr_subdirs)
+		erofs_dentry_mergesort(&dir->i_subdirs, 0);
 	nr_subdirs += 1 + !dot_omitted;
-	sorted_d = malloc(nr_subdirs * sizeof(d));
-	if (!sorted_d)
-		return -ENOMEM;
-
-	i = 0;
-	list_for_each_entry_safe(d, n, &dir->i_subdirs, d_child) {
-		list_del(&d->d_child);
-		sorted_d[i++] = d;
-	}
-	DBG_BUGON(i != nr_subdirs);
-	qsort(sorted_d, i, sizeof(d), comp_subdir);
-	while (i)
-		list_add(&sorted_d[--i]->d_child, &dir->i_subdirs);
-	free(sorted_d);
 
 	/* let's calculate dir size */
 	list_for_each_entry(d, &dir->i_subdirs, d_child) {
@@ -275,6 +325,11 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 		if (erofs_blkoff(sbi, d_size) + len > erofs_blksiz(sbi))
 			d_size = round_up(d_size, erofs_blksiz(sbi));
 		d_size += len;
+		--nr_subdirs;
+	}
+	if (nr_subdirs) {
+		DBG_BUGON(1);
+		return -EFAULT;
 	}
 	dir->i_size = d_size;
 
