@@ -301,6 +301,8 @@ static void erofsfuse_opendir(fuse_req_t req, fuse_ino_t ino,
 	}
 
 	fi->fh = (uint64_t)vi;
+	fi->cache_readdir = 1;
+	fi->keep_cache = 1;
 	fuse_reply_open(req, fi);
 	return;
 
