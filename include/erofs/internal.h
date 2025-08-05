@@ -126,6 +126,7 @@ struct erofs_sb_info {
 		u16 device_id_mask;		/* used for others */
 	};
 	erofs_nid_t packed_nid;
+	erofs_nid_t metabox_nid;
 
 	u32 xattr_prefix_start;
 	u8 xattr_prefix_count;
@@ -152,8 +153,6 @@ struct erofs_sb_info {
 	struct erofs_buffer_head *bh_devt;
 	bool useqpl;
 };
-
-#define EROFS_SUPER_END (EROFS_SUPER_OFFSET + sizeof(struct erofs_super_block))
 
 /* make sure that any user of the erofs headers has atleast 64bit off_t type */
 extern int erofs_assert_largefile[sizeof(off_t)-8];
@@ -182,6 +181,7 @@ EROFS_FEATURE_FUNCS(fragments, incompat, INCOMPAT_FRAGMENTS)
 EROFS_FEATURE_FUNCS(dedupe, incompat, INCOMPAT_DEDUPE)
 EROFS_FEATURE_FUNCS(xattr_prefixes, incompat, INCOMPAT_XATTR_PREFIXES)
 EROFS_FEATURE_FUNCS(48bit, incompat, INCOMPAT_48BIT)
+EROFS_FEATURE_FUNCS(metabox, incompat, INCOMPAT_METABOX)
 EROFS_FEATURE_FUNCS(sb_chksum, compat, COMPAT_SB_CHKSUM)
 EROFS_FEATURE_FUNCS(xattr_filter, compat, COMPAT_XATTR_FILTER)
 
@@ -295,12 +295,18 @@ struct erofs_inode {
 #endif
 };
 
+static inline bool erofs_inode_in_metabox(struct erofs_inode *inode)
+{
+	return inode->nid >> EROFS_DIRENT_NID_METABOX_BIT;
+}
+
 static inline erofs_off_t erofs_iloc(struct erofs_inode *inode)
 {
 	struct erofs_sb_info *sbi = inode->sbi;
+	erofs_off_t base = erofs_inode_in_metabox(inode) ? 0 :
+			erofs_pos(sbi, sbi->meta_blkaddr);
 
-	return erofs_pos(sbi, sbi->meta_blkaddr) +
-			(inode->nid << EROFS_ISLOTBITS);
+	return base + ((inode->nid & EROFS_DIRENT_NID_MASK) << EROFS_ISLOTBITS);
 }
 
 static inline bool is_inode_layout_compression(struct erofs_inode *inode)
@@ -437,9 +443,10 @@ int erofs_ilookup(const char *path, struct erofs_inode *vi);
 static inline void erofs_unmap_metabuf(struct erofs_buf *buf) {}
 static inline void erofs_put_metabuf(struct erofs_buf *buf) {}
 void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap);
-void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi);
+void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
+			bool in_mbox);
 void *erofs_read_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
-			 erofs_off_t offset);
+			 erofs_off_t offset, bool in_mbox);
 int erofs_iopen(struct erofs_vfile *vf, struct erofs_inode *inode);
 int erofs_map_blocks(struct erofs_inode *inode,
 		struct erofs_map_blocks *map, int flags);

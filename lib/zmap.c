@@ -35,7 +35,8 @@ static int z_erofs_load_full_lcluster(struct z_erofs_maprecorder *m,
 	struct z_erofs_lcluster_index *di;
 	unsigned int advise;
 
-	di = erofs_read_metabuf(&m->map->buf, sbi, pos);
+	di = erofs_read_metabuf(&m->map->buf, sbi, pos,
+				erofs_inode_in_metabox(vi));
 	if (IS_ERR(di))
 		return PTR_ERR(di);
 	m->lcn = lcn;
@@ -150,7 +151,8 @@ static int z_erofs_load_compact_lcluster(struct z_erofs_maprecorder *m,
 	else
 		return -EOPNOTSUPP;
 
-	in = erofs_read_metabuf(&m->map->buf, sbi, pos);
+	in = erofs_read_metabuf(&m->map->buf, sbi, pos,
+				erofs_inode_in_metabox(vi));
 	if (IS_ERR(in))
 		return PTR_ERR(in);
 
@@ -541,6 +543,7 @@ static int z_erofs_map_blocks_ext(struct erofs_inode *vi,
 	unsigned int recsz = z_erofs_extent_recsize(vi->z_advise);
 	erofs_off_t pos = round_up(Z_EROFS_MAP_HEADER_END(erofs_iloc(vi) +
 				   vi->inode_isize + vi->xattr_isize), recsz);
+	bool in_mbox = erofs_inode_in_metabox(vi);
 	erofs_off_t lend = vi->i_size;
 	erofs_off_t l, r, mid, pa, la, lstart;
 	struct z_erofs_extent *ext;
@@ -550,7 +553,7 @@ static int z_erofs_map_blocks_ext(struct erofs_inode *vi,
 	map->m_flags = 0;
 	if (recsz <= offsetof(struct z_erofs_extent, pstart_hi)) {
 		if (recsz <= offsetof(struct z_erofs_extent, pstart_lo)) {
-			ext = erofs_read_metabuf(&map->buf, sbi, pos);
+			ext = erofs_read_metabuf(&map->buf, sbi, pos, in_mbox);
 			if (IS_ERR(ext))
 				return PTR_ERR(ext);
 			pa = le64_to_cpu(*(__le64 *)ext);
@@ -562,7 +565,7 @@ static int z_erofs_map_blocks_ext(struct erofs_inode *vi,
 		}
 
 		for (; lstart <= map->m_la; lstart += 1 << vi->z_lclusterbits) {
-			ext = erofs_read_metabuf(&map->buf, sbi, pos);
+			ext = erofs_read_metabuf(&map->buf, sbi, pos, in_mbox);
 			if (IS_ERR(ext))
 				return PTR_ERR(ext);
 			map->m_plen = le32_to_cpu(ext->plen);
@@ -582,7 +585,7 @@ static int z_erofs_map_blocks_ext(struct erofs_inode *vi,
 		for (l = 0, r = vi->z_extents; l < r; ) {
 			mid = l + (r - l) / 2;
 			ext = erofs_read_metabuf(&map->buf, sbi,
-						 pos + mid * recsz);
+						 pos + mid * recsz, in_mbox);
 			if (IS_ERR(ext))
 				return PTR_ERR(ext);
 
@@ -651,7 +654,7 @@ static int z_erofs_fill_inode_lazy(struct erofs_inode *vi)
 		return 0;
 
 	pos = round_up(erofs_iloc(vi) + vi->inode_isize + vi->xattr_isize, 8);
-	h = erofs_read_metabuf(&buf, sbi, pos);
+	h = erofs_read_metabuf(&buf, sbi, pos, erofs_inode_in_metabox(vi));
 	if (IS_ERR(h))
 		return PTR_ERR(h);
 

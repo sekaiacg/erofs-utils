@@ -105,6 +105,7 @@ static struct erofsdump_feature feature_lists[] = {
 	{ false, EROFS_FEATURE_INCOMPAT_DEDUPE, "dedupe" },
 	{ false, EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES, "xattr_prefixes" },
 	{ false, EROFS_FEATURE_INCOMPAT_48BIT, "48bit" },
+	{ false, EROFS_FEATURE_INCOMPAT_METABOX, "metabox" },
 };
 
 static int erofsdump_readdir(struct erofs_dir_context *ctx);
@@ -163,7 +164,11 @@ static int erofsdump_parse_options_cfg(int argc, char **argv)
 			exit(0);
 		case 2:
 			dumpcfg.show_inode = true;
-			dumpcfg.nid = (erofs_nid_t)atoll(optarg);
+			dumpcfg.nid = strtoull(optarg, &endptr, 0);
+			if (*endptr != '\0') {
+				erofs_err("invalid NID %s", optarg);
+				return -EINVAL;
+			}
 			++dumpcfg.totalshow;
 			break;
 		case 'h':
@@ -643,6 +648,9 @@ static void erofsdump_show_superblock(void)
 	if (erofs_sb_has_fragments(&g_sbi) && g_sbi.packed_nid > 0)
 		fprintf(stdout, "Filesystem packed nid:                        %llu\n",
 			g_sbi.packed_nid | 0ULL);
+	if (erofs_sb_has_metabox(&g_sbi))
+		fprintf(stdout, "Filesystem metabox nid:                       %llu\n",
+			g_sbi.metabox_nid | 0ULL);
 	if (erofs_sb_has_compr_cfgs(&g_sbi)) {
 		fprintf(stdout, "Filesystem compr_algs:                        ");
 		erofsdump_print_supported_compressors(stdout,

@@ -79,7 +79,7 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 	int read, ret;
 
 	read = erofs_io_pread(&sbi->bdev, data, EROFS_MAX_BLOCK_SIZE, 0);
-	if (read < EROFS_SUPER_END) {
+	if (read < EROFS_SUPER_OFFSET + sizeof(*dsb)) {
 		ret = read < 0 ? read : -EIO;
 		erofs_err("cannot read erofs superblock: %s",
 			  erofs_strerror(ret));
@@ -123,6 +123,12 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 		sbi->root_nid = le16_to_cpu(dsb->rb.rootnid_2b);
 	}
 	sbi->packed_nid = le64_to_cpu(dsb->packed_nid);
+	if (erofs_sb_has_metabox(sbi)) {
+		if (sbi->sb_size <= offsetof(struct erofs_super_block,
+					     metabox_nid))
+			return -EFSCORRUPTED;
+		sbi->metabox_nid = le64_to_cpu(dsb->metabox_nid);
+	}
 	sbi->inos = le64_to_cpu(dsb->inos);
 	sbi->checksum = le32_to_cpu(dsb->checksum);
 
@@ -187,7 +193,6 @@ int erofs_writesb(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh)
 		.devt_slotoff = cpu_to_le16(sbi->devt_slotoff),
 		.packed_nid = cpu_to_le64(sbi->packed_nid),
 	};
-	const u32 sb_blksize = round_up(EROFS_SUPER_END, erofs_blksiz(sbi));
 	char *buf;
 	int ret;
 
@@ -205,16 +210,21 @@ int erofs_writesb(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh)
 	else
 		sb.u1.lz4_max_distance = cpu_to_le16(sbi->lz4.max_distance);
 
-	buf = calloc(sb_blksize, 1);
+	if (erofs_sb_has_metabox(sbi))
+		sb.metabox_nid = cpu_to_le64(sbi->metabox_nid);
+	sb.sb_extslots = (sbi->sb_size - 128) >> 4;
+
+	buf = calloc(round_up(EROFS_SUPER_OFFSET + sbi->sb_size,
+			      erofs_blksiz(sbi)), 1);
 	if (!buf) {
 		erofs_err("failed to allocate memory for sb: %s",
 			  erofs_strerror(-errno));
 		return -ENOMEM;
 	}
-	memcpy(buf + EROFS_SUPER_OFFSET, &sb, sizeof(sb));
+	memcpy(buf + EROFS_SUPER_OFFSET, &sb, sbi->sb_size);
 
 	ret = erofs_dev_write(sbi, buf, sb_bh ? erofs_btell(sb_bh, false) : 0,
-			      EROFS_SUPER_END);
+			      EROFS_SUPER_OFFSET + sbi->sb_size);
 	free(buf);
 	if (sb_bh)
 		erofs_bdrop(sb_bh, false);
@@ -223,8 +233,15 @@ int erofs_writesb(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh)
 
 struct erofs_buffer_head *erofs_reserve_sb(struct erofs_bufmgr *bmgr)
 {
+	struct erofs_sb_info *sbi = bmgr->sbi;
 	struct erofs_buffer_head *bh;
+	unsigned int sb_size = 128;
 	int err;
+
+	if (erofs_sb_has_metabox(sbi) &&
+	    sb_size <= offsetof(struct erofs_super_block, metabox_nid))
+		sb_size = offsetof(struct erofs_super_block, metabox_nid) + 8;
+	sbi->sb_size = round_up(sb_size, 16);
 
 	bh = erofs_balloc(bmgr, META, 0, 0);
 	if (IS_ERR(bh)) {
@@ -233,7 +250,7 @@ struct erofs_buffer_head *erofs_reserve_sb(struct erofs_bufmgr *bmgr)
 		return bh;
 	}
 	bh->op = &erofs_skip_write_bhops;
-	err = erofs_bh_balloon(bh, EROFS_SUPER_END);
+	err = erofs_bh_balloon(bh, EROFS_SUPER_OFFSET + sbi->sb_size);
 	if (err < 0) {
 		erofs_err("failed to balloon super: %s", erofs_strerror(err));
 		goto err_bdrop;

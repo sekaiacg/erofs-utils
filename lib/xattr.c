@@ -1079,7 +1079,7 @@ static int init_inode_xattrs(struct erofs_inode *vi)
 	it.ofs = erofs_blkoff(sbi, erofs_iloc(vi) + vi->inode_isize);
 
 	/* read in shared xattr array (non-atomic, see kmalloc below) */
-	it.kaddr = erofs_read_metabuf(&it.buf, sbi, erofs_pos(sbi, it.blkaddr));
+	it.kaddr = erofs_read_metabuf(&it.buf, sbi, erofs_pos(sbi, it.blkaddr), false);
 	if (IS_ERR(it.kaddr))
 		return PTR_ERR(it.kaddr);
 
@@ -1101,7 +1101,7 @@ static int init_inode_xattrs(struct erofs_inode *vi)
 			DBG_BUGON(it.ofs != erofs_blksiz(sbi));
 
 			it.kaddr = erofs_read_metabuf(&it.buf, sbi,
-					erofs_pos(sbi, ++it.blkaddr));
+					erofs_pos(sbi, ++it.blkaddr), false);
 			if (IS_ERR(it.kaddr)) {
 				free(vi->xattr_shared_xattrs);
 				vi->xattr_shared_xattrs = NULL;
@@ -1143,7 +1143,7 @@ static inline int xattr_iter_fixup(struct xattr_iter *it)
 
 	it->blkaddr += erofs_blknr(sbi, it->ofs);
 	it->kaddr = erofs_read_metabuf(&it->buf, sbi,
-				       erofs_pos(sbi, it->blkaddr));
+				       erofs_pos(sbi, it->blkaddr), false);
 	if (IS_ERR(it->kaddr))
 		return PTR_ERR(it->kaddr);
 	it->ofs = erofs_blkoff(sbi, it->ofs);
@@ -1168,7 +1168,7 @@ static int inline_xattr_iter_begin(struct xattr_iter *it,
 	it->ofs = erofs_blkoff(sbi, erofs_iloc(vi) + inline_xattr_ofs);
 
 	it->kaddr = erofs_read_metabuf(&it->buf, sbi,
-				       erofs_pos(sbi, it->blkaddr));
+				       erofs_pos(sbi, it->blkaddr), false);
 	if (IS_ERR(it->kaddr))
 		return PTR_ERR(it->kaddr);
 	return vi->xattr_isize - xattr_header_sz;
@@ -1393,7 +1393,7 @@ static int shared_getxattr(struct erofs_inode *vi, struct getxattr_iter *it)
 
 		it->it.ofs = xattrblock_offset(vi, vi->xattr_shared_xattrs[i]);
 		it->it.kaddr = erofs_read_metabuf(&it->it.buf, sbi,
-						  erofs_pos(sbi, blkaddr));
+						  erofs_pos(sbi, blkaddr), false);
 		if (IS_ERR(it->it.kaddr))
 			return PTR_ERR(it->it.kaddr);
 		it->it.blkaddr = blkaddr;
@@ -1548,7 +1548,7 @@ static int shared_listxattr(struct erofs_inode *vi, struct listxattr_iter *it)
 
 		it->it.ofs = xattrblock_offset(vi, vi->xattr_shared_xattrs[i]);
 		it->it.kaddr = erofs_read_metabuf(&it->it.buf, sbi,
-						  erofs_pos(sbi, blkaddr));
+						  erofs_pos(sbi, blkaddr), false);
 		if (IS_ERR(it->it.kaddr))
 			return PTR_ERR(it->it.kaddr);
 		it->it.blkaddr = blkaddr;

@@ -333,12 +333,14 @@ static int erofs_verify_xattr(struct erofs_inode *inode)
 	struct erofs_sb_info *sbi = inode->sbi;
 	unsigned int xattr_hdr_size = sizeof(struct erofs_xattr_ibody_header);
 	unsigned int xattr_entry_size = sizeof(struct erofs_xattr_entry);
-	erofs_off_t addr;
+	struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
 	unsigned int ofs, xattr_shared_count;
 	struct erofs_xattr_ibody_header *ih;
 	struct erofs_xattr_entry *entry;
-	int i, remaining = inode->xattr_isize, ret = 0;
-	char buf[EROFS_MAX_BLOCK_SIZE];
+	int remaining = inode->xattr_isize, ret = 0;
+	erofs_off_t addr;
+	char *ptr;
+	int i;
 
 	if (inode->xattr_isize == xattr_hdr_size) {
 		erofs_err("xattr_isize %d of nid %llu is not supported yet",
@@ -352,13 +354,15 @@ static int erofs_verify_xattr(struct erofs_inode *inode)
 	}
 
 	addr = erofs_iloc(inode) + inode->inode_isize;
-	ret = erofs_dev_read(sbi, 0, buf, addr, xattr_hdr_size);
-	if (ret < 0) {
+	ptr = erofs_read_metabuf(&buf, sbi, addr,
+				 erofs_inode_in_metabox(inode));
+	if (IS_ERR(ptr)) {
+		ret = PTR_ERR(ptr);
 		erofs_err("failed to read xattr header @ nid %llu: %d",
 			  inode->nid | 0ULL, ret);
 		goto out;
 	}
-	ih = (struct erofs_xattr_ibody_header *)buf;
+	ih = (struct erofs_xattr_ibody_header *)ptr;
 	xattr_shared_count = ih->h_shared_count;
 
 	ofs = erofs_blkoff(sbi, addr) + xattr_hdr_size;
@@ -382,14 +386,16 @@ static int erofs_verify_xattr(struct erofs_inode *inode)
 	while (remaining > 0) {
 		unsigned int entry_sz;
 
-		ret = erofs_dev_read(sbi, 0, buf, addr, xattr_entry_size);
-		if (ret) {
+		ptr = erofs_read_metabuf(&buf, sbi, addr,
+				 erofs_inode_in_metabox(inode));
+		if (IS_ERR(ptr)) {
+			ret = PTR_ERR(ptr);
 			erofs_err("failed to read xattr entry @ nid %llu: %d",
 				  inode->nid | 0ULL, ret);
 			goto out;
 		}
 
-		entry = (struct erofs_xattr_entry *)buf;
+		entry = (struct erofs_xattr_entry *)ptr;
 		entry_sz = erofs_xattr_entry_size(entry);
 		if (remaining < entry_sz) {
 			erofs_err("xattr on-disk corruption: xattr entry beyond xattr_isize @ nid %llu",
@@ -401,6 +407,7 @@ static int erofs_verify_xattr(struct erofs_inode *inode)
 		remaining -= entry_sz;
 	}
 out:
+	erofs_put_metabuf(&buf);
 	return ret;
 }
 

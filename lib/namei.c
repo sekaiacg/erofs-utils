@@ -27,6 +27,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	struct erofs_sb_info *sbi = vi->sbi;
 	erofs_blk_t blkaddr = erofs_blknr(sbi, erofs_iloc(vi));
 	unsigned int ofs = erofs_blkoff(sbi, erofs_iloc(vi));
+	bool in_mbox = erofs_inode_in_metabox(vi);
 	struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
 	erofs_blk_t addrmask = BIT_ULL(48) - 1;
 	struct erofs_inode_extended *die, copied;
@@ -35,7 +36,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 	void *ptr;
 	int err = 0;
 
-	ptr = erofs_read_metabuf(&buf, sbi, erofs_pos(sbi, blkaddr));
+	ptr = erofs_read_metabuf(&buf, sbi, erofs_pos(sbi, blkaddr), in_mbox);
 	if (IS_ERR(ptr)) {
 		err = PTR_ERR(ptr);
 		erofs_err("failed to get inode (nid: %llu) page, err %d",
@@ -74,7 +75,7 @@ int erofs_read_inode_from_disk(struct erofs_inode *vi)
 
 			memcpy(&copied, dic, gotten);
 			ptr = erofs_read_metabuf(&buf, sbi,
-					erofs_pos(sbi, blkaddr + 1));
+					erofs_pos(sbi, blkaddr + 1), in_mbox);
 			if (IS_ERR(ptr)) {
 				err = PTR_ERR(ptr);
 				erofs_err("failed to get inode payload block (nid: %llu), err %d",

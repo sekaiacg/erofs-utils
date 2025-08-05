@@ -14,6 +14,8 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
 {
 	struct erofs_sb_info *sbi = buf->sbi;
 	u32 blksiz = erofs_blksiz(sbi);
+	struct erofs_vfile vfm, *vf;
+	struct erofs_inode vi;
 	erofs_blk_t blknr;
 	int err;
 
@@ -22,7 +24,22 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
 	blknr = erofs_blknr(sbi, offset);
 	if (blknr != buf->blocknr) {
 		buf->blocknr = ~0ULL;
-		err = erofs_pread(buf->vf, buf->base, blksiz,
+		vf = buf->vf;
+		/*
+		 * TODO: introduce a metabox cache like the current fragment
+		 *       cache to improve userspace metadata performance.
+		 */
+		if (!vf) {
+			vi = (struct erofs_inode) { .sbi = sbi,
+						    .nid = sbi->metabox_nid };
+			err = erofs_read_inode_from_disk(&vi);
+			if (!err)
+				err = erofs_iopen(&vfm, &vi);
+			if (err)
+				return ERR_PTR(err);
+			vf = &vfm;
+		}
+		err = erofs_pread(vf, buf->base, blksiz,
 				  round_down(offset, blksiz));
 		if (err)
 			return ERR_PTR(err);
@@ -31,16 +48,17 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
 	return buf->base + erofs_blkoff(sbi, offset);
 }
 
-void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi)
+void erofs_init_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
+			bool in_mbox)
 {
 	buf->sbi = sbi;
-	buf->vf = &sbi->bdev;
+	buf->vf = in_mbox ? NULL : &sbi->bdev;
 }
 
 void *erofs_read_metabuf(struct erofs_buf *buf, struct erofs_sb_info *sbi,
-			 erofs_off_t offset)
+			 erofs_off_t offset, bool in_mbox)
 {
-	erofs_init_metabuf(buf, sbi);
+	erofs_init_metabuf(buf, sbi, in_mbox);
 	return erofs_bread(buf, offset, true);
 }
 
@@ -215,7 +233,20 @@ static int erofs_read_raw_data(struct erofs_inode *inode, char *buffer,
 		eend = min(offset + size, map.m_la + map.m_llen);
 		DBG_BUGON(ptr < map.m_la);
 
-		if (!(map.m_flags & EROFS_MAP_MAPPED)) {
+		if ((map.m_flags & EROFS_MAP_META) &&
+		    erofs_inode_in_metabox(inode)) {
+			struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
+			void *src;
+
+			src = erofs_read_metabuf(&buf, inode->sbi,
+						 map.m_pa, true);
+			if (IS_ERR(src))
+				return PTR_ERR(src);
+			memcpy(estart, src, eend - ptr);
+			erofs_put_metabuf(&buf);
+			ptr = eend;
+			continue;
+		} else if (!(map.m_flags & EROFS_MAP_MAPPED)) {
 			if (!map.m_llen) {
 				/* reached EOF */
 				memset(estart, 0, offset + size - ptr);
