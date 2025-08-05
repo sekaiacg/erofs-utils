@@ -403,6 +403,11 @@ AS_IF([test "x$enable_fuse" != "xno"], [
       have_fuse="yes"
     ], [have_fuse="no"])
   ])
+  AC_CHECK_MEMBERS([struct fuse_file_info.cache_readdir, struct fuse_file_info.keep_cache],
+    [], [], [[
+#include <fuse.h>
+  ]])
+
   LIBS="${saved_LIBS}"
   CPPFLAGS="${saved_CPPFLAGS}"], [have_fuse="no"])
 

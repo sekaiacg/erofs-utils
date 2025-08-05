@@ -301,8 +301,12 @@ static void erofsfuse_opendir(fuse_req_t req, fuse_ino_t ino,
 	}
 
 	fi->fh = (uint64_t)vi;
+#ifdef HAVE_STRUCT_FUSE_FILE_INFO_CACHE_READDIR
 	fi->cache_readdir = 1;
+#endif
+#ifdef HAVE_STRUCT_FUSE_FILE_INFO_KEEP_CACHE
 	fi->keep_cache = 1;
+#endif
 	fuse_reply_open(req, fi);
 	return;
 
