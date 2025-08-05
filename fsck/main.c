@@ -343,15 +343,12 @@ static int erofs_verify_xattr(struct erofs_inode *inode)
 	if (inode->xattr_isize == xattr_hdr_size) {
 		erofs_err("xattr_isize %d of nid %llu is not supported yet",
 			  inode->xattr_isize, inode->nid | 0ULL);
-		ret = -EFSCORRUPTED;
-		goto out;
+		return -EOPNOTSUPP;
 	} else if (inode->xattr_isize < xattr_hdr_size) {
-		if (inode->xattr_isize) {
-			erofs_err("bogus xattr ibody @ nid %llu",
-				  inode->nid | 0ULL);
-			ret = -EFSCORRUPTED;
-			goto out;
-		}
+		if (!inode->xattr_isize)
+			return 0;
+		erofs_err("bogus xattr ibody @ nid %llu", inode->nid | 0ULL);
+		return -EFSCORRUPTED;
 	}
 
 	addr = erofs_iloc(inode) + inode->inode_isize;
