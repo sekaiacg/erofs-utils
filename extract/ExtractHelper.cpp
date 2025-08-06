@@ -140,7 +140,7 @@ namespace skkk {
 				.dir = &inode,
 				.cb = dirent_iter,
 				.pnid = pnid,
-                .flags = EROFS_READDIR_VALID_PNID,
+				.flags = EROFS_READDIR_VALID_PNID,
 			};
 			if (S_ISDIR(inode.i_mode)) {
 				/* XXX: support the deeper cases later */
@@ -207,7 +207,7 @@ namespace skkk {
 	 */
 	static int erofs_verify_inode_data(struct erofs_inode *inode, int outfd) {
 		struct erofs_map_blocks map = {
-			.index = UINT_MAX,
+			.buf = __EROFS_BUF_INITIALIZER,
 		};
 		bool needdecode = eo->check_decomp && !erofs_is_packed_inode(inode);
 		int ret = 0;
@@ -282,7 +282,7 @@ namespace skkk {
 					buffer = newbuffer;
 				}
 				ret = z_erofs_read_one_data(inode, &map, raw, buffer,
-											0, map.m_llen, false);
+				                            0, map.m_llen, false);
 				if (ret)
 					goto out;
 
@@ -293,7 +293,7 @@ namespace skkk {
 
 				do {
 					u64 count = min_t(u64, alloc_rawsize,
-									  map.m_llen);
+					                  map.m_llen);
 
 					ret = erofs_read_one_data(inode, &map, raw, p, count);
 					if (ret)
@@ -368,9 +368,8 @@ namespace skkk {
 		int ret, fd;
 
 	again:
-		fd = open(filePath,
-				  O_WRONLY | O_CREAT | O_NOFOLLOW |
-				  (eo->overwrite ? O_TRUNC : O_EXCL), 0700);
+		fd = open(filePath, O_WRONLY | O_CREAT | O_NOFOLLOW |
+		                    (eo->overwrite ? O_TRUNC : O_EXCL), 0700);
 		if (fd < 0) {
 			if (eo->overwrite && tryagain) {
 				if (errno == EISDIR) {
@@ -435,6 +434,7 @@ namespace skkk {
 	 * @return
 	 */
 	int erofs_extract_symlink(erofs_inode *inode, const char *filePath) {
+		struct erofs_vfile vf;
 		bool tryagain = true;
 		int ret;
 
@@ -444,7 +444,11 @@ namespace skkk {
 			goto out;
 		}
 
-		ret = erofs_pread(inode, buf, inode->i_size, 0);
+		ret = erofs_iopen(&vf, inode);
+		if (ret)
+			goto out;
+
+		ret = erofs_pread(&vf, buf, inode->i_size, 0);
 		if (ret) {
 			goto out;
 		}
