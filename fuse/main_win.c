@@ -116,6 +116,8 @@ static int erofsfuse_read(const char *path, char *buffer,
 						  size_t size, off_t offset,
 						  struct fuse_file_info *fi)
 {
+	struct erofs_vfile vf;
+	char *buf = NULL;
 	int ret;
 	struct erofs_inode vi;
 
@@ -126,7 +128,12 @@ static int erofsfuse_read(const char *path, char *buffer,
 	if (ret)
 		return ret;
 
-	ret = erofs_pread(&vi, buffer, size, offset);
+	ret = erofs_iopen(&vf, &vi);
+	if (ret) {
+		return ret;
+	}
+
+	ret = erofs_pread(&vf, buffer, size, offset);
 	if (ret)
 		return ret;
 	if (offset >= vi.i_size)

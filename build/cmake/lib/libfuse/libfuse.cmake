@@ -40,6 +40,8 @@ set(LIBFUSE_DEFAULTS_CFLAGS
 	"-Wno-implicit-function-declaration"
 	"-Wno-unused-parameter"
 	"-Wno-unused-variable"
+	"-DHAVE_STRUCT_FUSE_FILE_INFO_CACHE_READDIR"
+	"-DHAVE_STRUCT_FUSE_FILE_INFO_KEEP_CACHE"
 	CACHE INTERNAL "libfuse_defaults_cflags"
 )
 
