@@ -15,6 +15,11 @@ extern "C"
 extern const char *erofs_frags_packedname;
 #define EROFS_PACKED_INODE	erofs_frags_packedname
 
+static inline bool erofs_is_packed_inode(struct erofs_inode *inode)
+{
+	return inode->i_srcpath == EROFS_PACKED_INODE;
+}
+
 u32 z_erofs_fragments_tofh(struct erofs_inode *inode, int fd, erofs_off_t fpos);
 int erofs_fragment_findmatch(struct erofs_inode *inode, int fd, u32 tofh);
 

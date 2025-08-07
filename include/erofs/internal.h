@@ -83,11 +83,10 @@ struct erofs_xattr_prefix_item {
 	u8 infix_len;
 };
 
-#define EROFS_PACKED_NID_UNALLOCATED	-1
-
 struct erofs_mkfs_dfops;
 struct erofs_packed_inode;
 struct z_erofs_mgr;
+struct erofs_metaboxmgr;
 
 struct erofs_sb_info {
 	struct erofs_sb_lz4_info lz4;
@@ -149,6 +148,7 @@ struct erofs_sb_info {
 #endif
 	struct erofs_bufmgr *bmgr;
 	struct z_erofs_mgr *zmgr;
+	struct erofs_metaboxmgr *m2gr;
 	struct erofs_packed_inode *packedinode;
 	struct erofs_buffer_head *bh_devt;
 	bool useqpl;
@@ -245,6 +245,7 @@ struct erofs_inode {
 	/* inline tail-end packing size */
 	unsigned short idata_size;
 	char datasource;
+	bool in_metabox;
 	bool compressed_idata;
 	bool lazy_tailblock;
 	bool opaque;

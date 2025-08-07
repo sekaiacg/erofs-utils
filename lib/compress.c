@@ -25,6 +25,7 @@
 #ifdef EROFS_MT_ENABLED
 #include "erofs/workqueue.h"
 #endif
+#include "liberofs_metabox.h"
 
 #define Z_EROFS_DESTBUF_SZ	(Z_EROFS_PCLUSTER_MAX_SIZE + EROFS_MAX_BLOCK_SIZE * 2)
 
@@ -459,6 +460,8 @@ static unsigned int z_erofs_get_max_pclustersize(struct erofs_inode *inode)
 {
 	if (erofs_is_packed_inode(inode)) {
 		return cfg.c_mkfs_pclustersize_packed;
+	} else if (erofs_is_metabox_inode(inode)) {
+		return cfg.c_mkfs_pclustersize_metabox;
 #ifndef NDEBUG
 	} else if (cfg.c_random_pclusterblks) {
 		unsigned int pclusterblks =
@@ -567,7 +570,8 @@ static int __z_erofs_compress_one(struct z_erofs_compress_sctx *ctx,
 	unsigned int len = ctx->tail - ctx->head;
 	bool is_packed_inode = erofs_is_packed_inode(inode);
 	bool tsg = (ctx->seg_idx + 1 >= ictx->seg_num), final = !ctx->remaining;
-	bool may_packing = (cfg.c_fragments && tsg && final && !is_packed_inode);
+	bool may_packing = (cfg.c_fragments && tsg && final && !is_packed_inode &&
+			    !erofs_is_metabox_inode(inode));
 	bool data_unaligned = ictx->data_unaligned;
 	bool may_inline = (cfg.c_ztailpacking && !data_unaligned && tsg &&
 			   final && !may_packing);
@@ -1247,6 +1251,7 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 	struct z_erofs_compress_ictx *ictx = ctx->ictx;
 	struct erofs_inode *inode = ictx->inode;
 	bool frag = cfg.c_fragments && !erofs_is_packed_inode(inode) &&
+		!erofs_is_metabox_inode(inode) &&
 		ctx->seg_idx >= ictx->seg_num - 1;
 	int fd = ictx->fd;
 	int ret;
@@ -1764,8 +1769,9 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 {
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct z_erofs_compress_ictx *ictx;
-	bool all_fragments = cfg.c_all_fragments &&
-					!erofs_is_packed_inode(inode);
+	bool frag = cfg.c_fragments && !erofs_is_packed_inode(inode) &&
+		!erofs_is_metabox_inode(inode);
+	bool all_fragments = cfg.c_all_fragments && frag;
 	int ret;
 
 	/* initialize per-file compression setting */
@@ -1799,8 +1805,10 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 			return ERR_PTR(-ENOMEM);
 	}
 	ictx->fd = fd;
-
-	ictx->ccfg = &sbi->zmgr->ccfg[inode->z_algorithmtype[0]];
+	if (erofs_is_metabox_inode(inode))
+		ictx->ccfg = &sbi->zmgr->ccfg[cfg.c_mkfs_metabox_algid];
+	else
+		ictx->ccfg = &sbi->zmgr->ccfg[inode->z_algorithmtype[0]];
 	inode->z_algorithmtype[0] = ictx->ccfg->algorithmtype;
 	inode->z_algorithmtype[1] = 0;
 	ictx->data_unaligned = erofs_sb_has_48bit(sbi) &&
@@ -1809,7 +1817,7 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 	if (cfg.c_fragments && !cfg.c_dedupe && !ictx->data_unaligned)
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 
-	if (cfg.c_fragments && !erofs_is_packed_inode(inode)) {
+	if (frag) {
 		ictx->tofh = z_erofs_fragments_tofh(inode, fd, fpos);
 		if (ictx == &g_ictx && cfg.c_fragdedupe != FRAGDEDUPE_OFF) {
 			/*
@@ -2104,6 +2112,12 @@ int z_erofs_compress_init(struct erofs_sb_info *sbi, struct erofs_buffer_head *s
 	if (cfg.c_mkfs_pclustersize_packed > cfg.c_mkfs_pclustersize_max) {
 		erofs_err("invalid pclustersize for the packed file %u",
 			  cfg.c_mkfs_pclustersize_packed);
+		return -EINVAL;
+	}
+
+	if (cfg.c_mkfs_pclustersize_metabox > (s32)cfg.c_mkfs_pclustersize_max) {
+		erofs_err("invalid pclustersize for the metabox file %u",
+			  cfg.c_mkfs_pclustersize_metabox);
 		return -EINVAL;
 	}
 

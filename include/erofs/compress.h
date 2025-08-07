@@ -30,17 +30,6 @@ int z_erofs_compress_exit(struct erofs_sb_info *sbi);
 const char *z_erofs_list_supported_algorithms(int i, unsigned int *mask);
 const struct erofs_algorithm *z_erofs_list_available_compressors(int *i);
 
-static inline bool erofs_is_packed_inode(struct erofs_inode *inode)
-{
-	erofs_nid_t packed_nid = inode->sbi->packed_nid;
-
-	if (inode->nid == EROFS_PACKED_NID_UNALLOCATED) {
-		DBG_BUGON(packed_nid != EROFS_PACKED_NID_UNALLOCATED);
-		return true;
-	}
-	return (packed_nid > 0 && inode->nid == packed_nid);
-}
-
 #ifdef __cplusplus
 }
 #endif

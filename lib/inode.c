@@ -28,6 +28,12 @@
 #include "erofs/blobchunk.h"
 #include "erofs/fragments.h"
 #include "liberofs_private.h"
+#include "liberofs_metabox.h"
+
+static inline bool erofs_is_special_identifier(const char *path)
+{
+	return path == EROFS_PACKED_INODE || path == EROFS_METABOX_INODE;
+}
 
 #define S_SHIFT                 12
 static unsigned char erofs_ftype_by_mode[S_IFMT >> S_SHIFT] = {
@@ -143,7 +149,8 @@ unsigned int erofs_iput(struct erofs_inode *inode)
 	free(inode->compressmeta);
 	free(inode->eof_tailraw);
 	erofs_remove_ihash(inode);
-	free(inode->i_srcpath);
+	if (!erofs_is_special_identifier(inode->i_srcpath))
+		free(inode->i_srcpath);
 
 	if (inode->datasource == EROFS_INODE_DATA_SOURCE_DISKBUF) {
 		erofs_diskbuf_close(inode->i_diskbuf);
@@ -380,19 +387,32 @@ erofs_nid_t erofs_lookupnid(struct erofs_inode *inode)
 	struct erofs_buffer_head *const bh = inode->bh;
 	struct erofs_sb_info *sbi = inode->sbi;
 	erofs_off_t off, meta_offset;
+	erofs_nid_t nid;
 
-	if (bh && (long long)inode->nid <= 0) {
+	if (bh && inode->nid == EROFS_NID_UNALLOCATED) {
 		erofs_mapbh(NULL, bh->block);
 		off = erofs_btell(bh, false);
 
-		meta_offset = erofs_pos(sbi, sbi->meta_blkaddr);
-		DBG_BUGON(off < meta_offset);
-		inode->nid = (off - meta_offset) >> EROFS_ISLOTBITS;
-		erofs_dbg("Assign nid %llu to file %s (mode %05o)",
-			  inode->nid, inode->i_srcpath, inode->i_mode);
+		if (!inode->in_metabox) {
+			meta_offset = erofs_pos(sbi, sbi->meta_blkaddr);
+			DBG_BUGON(off < meta_offset);
+		} else {
+			meta_offset = 0;
+		}
+
+		nid = (off - meta_offset) >> EROFS_ISLOTBITS;
+		inode->nid = nid |
+			(u64)inode->in_metabox << EROFS_DIRENT_NID_METABOX_BIT;
+		erofs_dbg("Assign nid %s%llu to file %s (mode %05o)",
+			  inode->in_metabox ? "[M]" : "", nid,
+			  inode->i_srcpath, inode->i_mode);
 	}
-	if (__erofs_unlikely(IS_ROOT(inode)) && inode->nid > 0xffff)
-		return sbi->root_nid;
+	if (__erofs_unlikely(IS_ROOT(inode))) {
+		if (inode->in_metabox)
+			DBG_BUGON(!erofs_sb_has_48bit(sbi));
+		else if (inode->nid > 0xffff)
+			return sbi->root_nid;
+	}
 	return inode->nid;
 }
 
@@ -578,6 +598,9 @@ int erofs_write_file_from_buffer(struct erofs_inode *inode, char *buf)
 /* rules to decide whether a file could be compressed or not */
 static bool erofs_file_is_compressible(struct erofs_inode *inode)
 {
+	if (erofs_is_metabox_inode(inode) &&
+	    cfg.c_mkfs_pclustersize_metabox < 0)
+		return false;
 	if (cfg.c_compress_hints_file)
 		return z_erofs_apply_compress_hints(inode);
 	return true;
@@ -663,6 +686,8 @@ int erofs_iflush(struct erofs_inode *inode)
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct erofs_buffer_head *bh = inode->bh;
 	erofs_off_t off = erofs_iloc(inode);
+	struct erofs_bufmgr *ibmgr = inode->in_metabox ?
+				erofs_metabox_bmgr(sbi) : sbi->bmgr;
 	union {
 		struct erofs_inode_compact dic;
 		struct erofs_inode_extended die;
@@ -767,7 +792,7 @@ int erofs_iflush(struct erofs_inode *inode)
 						.iov_len = inode->xattr_isize };
 	}
 
-	ret = erofs_io_pwritev(&sbi->bdev, iov, iovcnt, off);
+	ret = erofs_io_pwritev(ibmgr->vf, iov, iovcnt, off);
 	free(xattrs);
 	if (ret != inode->inode_isize + inode->xattr_isize)
 		return ret < 0 ? ret : -EIO;
@@ -775,10 +800,10 @@ int erofs_iflush(struct erofs_inode *inode)
 	off += ret;
 	if (inode->extent_isize) {
 		if (inode->datalayout == EROFS_INODE_CHUNK_BASED) {
-			ret = erofs_blob_write_chunk_indexes(inode, off);
+			ret = erofs_write_chunk_indexes(inode, ibmgr->vf, off);
 		} else {	/* write compression metadata */
 			off = roundup(off, 8);
-			ret = erofs_io_pwrite(&sbi->bdev, inode->compressmeta,
+			ret = erofs_io_pwrite(ibmgr->vf, inode->compressmeta,
 					      off, inode->extent_isize);
 		}
 		if (ret != inode->extent_isize)
@@ -844,14 +869,16 @@ static bool erofs_inode_need_48bit(struct erofs_inode *inode)
 
 static int erofs_prepare_inode_buffer(struct erofs_inode *inode)
 {
-	struct erofs_bufmgr *bmgr = inode->sbi->bmgr;
+	struct erofs_sb_info *sbi = inode->sbi;
+	struct erofs_bufmgr *bmgr = sbi->bmgr;
+	struct erofs_bufmgr *ibmgr = bmgr;
 	unsigned int inodesize;
 	struct erofs_buffer_head *bh, *ibh;
 
 	DBG_BUGON(inode->bh || inode->bh_inline);
 
 	if (erofs_inode_need_48bit(inode)) {
-		if (!erofs_sb_has_48bit(inode->sbi))
+		if (!erofs_sb_has_48bit(sbi))
 			return -ENOSPC;
 		if (inode->inode_isize == sizeof(struct erofs_inode_compact) &&
 		    inode->i_nlink != 1)
@@ -882,7 +909,13 @@ static int erofs_prepare_inode_buffer(struct erofs_inode *inode)
 			inode->datalayout = EROFS_INODE_FLAT_PLAIN;
 	}
 
-	bh = erofs_balloc(bmgr, INODE, inodesize, inode->idata_size);
+	if (!erofs_is_special_identifier(inode->i_srcpath) &&
+	    erofs_metabox_bmgr(sbi))
+		inode->in_metabox = true;
+
+	if (inode->in_metabox)
+		ibmgr = erofs_metabox_bmgr(sbi) ?: bmgr;
+	bh = erofs_balloc(ibmgr, INODE, inodesize, inode->idata_size);
 	if (bh == ERR_PTR(-ENOSPC)) {
 		int ret;
 
@@ -895,7 +928,7 @@ noinline:
 		ret = erofs_prepare_tail_block(inode);
 		if (ret)
 			return ret;
-		bh = erofs_balloc(bmgr, INODE, inodesize, 0);
+		bh = erofs_balloc(ibmgr, INODE, inodesize, 0);
 		if (IS_ERR(bh))
 			return PTR_ERR(bh);
 		DBG_BUGON(inode->bh_inline);
@@ -907,7 +940,7 @@ noinline:
 			erofs_dbg("Inline %scompressed data (%u bytes) to %s",
 				  inode->compressed_idata ? "" : "un",
 				  inode->idata_size, inode->i_srcpath);
-			erofs_sb_set_ztailpacking(inode->sbi);
+			erofs_sb_set_ztailpacking(sbi);
 		} else {
 			inode->datalayout = EROFS_INODE_FLAT_INLINE;
 			erofs_dbg("Inline tail-end data (%u bytes) to %s",
@@ -926,20 +959,24 @@ noinline:
 	bh->fsprivate = erofs_igrab(inode);
 	bh->op = &erofs_write_inode_bhops;
 	inode->bh = bh;
-	inode->i_ino[0] = ++inode->sbi->inos;  /* inode serial number */
+	inode->i_ino[0] = ++sbi->inos;	/* inode serial number */
 	return 0;
 }
 
 static int erofs_bh_flush_write_inline(struct erofs_buffer_head *bh)
 {
 	struct erofs_inode *const inode = bh->fsprivate;
+	struct erofs_sb_info *sbi = inode->sbi;
+	struct erofs_bufmgr *ibmgr = inode->in_metabox ?
+				erofs_metabox_bmgr(sbi) : sbi->bmgr;
 	const erofs_off_t off = erofs_btell(bh, false);
 	int ret;
 
-	ret = erofs_dev_write(inode->sbi, inode->idata, off, inode->idata_size);
-	if (ret)
+	ret = erofs_io_pwrite(ibmgr->vf, inode->idata, off, inode->idata_size);
+	if (ret < 0)
 		return ret;
-
+	if (ret != inode->idata_size)
+		return -EIO;
 	free(inode->idata);
 	inode->idata = NULL;
 
@@ -1048,7 +1085,7 @@ static bool erofs_should_use_inode_extended(struct erofs_inode *inode,
 		return true;
 	if (inode->i_nlink > USHRT_MAX)
 		return true;
-	if (path != EROFS_PACKED_INODE && !cfg.c_ignore_mtime &&
+	if (!erofs_is_special_identifier(path) && !cfg.c_ignore_mtime &&
 	    !erofs_sb_has_48bit(inode->sbi) &&
 	    inode->i_mtime != inode->sbi->epoch)
 		return true;
@@ -1078,7 +1115,7 @@ int erofs_droid_inode_fsconfig(struct erofs_inode *inode,
 	if (!cfg.fs_config_file && !cfg.mount_point)
 		return 0;
 	/* avoid loading special inodes */
-	if (path == EROFS_PACKED_INODE)
+	if (erofs_is_special_identifier(path))
 		return 0;
 
 	if (!cfg.mount_point ||
@@ -1140,7 +1177,7 @@ int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 		erofs_err("gid overflow @ %s", path);
 	inode->i_gid += cfg.c_gid_offset;
 
-	if (path == EROFS_PACKED_INODE) {
+	if (erofs_is_special_identifier(path)) {
 		inode->i_mtime = sbi->epoch + sbi->build_time;
 		inode->i_mtime_nsec = sbi->fixed_nsec;
 		return 0;
@@ -1189,9 +1226,13 @@ static int erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 		return -EINVAL;
 	}
 
-	inode->i_srcpath = strdup(path);
-	if (!inode->i_srcpath)
-		return -ENOMEM;
+	if (erofs_is_special_identifier(path)) {
+		inode->i_srcpath = (char *)path;
+	} else {
+		inode->i_srcpath = strdup(path);
+		if (!inode->i_srcpath)
+			return -ENOMEM;
+	}
 
 	if (erofs_should_use_inode_extended(inode, path)) {
 		if (cfg.c_force_inodeversion == FORCE_INODE_COMPACT) {
@@ -1226,6 +1267,7 @@ struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi)
 	inode->dev = sbi->dev;
 	inode->i_count = 1;
 	inode->datalayout = EROFS_INODE_FLAT_PLAIN;
+	inode->nid = EROFS_NID_UNALLOCATED;
 
 	init_list_head(&inode->i_hash);
 	init_list_head(&inode->i_subdirs);
@@ -1269,22 +1311,28 @@ static struct erofs_inode *erofs_iget_from_srcpath(struct erofs_sb_info *sbi,
 	return inode;
 }
 
-static void erofs_fixup_meta_blkaddr(struct erofs_inode *rootdir)
+static void erofs_fixup_meta_blkaddr(struct erofs_inode *root)
 {
 	const erofs_off_t rootnid_maxoffset = 0xffff << EROFS_ISLOTBITS;
-	struct erofs_buffer_head *const bh = rootdir->bh;
-	struct erofs_sb_info *sbi = rootdir->sbi;
-	erofs_off_t off, meta_offset;
+	struct erofs_buffer_head *const bh = root->bh;
+	struct erofs_sb_info *sbi = root->sbi;
+	erofs_off_t meta_offset = 0;
+	erofs_off_t off;
 
 	erofs_mapbh(NULL, bh->block);
 	off = erofs_btell(bh, false);
-
-	if (off > rootnid_maxoffset)
-		meta_offset = round_up(off - rootnid_maxoffset, erofs_blksiz(sbi));
-	else
-		meta_offset = 0;
+	if (!root->in_metabox && off > rootnid_maxoffset)
+		meta_offset = round_up(off - rootnid_maxoffset,
+				       erofs_blksiz(sbi));
+	else if (root->in_metabox && !erofs_sb_has_48bit(sbi)) {
+		sbi->build_time = sbi->epoch;
+		sbi->epoch = max_t(s64, 0, (s64)sbi->build_time - UINT32_MAX);
+		sbi->build_time -= sbi->epoch;
+		erofs_sb_set_48bit(sbi);
+	}
 	sbi->meta_blkaddr = erofs_blknr(sbi, meta_offset);
-	rootdir->nid = (off - meta_offset) >> EROFS_ISLOTBITS;
+	root->nid = ((off - meta_offset) >> EROFS_ISLOTBITS) |
+		((u64)root->in_metabox << EROFS_DIRENT_NID_METABOX_BIT);
 }
 
 static int erofs_inode_reserve_data_blocks(struct erofs_inode *inode)
@@ -2076,7 +2124,7 @@ struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_sb_info *sbi,
 	if (IS_ERR(inode))
 		return inode;
 
-	if (name == EROFS_PACKED_INODE) {
+	if (erofs_is_special_identifier(name)) {
 		st.st_uid = st.st_gid = 0;
 		st.st_nlink = 0;
 	}
@@ -2085,11 +2133,6 @@ struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_sb_info *sbi,
 	if (ret) {
 		free(inode);
 		return ERR_PTR(ret);
-	}
-
-	if (name == EROFS_PACKED_INODE) {
-		inode->sbi->packed_nid = EROFS_PACKED_NID_UNALLOCATED;
-		inode->nid = inode->sbi->packed_nid;
 	}
 
 	if (cfg.c_compr_opts[0].alg &&

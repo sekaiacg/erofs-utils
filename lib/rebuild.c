@@ -409,7 +409,7 @@ static int erofs_rebuild_dirent_iter(struct erofs_dir_context *ctx)
 
 	/* reset sbi, nid after subdirs are all loaded for the final dump */
 	inode->sbi = &g_sbi;
-	inode->nid = 0;
+	inode->nid = EROFS_NID_UNALLOCATED;
 out:
 	free(path);
 	return ret;

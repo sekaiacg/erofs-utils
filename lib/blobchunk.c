@@ -133,8 +133,8 @@ static int erofs_blob_hashmap_cmp(const void *a, const void *b,
 		      sizeof(ec1->sha256));
 }
 
-int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
-				   erofs_off_t off)
+int erofs_write_chunk_indexes(struct erofs_inode *inode, struct erofs_vfile *vf,
+			      erofs_off_t off)
 {
 	struct erofs_sb_info *sbi = inode->sbi;
 	erofs_blk_t remaining_blks = BLK_ROUND_UP(sbi, inode->i_size);
@@ -202,7 +202,7 @@ int erofs_blob_write_chunk_indexes(struct erofs_inode *inode,
 					 source_offset, zeroedlen);
 	}
 	off = roundup(off, unit);
-	return erofs_io_pwrite(&sbi->bdev, inode->chunkindexes,
+	return erofs_io_pwrite(vf, inode->chunkindexes,
 			       off, inode->extent_isize);
 }
 

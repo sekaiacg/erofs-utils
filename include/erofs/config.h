@@ -79,11 +79,13 @@ struct erofs_configure {
 	struct erofs_compr_opts c_compr_opts[EROFS_MAX_COMPR_CFGS];
 	char c_force_inodeversion;
 	char c_force_chunkformat;
+	u8 c_mkfs_metabox_algid;
 	/* < 0, xattr disabled and INT_MAX, always use inline xattrs */
 	int c_inline_xattr_tolerance;
 	u32 c_mkfs_pclustersize_max;
 	u32 c_mkfs_pclustersize_def;
 	u32 c_mkfs_pclustersize_packed;
+	s32 c_mkfs_pclustersize_metabox;
 	u32 c_max_decompressed_extent_bytes;
 	u64 c_unix_timestamp;
 	u32 c_uid, c_gid;

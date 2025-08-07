@@ -15,6 +15,8 @@ extern "C"
 
 #include "erofs/internal.h"
 
+#define EROFS_NID_UNALLOCATED	-1ULL
+
 static inline struct erofs_inode *erofs_igrab(struct erofs_inode *inode)
 {
 	(void)erofs_atomic_inc_return(&inode->i_count);

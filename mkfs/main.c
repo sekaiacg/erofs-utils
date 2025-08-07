@@ -30,6 +30,7 @@
 #include "erofs/rebuild.h"
 #include "../lib/liberofs_private.h"
 #include "../lib/liberofs_uuid.h"
+#include "../lib/liberofs_metabox.h"
 #include "../lib/compressor.h"
 
 static struct option long_options[] = {
@@ -159,6 +160,8 @@ static void usage(int argc, char **argv)
 		" -C#                   specify the size of compress physical cluster in bytes\n"
 		" -EX[,...]             X=extended options\n"
 		" -L volume-label       set the volume label (maximum 15 bytes)\n"
+		" -m#[:X]               enable metadata compression (# = physical cluster size in bytes;\n"
+		"                                                    X = another compression algorithm for metadata)\n"
 		" -T#                   specify a fixed UNIX timestamp # as build time\n"
 		"    --all-time         the timestamp is also applied to all files (default)\n"
 		"    --mkfs-time        the timestamp is applied as build time only\n"
@@ -237,10 +240,12 @@ static void version(void)
 }
 
 static unsigned int pclustersize_packed, pclustersize_max;
+static int pclustersize_metabox = -1;
 static struct erofs_tarfile erofstar = {
 	.global.xattrs = LIST_HEAD_INIT(erofstar.global.xattrs)
 };
 static bool tar_mode, rebuild_mode, incremental_mode;
+static u8 metabox_algorithmid;
 
 enum {
 	EROFS_MKFS_DATA_IMPORT_DEFAULT,
@@ -249,7 +254,7 @@ enum {
 	EROFS_MKFS_DATA_IMPORT_SPARSE,
 } dataimport_mode;
 
-static unsigned int rebuild_src_count;
+static unsigned int rebuild_src_count, total_ccfgs;
 static LIST_HEAD(rebuild_src_list);
 static u8 fixeduuid[16];
 static bool valid_fixeduuid;
@@ -575,19 +580,19 @@ static int mkfs_parse_one_compress_alg(char *alg,
 
 static int mkfs_parse_compress_algs(char *algs)
 {
-	unsigned int i;
 	char *s;
 	int ret;
 
-	for (s = strtok(algs, ":"), i = 0; s; s = strtok(NULL, ":"), ++i) {
-		if (i >= EROFS_MAX_COMPR_CFGS - 1) {
+	for (s = strtok(algs, ":"); s; s = strtok(NULL, ":")) {
+		if (total_ccfgs >= EROFS_MAX_COMPR_CFGS - 1) {
 			erofs_err("too many algorithm types");
 			return -EINVAL;
 		}
 
-		ret = mkfs_parse_one_compress_alg(s, &cfg.c_compr_opts[i]);
+		ret = mkfs_parse_one_compress_alg(s, &cfg.c_compr_opts[total_ccfgs]);
 		if (ret)
 			return ret;
+		++total_ccfgs;
 	}
 	return 0;
 }
@@ -694,7 +699,7 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 	bool quiet = false;
 	bool has_timestamp = false;
 
-	while ((opt = getopt_long(argc, argv, "C:E:L:T:U:b:d:x:z:Vh",
+	while ((opt = getopt_long(argc, argv, "C:E:L:T:U:b:d:m:x:z:Vh",
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'z':
@@ -849,6 +854,25 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 			}
 			pclustersize_max = i;
 			break;
+		case 'm': {
+			char *algid = strchr(optarg, ':');
+
+			if (algid) {
+				algid[0] = '\0';
+				metabox_algorithmid =
+					strtoul(algid + 1, &endptr, 0);
+				if (*endptr != '\0') {
+					err = mkfs_parse_one_compress_alg(algid + 1,
+							&cfg.c_compr_opts[total_ccfgs]);
+					if (err)
+						return err;
+					metabox_algorithmid = total_ccfgs++;
+				}
+			}
+			pclustersize_metabox = atoi(optarg);
+			break;
+		}
+
 		case 11:
 			i = strtol(optarg, &endptr, 0);
 			if (*endptr != '\0') {
@@ -1108,6 +1132,18 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 		cfg.c_mkfs_pclustersize_packed = pclustersize_packed;
 	}
 
+	if (pclustersize_metabox >= 0) {
+		if (pclustersize_metabox &&
+		    (pclustersize_metabox < erofs_blksiz(&g_sbi) ||
+		     pclustersize_metabox % erofs_blksiz(&g_sbi))) {
+			erofs_err("invalid pcluster size %u for the metabox inode",
+				  pclustersize_metabox);
+			return -EINVAL;
+		}
+		cfg.c_mkfs_pclustersize_metabox = pclustersize_metabox;
+		cfg.c_mkfs_metabox_algid = metabox_algorithmid;
+	}
+
 	if (has_timestamp && cfg.c_timeinherit == TIMESTAMP_UNSPECIFIED)
 		cfg.c_timeinherit = TIMESTAMP_FIXED;
 	return 0;
@@ -1334,6 +1370,15 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (cfg.c_mkfs_pclustersize_metabox >= 0) {
+		err = erofs_metabox_init(&g_sbi);
+		if (err) {
+			erofs_err("failed to initialize metabox: %s",
+				  erofs_strerror(err));
+			return 1;
+		}
+	}
+
 #ifndef NDEBUG
 	if (cfg.c_random_pclusterblks)
 		srand(time(NULL));
@@ -1541,6 +1586,13 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (erofs_sb_has_metabox(&g_sbi)) {
+		erofs_update_progressinfo("Handling metabox ...");
+		erofs_metabox_iflush(&g_sbi);
+		if (err)
+			goto exit;
+	}
+
 	if ((cfg.c_fragments || cfg.c_extra_ea_name_prefixes) &&
 	    erofs_sb_has_fragments(&g_sbi)) {
 		erofs_update_progressinfo("Handling packed data ...");
@@ -1594,6 +1646,7 @@ int main(int argc, char **argv)
 exit:
 	if (root)
 		erofs_iput(root);
+	erofs_metabox_exit(&g_sbi);
 	z_erofs_compress_exit(&g_sbi);
 	z_erofs_dedupe_exit();
 	z_erofs_dedupe_ext_exit();

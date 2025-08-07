@@ -16,7 +16,8 @@ extern "C"
 
 struct erofs_blobchunk *erofs_get_unhashed_chunk(unsigned int device_id,
 		erofs_blk_t blkaddr, erofs_off_t sourceoffset);
-int erofs_blob_write_chunk_indexes(struct erofs_inode *inode, erofs_off_t off);
+int erofs_write_chunk_indexes(struct erofs_inode *inode, struct erofs_vfile *vf,
+			      erofs_off_t off);
 int erofs_blob_write_chunked_file(struct erofs_inode *inode, int fd,
 				  erofs_off_t startoff);
 int erofs_write_zero_inode(struct erofs_inode *inode);
