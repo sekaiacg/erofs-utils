@@ -33,6 +33,9 @@ struct erofs_s3 {
 	enum s3erofs_signature_version sig;
 };
 
+int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
+			const char *path);
+
 #ifdef __cplusplus
 }
 #endif

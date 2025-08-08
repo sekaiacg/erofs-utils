@@ -1737,8 +1737,14 @@ int main(int argc, char **argv)
 				goto exit;
 #ifdef S3EROFS_ENABLED
 		} else if (source_mode == EROFS_MKFS_SOURCE_S3) {
-			err = -EOPNOTSUPP;
-			goto exit;
+			if (incremental_mode ||
+			    dataimport_mode != EROFS_MKFS_DATA_IMPORT_ZEROFILL)
+				err = -EOPNOTSUPP;
+			else
+				err = s3erofs_build_trees(root, &s3cfg,
+							  cfg.c_src_path);
+			if (err)
+				goto exit;
 #endif
 		}
 
