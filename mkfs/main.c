@@ -244,7 +244,7 @@ static int pclustersize_metabox = -1;
 static struct erofs_tarfile erofstar = {
 	.global.xattrs = LIST_HEAD_INIT(erofstar.global.xattrs)
 };
-static bool tar_mode, rebuild_mode, incremental_mode;
+static bool incremental_mode;
 static u8 metabox_algorithmid;
 
 enum {
@@ -253,6 +253,12 @@ enum {
 	EROFS_MKFS_DATA_IMPORT_RVSP,
 	EROFS_MKFS_DATA_IMPORT_SPARSE,
 } dataimport_mode;
+
+static enum {
+	EROFS_MKFS_SOURCE_LOCALDIR,
+	EROFS_MKFS_SOURCE_TAR,
+	EROFS_MKFS_SOURCE_REBUILD,
+} source_mode;
 
 static unsigned int rebuild_src_count, total_ccfgs;
 static LIST_HEAD(rebuild_src_list);
@@ -499,7 +505,7 @@ static void mkfs_parse_tar_cfg(char *cfg)
 {
 	char *p;
 
-	tar_mode = true;
+	source_mode = EROFS_MKFS_SOURCE_TAR;
 	if (!cfg)
 		return;
 	p = strchr(cfg, ',');
@@ -616,7 +622,30 @@ static int mkfs_parse_sources(int argc, char *argv[], int optind)
 	int err, fd;
 	char *s;
 
-	if (tar_mode) {
+	switch (source_mode) {
+	case EROFS_MKFS_SOURCE_LOCALDIR:
+		err = lstat((s = argv[optind++]), &st);
+		if (err) {
+			erofs_err("failed to stat %s: %s", s,
+				  erofs_strerror(-errno));
+			return -ENOENT;
+		}
+		if (S_ISDIR(st.st_mode)) {
+			cfg.c_src_path = realpath(s, NULL);
+			if (!cfg.c_src_path) {
+				erofs_err("failed to parse source directory: %s",
+					  erofs_strerror(-errno));
+				return -ENOENT;
+			}
+			erofs_set_fs_root(cfg.c_src_path);
+		} else {
+			cfg.c_src_path = strdup(s);
+			if (!cfg.c_src_path)
+				return -ENOMEM;
+			source_mode = EROFS_MKFS_SOURCE_REBUILD;
+		}
+		break;
+	case EROFS_MKFS_SOURCE_TAR:
 		cfg.c_src_path = strdup(argv[optind++]);
 		if (!cfg.c_src_path)
 			return -ENOMEM;
@@ -640,30 +669,13 @@ static int mkfs_parse_sources(int argc, char *argv[], int optind)
 			}
 			erofstar.ios.dumpfd = fd;
 		}
-	} else {
-		err = lstat((s = argv[optind++]), &st);
-		if (err) {
-			erofs_err("failed to stat %s: %s", s,
-				  erofs_strerror(-errno));
-			return -ENOENT;
-		}
-		if (S_ISDIR(st.st_mode)) {
-			cfg.c_src_path = realpath(s, NULL);
-			if (!cfg.c_src_path) {
-				erofs_err("failed to parse source directory: %s",
-					  erofs_strerror(-errno));
-				return -ENOENT;
-			}
-			erofs_set_fs_root(cfg.c_src_path);
-		} else {
-			cfg.c_src_path = strdup(s);
-			if (!cfg.c_src_path)
-				return -ENOMEM;
-			rebuild_mode = true;
-		}
+		break;
+	default:
+		erofs_err("unexpected source_mode: %d", source_mode);
+		return -EINVAL;
 	}
 
-	if (rebuild_mode) {
+	if (source_mode == EROFS_MKFS_SOURCE_REBUILD) {
 		char *srcpath = cfg.c_src_path;
 		struct erofs_sb_info *src;
 
@@ -1083,7 +1095,7 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 		err = mkfs_parse_sources(argc, argv, optind);
 		if (err)
 			return err;
-	} else if (!tar_mode) {
+	} else if (source_mode != EROFS_MKFS_SOURCE_TAR) {
 		erofs_err("missing argument: SOURCE(s)");
 		return -EINVAL;
 	} else {
@@ -1383,7 +1395,7 @@ int main(int argc, char **argv)
 	if (cfg.c_random_pclusterblks)
 		srand(time(NULL));
 #endif
-	if (tar_mode) {
+	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
 		if (dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP)
 			erofstar.rvsp_mode = true;
 		erofstar.dev = rebuild_src_count + 1;
@@ -1403,9 +1415,7 @@ int main(int argc, char **argv)
 			g_sbi.blkszbits = 9;
 			tar_index_512b = true;
 		}
-	}
-
-	if (rebuild_mode) {
+	} else if (source_mode == EROFS_MKFS_SOURCE_REBUILD) {
 		struct erofs_sb_info *src;
 
 		erofs_warn("EXPERIMENTAL rebuild mode in use. Use at your own risk!");
@@ -1465,7 +1475,7 @@ int main(int argc, char **argv)
 	else if (!incremental_mode)
 		erofs_uuid_generate(g_sbi.uuid);
 
-	if (tar_mode && !erofstar.index_mode) {
+	if (source_mode == EROFS_MKFS_SOURCE_TAR && !erofstar.index_mode) {
 		err = erofs_diskbuf_init(1);
 		if (err) {
 			erofs_err("failed to initialize diskbuf: %s",
@@ -1528,7 +1538,7 @@ int main(int argc, char **argv)
 
 	erofs_inode_manager_init();
 
-	if (tar_mode) {
+	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
 		root = erofs_rebuild_make_root(&g_sbi);
 		if (IS_ERR(root)) {
 			err = PTR_ERR(root);
@@ -1543,7 +1553,7 @@ int main(int argc, char **argv)
 		err = erofs_rebuild_dump_tree(root, incremental_mode);
 		if (err < 0)
 			goto exit;
-	} else if (rebuild_mode) {
+	} else if (source_mode == EROFS_MKFS_SOURCE_REBUILD) {
 		root = erofs_rebuild_make_root(&g_sbi);
 		if (IS_ERR(root)) {
 			err = PTR_ERR(root);
@@ -1663,7 +1673,7 @@ exit:
 	erofs_rebuild_cleanup();
 	erofs_diskbuf_exit();
 	erofs_exit_configure();
-	if (tar_mode) {
+	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
 		erofs_iostream_close(&erofstar.ios);
 		if (erofstar.ios.dumpfd >= 0)
 			close(erofstar.ios.dumpfd);
