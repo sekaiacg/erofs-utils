@@ -1737,6 +1737,17 @@ int main(int argc, char **argv)
 				goto exit;
 #ifdef S3EROFS_ENABLED
 		} else if (source_mode == EROFS_MKFS_SOURCE_S3) {
+			if (!s3cfg.access_key[0] && getenv("AWS_ACCESS_KEY_ID")) {
+				strncpy(s3cfg.access_key, getenv("AWS_ACCESS_KEY_ID"),
+					sizeof(s3cfg.access_key));
+				s3cfg.access_key[S3_ACCESS_KEY_LEN] = '\0';
+			}
+			if (!s3cfg.secret_key[0] && getenv("AWS_SECRET_ACCESS_KEY")) {
+				strncpy(s3cfg.secret_key, getenv("AWS_SECRET_ACCESS_KEY"),
+					sizeof(s3cfg.secret_key));
+				s3cfg.secret_key[S3_SECRET_KEY_LEN] = '\0';
+			}
+
 			if (incremental_mode ||
 			    dataimport_mode != EROFS_MKFS_DATA_IMPORT_ZEROFILL)
 				err = -EOPNOTSUPP;
