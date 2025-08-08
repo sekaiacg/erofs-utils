@@ -24,7 +24,7 @@ esac
 # OS-specific treatment
 AM_CONDITIONAL([OS_LINUX], [test "$build_linux" = "yes"])
 
-AM_INIT_AUTOMAKE([foreign -Wall])
+AM_INIT_AUTOMAKE([foreign subdir-objects -Wall])
 
 # Checks for programs.
 AM_PROG_AR
@@ -164,6 +164,22 @@ AC_ARG_WITH(qpl,
 AC_ARG_WITH(xxhash,
    [AS_HELP_STRING([--with-xxhash],
       [Enable and build with libxxhash support @<:@default=auto@:>@])])
+
+AC_ARG_WITH(libcurl,
+   [AS_HELP_STRING([--with-libcurl],
+      [Enable and build with libcurl support @<:@default=auto@:>@])])
+
+AC_ARG_WITH(openssl,
+   [AS_HELP_STRING([--with-openssl],
+      [Enable and build with openssl support @<:@default=auto@:>@])])
+
+AC_ARG_WITH(libxml2,
+   [AS_HELP_STRING([--with-libxml2],
+      [Enable and build with libxml2 support @<:@default=auto@:>@])])
+
+AC_ARG_ENABLE(s3,
+   [AS_HELP_STRING([--enable-s3], [enable s3 image generation support @<:@default=no@:>@])],
+   [enable_s3="$enableval"], [enable_s3="no"])
 
 AC_ARG_ENABLE(fuse,
    [AS_HELP_STRING([--enable-fuse], [enable erofsfuse @<:@default=no@:>@])],
@@ -583,6 +599,91 @@ AS_IF([test "x$with_xxhash" != "xno"], [
   ])
 ])
 
+# Configure libcurl
+have_libcurl="no"
+AS_IF([test "x$with_libcurl" != "xno"], [
+  PKG_CHECK_MODULES([libcurl], [libcurl], [
+    # Paranoia: don't trust the result reported by pkgconfig before trying out
+    saved_LIBS="$LIBS"
+    saved_CPPFLAGS=${CPPFLAGS}
+    CPPFLAGS="${libcurl_CFLAGS} ${CPPFLAGS}"
+    LIBS="${libcurl_LIBS} $LIBS"
+    AC_CHECK_HEADERS([curl/curl.h],[
+      AC_CHECK_LIB(curl, curl_easy_perform, [], [
+        AC_MSG_ERROR([libcurl doesn't work properly])])
+      AC_CHECK_DECL(curl_easy_perform, [have_libcurl="yes"],
+        [AC_MSG_ERROR([libcurl doesn't work properly])], [[
+#include <curl/curl.h>
+      ]])
+    ])
+    LIBS="${saved_LIBS}"
+    CPPFLAGS="${saved_CPPFLAGS}"], [
+    AS_IF([test "x$with_libcurl" = "xyes"], [
+      AC_MSG_ERROR([Cannot find proper libcurl])
+    ])
+  ])
+])
+
+# Configure openssl
+have_openssl="no"
+AS_IF([test "x$with_openssl" != "xno"], [
+  PKG_CHECK_MODULES([openssl], [openssl], [
+    # Paranoia: don't trust the result reported by pkgconfig before trying out
+    saved_LIBS="$LIBS"
+    saved_CPPFLAGS=${CPPFLAGS}
+    CPPFLAGS="${openssl_CFLAGS} ${CPPFLAGS}"
+    LIBS="${openssl_LIBS} $LIBS"
+    AC_CHECK_HEADERS([openssl/hmac.h],[
+      AC_CHECK_LIB(ssl, EVP_sha1, [], [
+        AC_MSG_ERROR([openssl doesn't work properly])])
+      AC_CHECK_DECL(EVP_sha1, [have_openssl="yes"],
+        [AC_MSG_ERROR([openssl doesn't work properly])], [[
+#include <openssl/hmac.h>
+      ]])
+    ])
+    LIBS="${saved_LIBS}"
+    CPPFLAGS="${saved_CPPFLAGS}"], [
+    AS_IF([test "x$with_openssl" = "xyes"], [
+      AC_MSG_ERROR([Cannot find proper openssl])
+    ])
+  ])
+])
+
+# Configure libxml2
+have_libxml2="no"
+AS_IF([test "x$with_libxml2" != "xno"], [
+  PKG_CHECK_MODULES([libxml2], [libxml-2.0], [
+    # Paranoia: don't trust the result reported by pkgconfig before trying out
+    saved_LIBS="$LIBS"
+    saved_CPPFLAGS=${CPPFLAGS}
+    CPPFLAGS="${libxml2_CFLAGS} ${CPPFLAGS}"
+    LIBS="${libxml2_LIBS} $LIBS"
+    AC_CHECK_HEADERS([libxml/parser.h],[
+      AC_CHECK_LIB(xml2, xmlReadMemory, [], [
+        AC_MSG_ERROR([libxml2 doesn't work properly])])
+      AC_CHECK_DECL(xmlReadMemory, [have_libxml2="yes"],
+        [AC_MSG_ERROR([libxml2 doesn't work properly])], [[
+#include <libxml/parser.h>
+      ]])
+    ])
+    LIBS="${saved_LIBS}"
+    CPPFLAGS="${saved_CPPFLAGS}"], [
+    AS_IF([test "x$with_libxml2" = "xyes"], [
+      AC_MSG_ERROR([Cannot find proper libxml2])
+    ])
+  ])
+])
+
+AS_IF([test "x$enable_s3" != "xno"], [
+  AS_IF(
+    [test "x$have_libcurl" = "xyes" && \
+     test "x$have_openssl" = "xyes" && \
+     test "x$have_libxml2" = "xyes"],
+    [have_s3="yes"],
+    [have_s3="no"
+     AC_MSG_ERROR([S3 disabled: missing libcurl, openssl, or libxml2])])
+  ], [have_s3="no"])
+
 # Enable 64-bit off_t
 CFLAGS+=" -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 
@@ -606,6 +707,10 @@ AM_CONDITIONAL([ENABLE_LIBDEFLATE], [test "x${have_libdeflate}" = "xyes"])
 AM_CONDITIONAL([ENABLE_LIBZSTD], [test "x${have_libzstd}" = "xyes"])
 AM_CONDITIONAL([ENABLE_QPL], [test "x${have_qpl}" = "xyes"])
 AM_CONDITIONAL([ENABLE_XXHASH], [test "x${have_xxhash}" = "xyes"])
+AM_CONDITIONAL([ENABLE_LIBCURL], [test "x${have_libcurl}" = "xyes"])
+AM_CONDITIONAL([ENABLE_OPENSSL], [test "x${have_openssl}" = "xyes"])
+AM_CONDITIONAL([ENABLE_LIBXML2], [test "x${have_libxml2}" = "xyes"])
+AM_CONDITIONAL([ENABLE_S3], [test "x${have_s3}" = "xyes"])
 AM_CONDITIONAL([ENABLE_STATIC_FUSE], [test "x${enable_static_fuse}" = "xyes"])
 
 if test "x$have_uuid" = "xyes"; then
@@ -655,6 +760,28 @@ fi
 
 if test "x$have_xxhash" = "xyes"; then
   AC_DEFINE([HAVE_XXHASH], 1, [Define to 1 if xxhash is found])
+fi
+
+if test "x$have_libcurl" = "xyes"; then
+  AC_DEFINE([HAVE_LIBCURL], 1, [Define to 1 if libcurl is found])
+  AC_SUBST([libcurl_LIBS])
+  AC_SUBST([libcurl_CFLAGS])
+fi
+
+if test "x$have_openssl" = "xyes"; then
+  AC_DEFINE([HAVE_OPENSSL], 1, [Define to 1 if openssl is found])
+  AC_SUBST([openssl_LIBS])
+  AC_SUBST([openssl_CFLAGS])
+fi
+
+if test "x$have_libxml2" = "xyes"; then
+  AC_DEFINE([HAVE_LIBXML2], 1, [Define to 1 if libxml2 is found])
+  AC_SUBST([libxml2_LIBS])
+  AC_SUBST([libxml2_CFLAGS])
+fi
+
+if test "x$have_s3" = "xyes"; then
+  AC_DEFINE([S3EROFS_ENABLED], 1, [Define to 1 if s3 is enabled])
 fi
 
 # Dump maximum block size
