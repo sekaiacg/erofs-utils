@@ -15,6 +15,7 @@
 #include "erofs/print.h"
 #include "erofs/inode.h"
 #include "erofs/blobchunk.h"
+#include "erofs/diskbuf.h"
 #include "erofs/rebuild.h"
 #include "liberofs_s3.h"
 
@@ -41,7 +42,7 @@ struct s3erofs_curl_request {
 
 static int s3erofs_prepare_url(struct s3erofs_curl_request *req,
 			       const char *endpoint,
-			       const char *path,
+			       const char *path, const char *key,
 			       struct s3erofs_query_params *params,
 			       enum s3erofs_url_style url_style)
 {
@@ -81,8 +82,14 @@ static int s3erofs_prepare_url(struct s3erofs_curl_request *req,
 				       host, split);
 		}
 	}
+	if (key) {
+		slash |= url[pos - 1] != '/';
+		pos -= !slash;
+		pos += snprintf(url + pos, S3EROFS_URL_LEN - pos, "/%s", key);
+	}
+
 	i = snprintf(req->canonical_query, S3EROFS_CANONICAL_QUERY_LEN,
-		     "/%s%s", path, slash ? "/" : "");
+		     "/%s%s%s", path, slash ? "/" : "", key ? key : "");
 	req->canonical_query[i] = '\0';
 
 	for (i = 0; i < params->num; i++)
@@ -91,6 +98,7 @@ static int s3erofs_prepare_url(struct s3erofs_curl_request *req,
 				params->key[i], params->value[i]);
 	if (schema != https)
 		free((void *)schema);
+	erofs_dbg("Request URL %s", url);
 	return 0;
 }
 
@@ -460,10 +468,14 @@ static int s3erofs_list_objects(struct s3erofs_object_iterator *it)
 	}
 
 	req.method = "GET";
-	ret = s3erofs_prepare_url(&req, s3->endpoint, it->bucket,
+	ret = s3erofs_prepare_url(&req, s3->endpoint, it->bucket, NULL,
 				  &params, s3->url_style);
 	if (ret < 0)
 		return ret;
+
+	if (curl_easy_setopt(easy_curl, CURLOPT_WRITEFUNCTION,
+			     s3erofs_request_write_memory_cb) != CURLE_OK)
+		return -EIO;
 
 	ret = s3erofs_request_perform(s3, &req, &resp);
 	if (ret < 0)
@@ -544,14 +556,10 @@ static int s3erofs_global_init(void)
 	if (!easy_curl)
 		goto out_err;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_WRITEFUNCTION,
-			     s3erofs_request_write_memory_cb) != CURLE_OK)
-		goto out_err;
-
 	if (curl_easy_setopt(easy_curl, CURLOPT_FOLLOWLOCATION, 1L) != CURLE_OK)
 		goto out_err;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_TIMEOUT, 30L) != CURLE_OK)
+	if (curl_easy_setopt(easy_curl, CURLOPT_CONNECTTIMEOUT, 30L) != CURLE_OK)
 		goto out_err;
 
 	if (curl_easy_setopt(easy_curl, CURLOPT_USERAGENT,
@@ -578,8 +586,95 @@ static void s3erofs_global_exit(void)
 	curl_global_cleanup();
 }
 
+struct s3erofs_curl_getobject_resp {
+	struct erofs_vfile *vf;
+	erofs_off_t pos, end;
+};
+
+static size_t s3erofs_remote_getobject_cb(void *contents, size_t size,
+					  size_t nmemb, void *userp)
+{
+	struct s3erofs_curl_getobject_resp *resp = userp;
+	size_t realsize = size * nmemb;
+
+	if (resp->pos + realsize > resp->end ||
+	    erofs_io_pwrite(resp->vf, contents, resp->pos, realsize) != realsize)
+		return 0;
+
+	resp->pos += realsize;
+	return realsize;
+}
+
+static int s3erofs_remote_getobject(struct erofs_s3 *s3,
+				    struct erofs_inode *inode,
+				    const char *bucket, const char *key)
+{
+	struct erofs_sb_info *sbi = inode->sbi;
+	struct s3erofs_curl_request req = {};
+	struct s3erofs_curl_getobject_resp resp;
+	struct s3erofs_query_params params;
+	struct erofs_vfile vf;
+	int ret;
+
+	params.num = 0;
+	req.method = "GET";
+	ret = s3erofs_prepare_url(&req, s3->endpoint, bucket, key,
+				  &params, s3->url_style);
+	if (ret < 0)
+		return ret;
+
+	if (curl_easy_setopt(easy_curl, CURLOPT_WRITEFUNCTION,
+			     s3erofs_remote_getobject_cb) != CURLE_OK)
+		return -EIO;
+
+	resp.pos = 0;
+	if (!cfg.c_compr_opts[0].alg && !cfg.c_inline_data) {
+		inode->datalayout = EROFS_INODE_FLAT_PLAIN;
+		inode->idata_size = 0;
+		ret = erofs_allocate_inode_bh_data(inode,
+				DIV_ROUND_UP(inode->i_size, 1U << sbi->blkszbits));
+		if (ret)
+			return ret;
+		resp.vf = &sbi->bdev;
+		resp.pos = erofs_pos(inode->sbi, inode->u.i_blkaddr);
+		inode->datasource = EROFS_INODE_DATA_SOURCE_NONE;
+	} else {
+		u64 off;
+
+		if (!inode->i_diskbuf) {
+			inode->i_diskbuf = calloc(1, sizeof(*inode->i_diskbuf));
+			if (!inode->i_diskbuf)
+				return -ENOSPC;
+		} else {
+			erofs_diskbuf_close(inode->i_diskbuf);
+		}
+
+		vf = (struct erofs_vfile) {.fd =
+			erofs_diskbuf_reserve(inode->i_diskbuf, 0, &off)};
+		if (vf.fd < 0)
+			return -EBADF;
+		resp.pos = off;
+		resp.vf = &vf;
+		inode->datasource = EROFS_INODE_DATA_SOURCE_DISKBUF;
+	}
+	resp.end = resp.pos + inode->i_size;
+
+	ret = s3erofs_request_perform(s3, &req, &resp);
+	if (resp.vf == &vf) {
+		erofs_diskbuf_commit(inode->i_diskbuf, resp.end - resp.pos);
+		if (ret) {
+			erofs_diskbuf_close(inode->i_diskbuf);
+			inode->i_diskbuf = NULL;
+			inode->datasource = EROFS_INODE_DATA_SOURCE_NONE;
+		}
+	}
+	if (ret)
+		return ret;
+	return resp.pos != resp.end ? -EIO : 0;
+}
+
 int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
-			const char *path)
+			const char *path, bool fillzero)
 {
 	struct erofs_sb_info *sbi = root->sbi;
 	struct s3erofs_object_iterator *iter;
@@ -656,7 +751,11 @@ int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
 		ret = __erofs_fill_inode(inode, &st, obj->key);
 		if (!ret && S_ISREG(inode->i_mode)) {
 			inode->i_size = obj->size;
-			ret = erofs_write_zero_inode(inode);
+			if (fillzero)
+				ret = erofs_write_zero_inode(inode);
+			else
+				ret = s3erofs_remote_getobject(s3, inode,
+						iter->bucket, obj->key);
 		}
 		if (ret)
 			goto err_iter;

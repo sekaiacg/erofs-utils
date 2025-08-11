@@ -271,9 +271,7 @@ enum {
 static enum {
 	EROFS_MKFS_SOURCE_LOCALDIR,
 	EROFS_MKFS_SOURCE_TAR,
-#ifdef S3EROFS_ENABLED
 	EROFS_MKFS_SOURCE_S3,
-#endif
 	EROFS_MKFS_SOURCE_REBUILD,
 } source_mode;
 
@@ -1639,7 +1637,8 @@ int main(int argc, char **argv)
 	else if (!incremental_mode)
 		erofs_uuid_generate(g_sbi.uuid);
 
-	if (source_mode == EROFS_MKFS_SOURCE_TAR && !erofstar.index_mode) {
+	if ((source_mode == EROFS_MKFS_SOURCE_TAR && !erofstar.index_mode) ||
+	    (source_mode == EROFS_MKFS_SOURCE_S3)) {
 		err = erofs_diskbuf_init(1);
 		if (err) {
 			erofs_err("failed to initialize diskbuf: %s",
@@ -1749,11 +1748,12 @@ int main(int argc, char **argv)
 			}
 
 			if (incremental_mode ||
-			    dataimport_mode != EROFS_MKFS_DATA_IMPORT_ZEROFILL)
+			    dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP)
 				err = -EOPNOTSUPP;
 			else
 				err = s3erofs_build_trees(root, &s3cfg,
-							  cfg.c_src_path);
+							  cfg.c_src_path,
+					dataimport_mode == EROFS_MKFS_DATA_IMPORT_ZEROFILL);
 			if (err)
 				goto exit;
 #endif

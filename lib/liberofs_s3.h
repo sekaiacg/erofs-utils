@@ -34,7 +34,7 @@ struct erofs_s3 {
 };
 
 int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
-			const char *path);
+			const char *path, bool fillzero);
 
 #ifdef __cplusplus
 }
