@@ -162,18 +162,9 @@ int z_erofs_dedupe_insert(struct z_erofs_inmem_extent *e,
 	if (!di)
 		return -ENOMEM;
 
-	di->original_length = e->length;
-	erofs_sha256(original_data, window_size, di->prefix_sha256);
-
 	di->prefix_xxh64 = xxh64(original_data, window_size, 0);
 	di->hash = erofs_rolling_hash_init(original_data,
 			window_size, true);
-	memcpy(di->extra_data, original_data + window_size,
-	       e->length - window_size);
-	di->pstart = e->pstart;
-	di->plen = e->plen;
-	di->partial = e->partial;
-	di->raw = e->raw;
 
 	/* skip the same xxh64 hash */
 	p = &dedupe_tree[di->hash & (ARRAY_SIZE(dedupe_tree) - 1)];
@@ -183,6 +174,15 @@ int z_erofs_dedupe_insert(struct z_erofs_inmem_extent *e,
 			return 0;
 		}
 	}
+
+	di->original_length = e->length;
+	erofs_sha256(original_data, window_size, di->prefix_sha256);
+	memcpy(di->extra_data, original_data + window_size,
+	       e->length - window_size);
+	di->pstart = e->pstart;
+	di->plen = e->plen;
+	di->partial = e->partial;
+	di->raw = e->raw;
 	di->chain = dedupe_subtree;
 	dedupe_subtree = di;
 	list_add_tail(&di->list, p);
