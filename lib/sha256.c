@@ -7,6 +7,43 @@
 #include "sha256.h"
 #include <string.h>
 
+#ifdef __USE_OPENSSL_SHA256
+void erofs_sha256_init(struct sha256_state *md)
+{
+	int ret;
+
+	md->ctx = EVP_MD_CTX_new();
+	if (!md->ctx)
+		return;
+	ret = EVP_DigestInit(md->ctx, EVP_sha256());
+	DBG_BUGON(ret != 1);
+}
+
+int erofs_sha256_process(struct sha256_state *md,
+		const unsigned char *in, unsigned long inlen)
+{
+	int ret;
+
+	if (!md->ctx)
+		return -1;
+	ret = EVP_DigestUpdate(md->ctx, in, inlen);
+	return (ret == 1) - 1;
+}
+
+int erofs_sha256_done(struct sha256_state *md, unsigned char *out)
+{
+	int ret;
+	unsigned int mdsize;
+
+	if (!md->ctx)
+		return -1;
+	ret = EVP_DigestFinal_ex(md->ctx, out, &mdsize);
+	if (ret != 1)
+		return -1;
+	EVP_MD_CTX_free(md->ctx);
+	return 0;
+}
+#else
 /* This is based on SHA256 implementation in LibTomCrypt that was released into
  * public domain by Tom St Denis. */
 /* the K array */
@@ -186,6 +223,7 @@ int erofs_sha256_done(struct sha256_state *md, unsigned char *out)
 		STORE32H(md->state[i], out + (4 * i));
 	return 0;
 }
+#endif
 
 void erofs_sha256(const unsigned char *in, unsigned long in_size,
 		  unsigned char out[32])
@@ -193,6 +231,9 @@ void erofs_sha256(const unsigned char *in, unsigned long in_size,
 	struct sha256_state md;
 
 	erofs_sha256_init(&md);
+#ifdef __USE_OPENSSL_SHA256
+	EVP_MD_CTX_set_flags(md.ctx, EVP_MD_CTX_FLAG_ONESHOT);
+#endif
 	erofs_sha256_process(&md, in, in_size);
 	erofs_sha256_done(&md, out);
 }

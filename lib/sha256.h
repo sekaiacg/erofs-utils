@@ -4,11 +4,19 @@
 
 #include "erofs/defs.h"
 
+#if defined(HAVE_OPENSSL) && defined(HAVE_OPENSSL_EVP_H)
+#include <openssl/evp.h>
+struct sha256_state {
+	EVP_MD_CTX *ctx;
+};
+#define __USE_OPENSSL_SHA256
+#else
 struct sha256_state {
 	u64 length;
 	u32 state[8], curlen;
 	u8 buf[64];
 };
+#endif
 
 void erofs_sha256_init(struct sha256_state *md);
 int erofs_sha256_process(struct sha256_state *md,

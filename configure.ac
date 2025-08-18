@@ -641,6 +641,7 @@ AS_IF([test "x$with_openssl" != "xno"], [
 #include <openssl/hmac.h>
       ]])
     ])
+    AC_CHECK_HEADERS([openssl/evp.h],[],[])
     LIBS="${saved_LIBS}"
     CPPFLAGS="${saved_CPPFLAGS}"], [
     AS_IF([test "x$with_openssl" = "xyes"], [
