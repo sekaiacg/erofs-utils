@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include "erofs/cache.h"
 #include "erofs/inode.h"
+#include "erofs/importer.h"
 #include "liberofs_private.h"
 #include "liberofs_metabox.h"
 
@@ -55,8 +56,9 @@ struct erofs_bufmgr *erofs_metabox_bmgr(struct erofs_sb_info *sbi)
 	return sbi->m2gr ? sbi->m2gr->bmgr : NULL;
 }
 
-int erofs_metabox_iflush(struct erofs_sb_info *sbi)
+int erofs_metabox_iflush(struct erofs_importer *im)
 {
+	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_metaboxmgr *m2gr = sbi->m2gr;
 	struct erofs_inode *inode;
 	int err;
@@ -70,7 +72,7 @@ int erofs_metabox_iflush(struct erofs_sb_info *sbi)
 
 	if (erofs_io_lseek(&m2gr->vf, 0, SEEK_END) <= 0)
 		return 0;
-	inode = erofs_mkfs_build_special_from_fd(sbi, m2gr->vf.fd,
+	inode = erofs_mkfs_build_special_from_fd(im, m2gr->vf.fd,
 						 EROFS_METABOX_INODE);
 	sbi->metabox_nid = erofs_lookupnid(inode);
 	erofs_iput(inode);

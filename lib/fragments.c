@@ -20,6 +20,7 @@
 #include "erofs/fragments.h"
 #include "erofs/bitops.h"
 #include "erofs/lock.h"
+#include "erofs/importer.h"
 #include "liberofs_private.h"
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
@@ -370,8 +371,9 @@ int erofs_fragment_commit(struct erofs_inode *inode, u32 tofh)
 	return 0;
 }
 
-int erofs_flush_packed_inode(struct erofs_sb_info *sbi)
+int erofs_flush_packed_inode(struct erofs_importer *im)
 {
+	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_packed_inode *epi = sbi->packedinode;
 	struct erofs_inode *inode;
 
@@ -380,7 +382,7 @@ int erofs_flush_packed_inode(struct erofs_sb_info *sbi)
 
 	if (lseek(epi->fd, 0, SEEK_CUR) <= 0)
 		return 0;
-	inode = erofs_mkfs_build_special_from_fd(sbi, epi->fd,
+	inode = erofs_mkfs_build_special_from_fd(im, epi->fd,
 						 EROFS_PACKED_INODE);
 	sbi->packed_nid = erofs_lookupnid(inode);
 	erofs_iput(inode);

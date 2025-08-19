@@ -397,6 +397,8 @@ static struct {
 	{NULL, NULL},
 };
 
+static bool mkfs_no_datainline;
+
 static int parse_extended_opts(const char *opts)
 {
 #define MATCH_EXTENTED_OPT(opt, token, keylen) \
@@ -455,11 +457,11 @@ static int parse_extended_opts(const char *opts)
 		} else if (MATCH_EXTENTED_OPT("noinline_data", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
-			cfg.c_inline_data = false;
+			mkfs_no_datainline = true;
 		} else if (MATCH_EXTENTED_OPT("inline_data", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
-			cfg.c_inline_data = !clear;
+			mkfs_no_datainline = !!clear;
 		} else if (MATCH_EXTENTED_OPT("force-inode-blockmap", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
@@ -1328,7 +1330,6 @@ static void erofs_mkfs_default_options(void)
 {
 	cfg.c_showprogress = true;
 	cfg.c_legacy_compress = false;
-	cfg.c_inline_data = true;
 	cfg.c_xattr_name_filter = true;
 #ifdef EROFS_MT_ENABLED
 	cfg.c_mt_workers = erofs_get_available_processors();
@@ -1543,6 +1544,8 @@ int main(int argc, char **argv)
 	erofs_show_config();
 
 	importer_params.source = cfg.c_src_path;
+	importer_params.no_datainline = mkfs_no_datainline;
+
 	err = erofs_importer_init(&importer);
 	if (err)
 		goto exit;
@@ -1707,43 +1710,39 @@ int main(int argc, char **argv)
 			err = PTR_ERR(root);
 			goto exit;
 		}
-
-		if (source_mode == EROFS_MKFS_SOURCE_TAR) {
-			while (!(err = tarerofs_parse_tar(root, &erofstar)))
-				;
-			if (err < 0)
-				goto exit;
-		} else if (source_mode == EROFS_MKFS_SOURCE_REBUILD) {
-			err = erofs_mkfs_rebuild_load_trees(root);
-			if (err)
-				goto exit;
-#ifdef S3EROFS_ENABLED
-		} else if (source_mode == EROFS_MKFS_SOURCE_S3) {
-			if (!s3cfg.access_key[0] && getenv("AWS_ACCESS_KEY_ID")) {
-				strncpy(s3cfg.access_key, getenv("AWS_ACCESS_KEY_ID"),
-					sizeof(s3cfg.access_key));
-				s3cfg.access_key[S3_ACCESS_KEY_LEN] = '\0';
-			}
-			if (!s3cfg.secret_key[0] && getenv("AWS_SECRET_ACCESS_KEY")) {
-				strncpy(s3cfg.secret_key, getenv("AWS_SECRET_ACCESS_KEY"),
-					sizeof(s3cfg.secret_key));
-				s3cfg.secret_key[S3_SECRET_KEY_LEN] = '\0';
-			}
-
-			if (incremental_mode ||
-			    dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP)
-				err = -EOPNOTSUPP;
-			else
-				err = s3erofs_build_trees(root, &s3cfg,
-							  cfg.c_src_path,
-					dataimport_mode == EROFS_MKFS_DATA_IMPORT_ZEROFILL);
-			if (err)
-				goto exit;
-#endif
-		}
 	}
 
 	importer.root = root;
+	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
+		while (!(err = tarerofs_parse_tar(&importer, &erofstar)))
+			;
+	} else if (source_mode == EROFS_MKFS_SOURCE_REBUILD) {
+		err = erofs_mkfs_rebuild_load_trees(root);
+#ifdef S3EROFS_ENABLED
+	} else if (source_mode == EROFS_MKFS_SOURCE_S3) {
+		if (!s3cfg.access_key[0] && getenv("AWS_ACCESS_KEY_ID")) {
+			strncpy(s3cfg.access_key, getenv("AWS_ACCESS_KEY_ID"),
+				sizeof(s3cfg.access_key));
+			s3cfg.access_key[S3_ACCESS_KEY_LEN] = '\0';
+		}
+		if (!s3cfg.secret_key[0] && getenv("AWS_SECRET_ACCESS_KEY")) {
+			strncpy(s3cfg.secret_key, getenv("AWS_SECRET_ACCESS_KEY"),
+				sizeof(s3cfg.secret_key));
+			s3cfg.secret_key[S3_SECRET_KEY_LEN] = '\0';
+		}
+
+		if (incremental_mode ||
+		    dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP)
+			err = -EOPNOTSUPP;
+		else
+			err = s3erofs_build_trees(&importer, &s3cfg,
+						  cfg.c_src_path,
+				dataimport_mode == EROFS_MKFS_DATA_IMPORT_ZEROFILL);
+#endif
+	}
+	if (err < 0)
+		goto exit;
+
 	err = erofs_importer_load_tree(&importer,
 				       source_mode != EROFS_MKFS_SOURCE_LOCALDIR,
 				       incremental_mode);
@@ -1763,7 +1762,7 @@ int main(int argc, char **argv)
 
 	if (erofs_sb_has_metabox(&g_sbi)) {
 		erofs_update_progressinfo("Handling metabox ...");
-		erofs_metabox_iflush(&g_sbi);
+		erofs_metabox_iflush(&importer);
 		if (err)
 			goto exit;
 	}
@@ -1771,7 +1770,7 @@ int main(int argc, char **argv)
 	if ((cfg.c_fragments || cfg.c_extra_ea_name_prefixes) &&
 	    erofs_sb_has_fragments(&g_sbi)) {
 		erofs_update_progressinfo("Handling packed data ...");
-		err = erofs_flush_packed_inode(&g_sbi);
+		err = erofs_flush_packed_inode(&importer);
 		if (err)
 			goto exit;
 	}

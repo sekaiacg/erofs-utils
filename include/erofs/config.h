@@ -54,7 +54,6 @@ struct erofs_configure {
 	bool c_legacy_compress;
 	char c_timeinherit;
 	char c_chunkbits;
-	bool c_inline_data;
 	bool c_ztailpacking;
 	bool c_fragments;
 	bool c_all_fragments;

@@ -12,6 +12,7 @@
 #include "erofs/xattr.h"
 #include "erofs/blobchunk.h"
 #include "erofs/rebuild.h"
+#include "erofs/importer.h"
 #if defined(HAVE_ZLIB)
 #include <zlib.h>
 #endif
@@ -704,12 +705,14 @@ static int tarerofs_write_file_data(struct erofs_inode *inode,
 	return 0;
 }
 
-int tarerofs_parse_tar(struct erofs_inode *root, struct erofs_tarfile *tar)
+int tarerofs_parse_tar(struct erofs_importer *im, struct erofs_tarfile *tar)
 {
-	char path[PATH_MAX];
 	struct erofs_pax_header eh = tar->global;
-	struct erofs_sb_info *sbi = root->sbi;
+	struct erofs_importer_params *params = im->params;
+	struct erofs_sb_info *sbi = im->sbi;
+	struct erofs_inode *root = im->root;
 	bool whout, opq, e = false;
+	char path[PATH_MAX];
 	struct stat st;
 	mode_t mode;
 	erofs_off_t tar_offset, dataoff;
@@ -1112,7 +1115,7 @@ new_inode:
 					ret = -EIO;
 			} else if (tar->try_no_reorder &&
 				   !cfg.c_compr_opts[0].alg &&
-				   !cfg.c_inline_data) {
+				   params->no_datainline) {
 				ret = tarerofs_write_uncompressed_file(inode, tar);
 			} else {
 				ret = tarerofs_write_file_data(inode, tar);

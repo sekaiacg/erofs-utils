@@ -55,9 +55,11 @@ struct erofs_tarfile {
 	bool try_no_reorder;
 };
 
+struct erofs_importer;
+
 void erofs_iostream_close(struct erofs_iostream *ios);
 int erofs_iostream_open(struct erofs_iostream *ios, int fd, int decoder);
-int tarerofs_parse_tar(struct erofs_inode *root, struct erofs_tarfile *tar);
+int tarerofs_parse_tar(struct erofs_importer *im, struct erofs_tarfile *tar);
 
 #ifdef __cplusplus
 }

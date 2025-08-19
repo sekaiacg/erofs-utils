@@ -45,7 +45,7 @@ int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi);
 int erofs_importer_load_tree(struct erofs_importer *im, bool rebuild,
 			     bool incremental);
-struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_sb_info *sbi,
+struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_importer *im,
 						     int fd, const char *name);
 int erofs_fixup_root_inode(struct erofs_inode *root);
 struct erofs_inode *erofs_rebuild_make_root(struct erofs_sb_info *sbi);

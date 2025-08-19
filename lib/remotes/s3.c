@@ -17,6 +17,7 @@
 #include "erofs/blobchunk.h"
 #include "erofs/diskbuf.h"
 #include "erofs/rebuild.h"
+#include "erofs/importer.h"
 #include "liberofs_s3.h"
 
 #define S3EROFS_PATH_MAX		1024
@@ -598,7 +599,8 @@ static size_t s3erofs_remote_getobject_cb(void *contents, size_t size,
 	return realsize;
 }
 
-static int s3erofs_remote_getobject(struct erofs_s3 *s3,
+static int s3erofs_remote_getobject(struct erofs_importer *im,
+				    struct erofs_s3 *s3,
 				    struct erofs_inode *inode,
 				    const char *bucket, const char *key)
 {
@@ -621,7 +623,7 @@ static int s3erofs_remote_getobject(struct erofs_s3 *s3,
 		return -EIO;
 
 	resp.pos = 0;
-	if (!cfg.c_compr_opts[0].alg && !cfg.c_inline_data) {
+	if (!cfg.c_compr_opts[0].alg && im->params->no_datainline) {
 		inode->datalayout = EROFS_INODE_FLAT_PLAIN;
 		inode->idata_size = 0;
 		ret = erofs_allocate_inode_bh_data(inode,
@@ -666,10 +668,11 @@ static int s3erofs_remote_getobject(struct erofs_s3 *s3,
 	return resp.pos != resp.end ? -EIO : 0;
 }
 
-int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
+int s3erofs_build_trees(struct erofs_importer *im, struct erofs_s3 *s3,
 			const char *path, bool fillzero)
 {
-	struct erofs_sb_info *sbi = root->sbi;
+	struct erofs_sb_info *sbi = im->sbi;
+	struct erofs_inode *root = im->root;
 	struct s3erofs_object_iterator *iter;
 	struct s3erofs_object_info *obj;
 	struct erofs_dentry *d;
@@ -747,7 +750,7 @@ int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
 			if (fillzero)
 				ret = erofs_write_zero_inode(inode);
 			else
-				ret = s3erofs_remote_getobject(s3, inode,
+				ret = s3erofs_remote_getobject(im, s3, inode,
 						iter->bucket, obj->key);
 		}
 		if (ret)

@@ -14,6 +14,7 @@ extern "C"
 
 struct erofs_importer_params {
 	char *source;
+	bool no_datainline;
 };
 
 struct erofs_importer {
