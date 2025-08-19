@@ -23,6 +23,8 @@ static inline struct erofs_inode *erofs_igrab(struct erofs_inode *inode)
 	return inode;
 }
 
+struct erofs_importer;
+
 u32 erofs_new_encode_dev(dev_t dev);
 unsigned char erofs_mode_to_ftype(umode_t mode);
 umode_t erofs_ftype_to_mode(unsigned int ftype, unsigned int perm);
@@ -38,12 +40,11 @@ struct erofs_dentry *erofs_d_alloc(struct erofs_inode *parent,
 				   const char *name);
 int erofs_allocate_inode_bh_data(struct erofs_inode *inode, erofs_blk_t nblocks);
 bool erofs_dentry_is_wht(struct erofs_sb_info *sbi, struct erofs_dentry *d);
-int erofs_rebuild_dump_tree(struct erofs_inode *dir, bool incremental);
 int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 		       const char *path);
 struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi);
-struct erofs_inode *erofs_mkfs_build_tree_from_path(struct erofs_sb_info *sbi,
-						    const char *path);
+int erofs_importer_load_tree(struct erofs_importer *im, bool rebuild,
+			     bool incremental);
 struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_sb_info *sbi,
 						     int fd, const char *name);
 int erofs_fixup_root_inode(struct erofs_inode *root);

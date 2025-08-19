@@ -27,6 +27,7 @@
 #include "erofs/compress_hints.h"
 #include "erofs/blobchunk.h"
 #include "erofs/fragments.h"
+#include "erofs/importer.h"
 #include "liberofs_private.h"
 #include "liberofs_metabox.h"
 
@@ -1275,9 +1276,8 @@ struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi)
 	return inode;
 }
 
-/* get the inode from the source path */
-static struct erofs_inode *erofs_iget_from_srcpath(struct erofs_sb_info *sbi,
-						   const char *path)
+static struct erofs_inode *erofs_iget_from_local(struct erofs_sb_info *sbi,
+						 const char *path)
 {
 	struct stat st;
 	struct erofs_inode *inode;
@@ -1644,7 +1644,7 @@ static int erofs_mkfs_handle_directory(struct erofs_inode *dir)
 		if (ret < 0 || ret >= PATH_MAX)
 			goto err_closedir;
 
-		inode = erofs_iget_from_srcpath(sbi, buf);
+		inode = erofs_iget_from_local(sbi, buf);
 		if (IS_ERR(inode)) {
 			ret = PTR_ERR(inode);
 			goto err_closedir;
@@ -1880,9 +1880,10 @@ static void erofs_mark_parent_inode(struct erofs_inode *inode,
 	inode->i_parent = (void *)((unsigned long)dir | 1);
 }
 
-static int erofs_mkfs_dump_tree(struct erofs_inode *root, bool rebuild,
+static int erofs_mkfs_dump_tree(struct erofs_importer *im, bool rebuild,
 				bool incremental)
 {
+	struct erofs_inode *root = im->root;
 	struct erofs_sb_info *sbi = root->sbi;
 	struct erofs_inode *dumpdir = erofs_igrab(root);
 	int err, err2;
@@ -1964,12 +1965,8 @@ static int erofs_mkfs_dump_tree(struct erofs_inode *root, bool rebuild,
 }
 
 struct erofs_mkfs_buildtree_ctx {
-	struct erofs_sb_info *sbi;
-	union {
-		const char *path;
-		struct erofs_inode *root;
-	} u;
-	bool incremental;
+	struct erofs_importer *im;
+	bool rebuild, incremental;
 };
 #ifndef EROFS_MT_ENABLED
 #define __erofs_mkfs_build_tree erofs_mkfs_build_tree
@@ -1977,26 +1974,22 @@ struct erofs_mkfs_buildtree_ctx {
 
 static int __erofs_mkfs_build_tree(struct erofs_mkfs_buildtree_ctx *ctx)
 {
-	bool from_path = !!ctx->sbi;
-	struct erofs_inode *root;
-	int err;
+	struct erofs_importer *im = ctx->im;
 
-	if (from_path) {
-		root = erofs_iget_from_srcpath(ctx->sbi, ctx->u.path);
-		if (IS_ERR(root))
-			return PTR_ERR(root);
-	} else {
-		root = ctx->u.root;
-	}
+	if (!ctx->rebuild) {
+		struct erofs_importer_params *params = im->params;
+		struct stat st;
+		int err;
 
-	err = erofs_mkfs_dump_tree(root, !from_path, ctx->incremental);
-	if (err) {
-		if (from_path)
-			erofs_iput(root);
-		return err;
+		err = lstat(params->source, &st);
+		if (err)
+			return -errno;
+
+		err = erofs_fill_inode(im->root, &st, params->source);
+		if (err)
+			return err;
 	}
-	ctx->u.root = root;
-	return 0;
+	return erofs_mkfs_dump_tree(im, ctx->rebuild, ctx->incremental);
 }
 
 #ifdef EROFS_MT_ENABLED
@@ -2024,7 +2017,8 @@ static int erofs_get_fdlimit(void)
 
 static int erofs_mkfs_build_tree(struct erofs_mkfs_buildtree_ctx *ctx)
 {
-	struct erofs_sb_info *sbi = ctx->sbi ? ctx->sbi : ctx->u.root->sbi;
+	struct erofs_importer *im = ctx->im;
+	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_mkfs_dfops *q;
 	int err, err2;
 	void *retval;
@@ -2078,28 +2072,12 @@ fail:
 }
 #endif
 
-struct erofs_inode *erofs_mkfs_build_tree_from_path(struct erofs_sb_info *sbi,
-						    const char *path)
-{
-	struct erofs_mkfs_buildtree_ctx ctx = {
-		.sbi = sbi,
-		.u.path = path,
-	};
-	int err;
-
-	if (!sbi)
-		return ERR_PTR(-EINVAL);
-	err = erofs_mkfs_build_tree(&ctx);
-	if (err)
-		return ERR_PTR(err);
-	return ctx.u.root;
-}
-
-int erofs_rebuild_dump_tree(struct erofs_inode *root, bool incremental)
+int erofs_importer_load_tree(struct erofs_importer *im, bool rebuild,
+			     bool incremental)
 {
 	return erofs_mkfs_build_tree(&((struct erofs_mkfs_buildtree_ctx) {
-		.sbi = NULL,
-		.u.root = root,
+		.im = im,
+		.rebuild = rebuild,
 		.incremental = incremental,
 	}));
 }

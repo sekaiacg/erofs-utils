@@ -1542,6 +1542,7 @@ int main(int argc, char **argv)
 #endif
 	erofs_show_config();
 
+	importer_params.source = cfg.c_src_path;
 	err = erofs_importer_init(&importer);
 	if (err)
 		goto exit;
@@ -1694,12 +1695,12 @@ int main(int argc, char **argv)
 		if (cfg.c_extra_ea_name_prefixes)
 			erofs_xattr_flush_name_prefixes(&g_sbi);
 
-		root = erofs_mkfs_build_tree_from_path(&g_sbi, cfg.c_src_path);
+		root = erofs_new_inode(&g_sbi);
 		if (IS_ERR(root)) {
 			err = PTR_ERR(root);
-			root = NULL;
 			goto exit;
 		}
+		incremental_mode = false;
 	} else {
 		root = erofs_rebuild_make_root(&g_sbi);
 		if (IS_ERR(root)) {
@@ -1740,11 +1741,14 @@ int main(int argc, char **argv)
 				goto exit;
 #endif
 		}
-
-		err = erofs_rebuild_dump_tree(root, incremental_mode);
-		if (err)
-			goto exit;
 	}
+
+	importer.root = root;
+	err = erofs_importer_load_tree(&importer,
+				       source_mode != EROFS_MKFS_SOURCE_LOCALDIR,
+				       incremental_mode);
+	if (err)
+		goto exit;
 
 	if (tar_index_512b) {
 		if (!g_sbi.extra_devices) {

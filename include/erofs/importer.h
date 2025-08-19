@@ -13,11 +13,13 @@ extern "C"
 #include "internal.h"
 
 struct erofs_importer_params {
+	char *source;
 };
 
 struct erofs_importer {
 	struct erofs_importer_params *params;
 	struct erofs_sb_info *sbi;
+	struct erofs_inode *root;
 };
 
 void erofs_importer_preset(struct erofs_importer_params *params);
