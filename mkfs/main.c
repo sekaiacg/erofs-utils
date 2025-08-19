@@ -372,13 +372,15 @@ static int erofs_mkfs_feat_set_48bit(bool en, const char *val,
 	return 0;
 }
 
+static bool mkfs_dot_omitted;
+
 static int erofs_mkfs_feat_set_dot_omitted(bool en, const char *val,
 					   unsigned int vallen)
 {
 	if (vallen)
 		return -EINVAL;
 
-	cfg.c_dot_omitted = en;
+	mkfs_dot_omitted = en;
 	return 0;
 }
 
@@ -1101,10 +1103,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			erofstar.aufs = true;
 			break;
 		case 516:
-			if (!optarg || !strcmp(optarg, "1"))
-				cfg.c_ovlfs_strip = true;
-			else
-				cfg.c_ovlfs_strip = false;
+			params->ovlfs_strip = !optarg || !strcmp(optarg, "1");
 			break;
 		case 517:
 			g_sbi.bdev.offset = strtoull(optarg, &endptr, 0);
@@ -1185,7 +1184,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				erofstar.try_no_reorder = true;
 			break;
 		case 528:
-			cfg.c_hard_dereference = true;
+			params->hard_dereference = true;
 			break;
 		case 529:
 			dsunit = strtoul(optarg, &endptr, 0);
@@ -1525,9 +1524,6 @@ int main(int argc, char **argv)
 		g_sbi.epoch = mkfs_time;
 	}
 
-	if (cfg.c_dot_omitted)
-		erofs_sb_set_48bit(&g_sbi);
-
 	err = erofs_dev_open(&g_sbi, cfg.c_img_path, O_RDWR |
 				(incremental_mode ? 0 : O_TRUNC));
 	if (err) {
@@ -1546,6 +1542,9 @@ int main(int argc, char **argv)
 
 	importer_params.source = cfg.c_src_path;
 	importer_params.no_datainline = mkfs_no_datainline;
+	importer_params.dot_omitted = mkfs_dot_omitted;
+	if (importer_params.dot_omitted)
+		erofs_sb_set_48bit(&g_sbi);
 
 	err = erofs_importer_init(&importer);
 	if (err)

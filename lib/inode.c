@@ -297,15 +297,15 @@ static void erofs_dentry_mergesort(struct list_head *entries, int k)
 		list_add_tail(great, entries);
 }
 
-static int erofs_prepare_dir_file(struct erofs_inode *dir,
-				  unsigned int nr_subdirs)
+static int erofs_prepare_dir_file(struct erofs_importer *im,
+			       struct erofs_inode *dir, unsigned int nr_subdirs)
 {
-	bool dot_omitted = cfg.c_dot_omitted;
+	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = dir->sbi;
 	struct erofs_dentry *d;
 	unsigned int d_size = 0;
 
-	if (!dot_omitted) {
+	if (!params->dot_omitted) {
 		/* dot is pointed to the current dir inode */
 		d = erofs_d_alloc(dir, ".");
 		if (IS_ERR(d))
@@ -313,7 +313,7 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 		d->inode = erofs_igrab(dir);
 		d->type = EROFS_FT_DIR;
 	}
-	dir->dot_omitted = dot_omitted;
+	dir->dot_omitted = params->dot_omitted;
 
 	/* dotdot is pointed to the parent dir */
 	d = erofs_d_alloc(dir, "..");
@@ -324,7 +324,7 @@ static int erofs_prepare_dir_file(struct erofs_inode *dir,
 
 	if (nr_subdirs)
 		erofs_dentry_mergesort(&dir->i_subdirs, 0);
-	nr_subdirs += 1 + !dot_omitted;
+	nr_subdirs += 1 + !params->dot_omitted;
 
 	/* let's calculate dir size */
 	list_for_each_entry(d, &dir->i_subdirs, d_child) {
@@ -1297,7 +1297,7 @@ static struct erofs_inode *erofs_iget_from_local(struct erofs_importer *im,
 	 * hard-link, just return it. Also don't lookup for directories
 	 * since hard-link directory isn't allowed.
 	 */
-	if (!S_ISDIR(st.st_mode) && (!cfg.c_hard_dereference)) {
+	if (!S_ISDIR(st.st_mode) && !im->params->hard_dereference) {
 		inode = erofs_iget(st.st_dev, st.st_ino);
 		if (inode)
 			return inode;
@@ -1664,7 +1664,7 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im, struct erofs_i
 	}
 	closedir(_dir);
 
-	ret = erofs_prepare_dir_file(dir, nr_subdirs); /* sort subdirs */
+	ret = erofs_prepare_dir_file(im, dir, nr_subdirs); /* sort subdirs */
 	if (ret)
 		return ret;
 
@@ -1725,7 +1725,7 @@ static int erofs_rebuild_handle_directory(struct erofs_importer *im,
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_dentry *d, *n;
 	unsigned int nr_subdirs, i_nlink;
-	bool delwht = cfg.c_ovlfs_strip && dir->whiteouts;
+	bool delwht = im->params->ovlfs_strip && dir->whiteouts;
 	int ret;
 
 	nr_subdirs = 0;
@@ -1746,7 +1746,7 @@ static int erofs_rebuild_handle_directory(struct erofs_importer *im,
 		++nr_subdirs;
 	}
 	DBG_BUGON(nr_subdirs + 2 < i_nlink);
-	ret = erofs_prepare_dir_file(dir, nr_subdirs);
+	ret = erofs_prepare_dir_file(im, dir, nr_subdirs);
 	if (ret)
 		return ret;
 
@@ -1813,6 +1813,7 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 				    struct erofs_inode *inode, bool incremental)
 {
+	struct erofs_importer_params *params = im->params;
 	char *trimmed;
 	int ret;
 
@@ -1840,7 +1841,7 @@ static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 	}
 
 	/* strip all unnecessary overlayfs xattrs when ovlfs_strip is enabled */
-	if (cfg.c_ovlfs_strip)
+	if (params->ovlfs_strip)
 		erofs_clear_opaque_xattr(inode);
 	else if (inode->whiteouts)
 		erofs_set_origin_xattr(inode);

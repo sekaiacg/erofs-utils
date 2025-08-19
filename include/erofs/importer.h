@@ -20,6 +20,9 @@ struct erofs_importer_params {
 	u32 uid_offset;
 	u32 gid_offset;
 	bool no_datainline;
+	bool hard_dereference;
+	bool ovlfs_strip;
+	bool dot_omitted;
 };
 
 struct erofs_importer {
