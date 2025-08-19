@@ -111,10 +111,10 @@ AC_ARG_VAR([MAX_BLOCK_SIZE], [The maximum block size which erofs-utils supports]
 
 AC_MSG_CHECKING([whether to enable multi-threading support])
 AC_ARG_ENABLE([multithreading],
-    AS_HELP_STRING([--enable-multithreading],
-                   [enable multi-threading support (EXPERIMENTAL) @<:@default=no@:>@]),
+    AS_HELP_STRING([--disable-multithreading],
+                   [disable multi-threading support @<:@default=yes@:>@]),
     [enable_multithreading="$enableval"],
-    [enable_multithreading="no"])
+    [enable_multithreading="yes"])
 AC_MSG_RESULT([$enable_multithreading])
 
 AC_ARG_ENABLE([debug],
