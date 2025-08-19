@@ -40,8 +40,8 @@ struct erofs_dentry *erofs_d_alloc(struct erofs_inode *parent,
 				   const char *name);
 int erofs_allocate_inode_bh_data(struct erofs_inode *inode, erofs_blk_t nblocks);
 bool erofs_dentry_is_wht(struct erofs_sb_info *sbi, struct erofs_dentry *d);
-int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
-		       const char *path);
+int __erofs_fill_inode(struct erofs_importer *im, struct erofs_inode *inode,
+		       struct stat *st, const char *path);
 struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi);
 int erofs_importer_load_tree(struct erofs_importer *im, bool rebuild,
 			     bool incremental);

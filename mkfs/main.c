@@ -963,21 +963,21 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				return opt;
 			break;
 		case 5:
-			cfg.c_uid = strtoul(optarg, &endptr, 0);
-			if (cfg.c_uid == -1 || *endptr != '\0') {
+			params->fixed_uid = strtoul(optarg, &endptr, 0);
+			if (params->fixed_uid == -1 || *endptr != '\0') {
 				erofs_err("invalid uid %s", optarg);
 				return -EINVAL;
 			}
 			break;
 		case 6:
-			cfg.c_gid = strtoul(optarg, &endptr, 0);
-			if (cfg.c_gid == -1 || *endptr != '\0') {
+			params->fixed_gid = strtoul(optarg, &endptr, 0);
+			if (params->fixed_gid == -1 || *endptr != '\0') {
 				erofs_err("invalid gid %s", optarg);
 				return -EINVAL;
 			}
 			break;
 		case 7:
-			cfg.c_uid = cfg.c_gid = 0;
+			params->fixed_uid = params->fixed_gid = 0;
 			break;
 #ifndef NDEBUG
 		case 8:
@@ -1070,7 +1070,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			break;
 		case 16:
 			errno = 0;
-			cfg.c_uid_offset = strtoll(optarg, &endptr, 0);
+			params->uid_offset = strtoul(optarg, &endptr, 0);
 			if (errno || *endptr != '\0') {
 				erofs_err("invalid uid offset %s", optarg);
 				return -EINVAL;
@@ -1078,7 +1078,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			break;
 		case 17:
 			errno = 0;
-			cfg.c_gid_offset = strtoll(optarg, &endptr, 0);
+			params->gid_offset = strtoul(optarg, &endptr, 0);
 			if (errno || *endptr != '\0') {
 				erofs_err("invalid gid offset %s", optarg);
 				return -EINVAL;

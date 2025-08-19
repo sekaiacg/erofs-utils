@@ -1160,25 +1160,27 @@ static int erofs_droid_inode_fsconfig(struct erofs_inode *inode,
 }
 #endif
 
-int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
-		       const char *path)
+int __erofs_fill_inode(struct erofs_importer *im, struct erofs_inode *inode,
+		       struct stat *st, const char *path)
 {
-	int err = erofs_droid_inode_fsconfig(inode, st, path);
+	struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = inode->sbi;
+	int err;
 
+	err = erofs_droid_inode_fsconfig(inode, st, path);
 	if (err)
 		return err;
 
-	inode->i_uid = cfg.c_uid == -1 ? st->st_uid : cfg.c_uid;
-	inode->i_gid = cfg.c_gid == -1 ? st->st_gid : cfg.c_gid;
+	inode->i_uid = params->fixed_uid == -1 ? st->st_uid : params->fixed_uid;
+	inode->i_gid = params->fixed_gid == -1 ? st->st_gid : params->fixed_gid;
 
-	if (inode->i_uid + cfg.c_uid_offset < 0)
+	if ((u32)(inode->i_uid + params->uid_offset) < inode->i_uid)
 		erofs_err("uid overflow @ %s", path);
-	inode->i_uid += cfg.c_uid_offset;
+	inode->i_uid += params->uid_offset;
 
-	if (inode->i_gid + cfg.c_gid_offset < 0)
+	if ((u32)(inode->i_gid + params->gid_offset) < inode->i_gid)
 		erofs_err("gid overflow @ %s", path);
-	inode->i_gid += cfg.c_gid_offset;
+	inode->i_gid += params->gid_offset;
 
 	if (erofs_is_special_identifier(path)) {
 		inode->i_mtime = sbi->epoch + sbi->build_time;
@@ -1201,10 +1203,10 @@ int __erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
 	return 0;
 }
 
-static int erofs_fill_inode(struct erofs_inode *inode, struct stat *st,
-			    const char *path)
+static int erofs_fill_inode(struct erofs_importer *im, struct erofs_inode *inode,
+			    struct stat *st, const char *path)
 {
-	int err = __erofs_fill_inode(inode, st, path);
+	int err = __erofs_fill_inode(im, inode, st, path);
 
 	if (err)
 		return err;
@@ -1278,11 +1280,12 @@ struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi)
 	return inode;
 }
 
-static struct erofs_inode *erofs_iget_from_local(struct erofs_sb_info *sbi,
+static struct erofs_inode *erofs_iget_from_local(struct erofs_importer *im,
 						 const char *path)
 {
-	struct stat st;
+	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_inode *inode;
+	struct stat st;
 	int ret;
 
 	ret = lstat(path, &st);
@@ -1305,7 +1308,7 @@ static struct erofs_inode *erofs_iget_from_local(struct erofs_sb_info *sbi,
 	if (IS_ERR(inode))
 		return inode;
 
-	ret = erofs_fill_inode(inode, &st, path);
+	ret = erofs_fill_inode(im, inode, &st, path);
 	if (ret) {
 		erofs_iput(inode);
 		return ERR_PTR(ret);
@@ -1597,7 +1600,6 @@ static void erofs_mkfs_flushjobs(struct erofs_sb_info *sbi)
 
 static int erofs_mkfs_handle_directory(struct erofs_importer *im, struct erofs_inode *dir)
 {
-	struct erofs_sb_info *sbi = im->sbi;
 	DIR *_dir;
 	struct dirent *dp;
 	struct erofs_dentry *d;
@@ -1649,7 +1651,7 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im, struct erofs_i
 		if (ret < 0 || ret >= PATH_MAX)
 			goto err_closedir;
 
-		inode = erofs_iget_from_local(sbi, buf);
+		inode = erofs_iget_from_local(im, buf);
 		if (IS_ERR(inode)) {
 			ret = PTR_ERR(inode);
 			goto err_closedir;
@@ -1990,7 +1992,7 @@ static int __erofs_mkfs_build_tree(struct erofs_mkfs_buildtree_ctx *ctx)
 		if (err)
 			return -errno;
 
-		err = erofs_fill_inode(im->root, &st, params->source);
+		err = erofs_fill_inode(im, im->root, &st, params->source);
 		if (err)
 			return err;
 	}
@@ -2118,7 +2120,7 @@ struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_importer *im,
 		st.st_nlink = 0;
 	}
 
-	ret = erofs_fill_inode(inode, &st, name);
+	ret = erofs_fill_inode(im, inode, &st, name);
 	if (ret) {
 		free(inode);
 		return ERR_PTR(ret);

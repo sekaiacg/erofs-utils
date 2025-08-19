@@ -1079,7 +1079,7 @@ new_inode:
 		goto out;
 	}
 
-	ret = __erofs_fill_inode(inode, &st, eh.path);
+	ret = __erofs_fill_inode(im, inode, &st, eh.path);
 	if (ret)
 		goto out;
 	inode->i_size = st.st_size;

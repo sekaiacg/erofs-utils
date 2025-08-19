@@ -87,9 +87,7 @@ struct erofs_configure {
 	s32 c_mkfs_pclustersize_metabox;
 	u32 c_max_decompressed_extent_bytes;
 	u64 c_unix_timestamp;
-	u32 c_uid, c_gid;
 	const char *mount_point;
-	long long c_uid_offset, c_gid_offset;
 	u32 c_root_xattr_isize;
 #ifdef EROFS_MT_ENABLED
 	u64 c_mkfs_segment_size;

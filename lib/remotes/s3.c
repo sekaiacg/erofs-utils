@@ -744,7 +744,7 @@ int s3erofs_build_trees(struct erofs_importer *im, struct erofs_s3 *s3,
 
 		st.st_mtime = obj->mtime;
 		ST_MTIM_NSEC_SET(&st, obj->mtime_ns);
-		ret = __erofs_fill_inode(inode, &st, obj->key);
+		ret = __erofs_fill_inode(im, inode, &st, obj->key);
 		if (!ret && S_ISREG(inode->i_mode)) {
 			inode->i_size = obj->size;
 			if (fillzero)

@@ -16,7 +16,10 @@ static bool erofs_importer_global_initialized;
 
 void erofs_importer_preset(struct erofs_importer_params *params)
 {
-	*params = (struct erofs_importer_params) {};
+	*params = (struct erofs_importer_params) {
+		.fixed_uid = -1,
+		.fixed_gid = -1,
+	};
 }
 
 void erofs_importer_global_init(void)

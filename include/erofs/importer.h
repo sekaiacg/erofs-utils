@@ -15,6 +15,10 @@ extern "C"
 struct erofs_importer_params {
 	char *source;
 	u32 mt_async_queue_limit;
+	u32 fixed_uid;
+	u32 fixed_gid;
+	u32 uid_offset;
+	u32 gid_offset;
 	bool no_datainline;
 };
 
