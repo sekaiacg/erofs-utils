@@ -426,6 +426,9 @@ struct erofs_map_dev {
 	unsigned int m_deviceid;
 };
 
+int liberofs_global_init(void);
+void liberofs_global_exit(void);
+
 /* super.c */
 int erofs_read_superblock(struct erofs_sb_info *sbi);
 void erofs_put_super(struct erofs_sb_info *sbi);

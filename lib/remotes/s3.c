@@ -26,8 +26,6 @@
 
 #define BASE64_ENCODE_LEN(len)	(((len + 2) / 3) * 4)
 
-static CURL *easy_curl;
-
 struct s3erofs_query_params {
 	int num;
 	const char *key[S3EROFS_MAX_QUERY_PARAMS];
@@ -213,6 +211,7 @@ static int s3erofs_request_perform(struct erofs_s3 *s3,
 				   struct s3erofs_curl_request *req, void *resp)
 {
 	struct curl_slist *request_headers = NULL;
+	CURL *curl = s3->easy_curl;
 	long http_code = 0;
 	int ret;
 
@@ -226,11 +225,11 @@ static int s3erofs_request_perform(struct erofs_s3 *s3,
 		}
 	}
 
-	curl_easy_setopt(easy_curl, CURLOPT_URL, req->url);
-	curl_easy_setopt(easy_curl, CURLOPT_WRITEDATA, resp);
-	curl_easy_setopt(easy_curl, CURLOPT_HTTPHEADER, request_headers);
+	curl_easy_setopt(curl, CURLOPT_URL, req->url);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, resp);
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, request_headers);
 
-	ret = curl_easy_perform(easy_curl);
+	ret = curl_easy_perform(curl);
 	if (ret != CURLE_OK) {
 		erofs_err("curl_easy_perform() failed: %s",
 			  curl_easy_strerror(ret));
@@ -238,7 +237,7 @@ static int s3erofs_request_perform(struct erofs_s3 *s3,
 		goto err_header;
 	}
 
-	ret = curl_easy_getinfo(easy_curl, CURLINFO_RESPONSE_CODE, &http_code);
+	ret = curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 	if (ret != CURLE_OK) {
 		erofs_err("curl_easy_getinfo() failed: %s",
 			  curl_easy_strerror(ret));
@@ -473,7 +472,7 @@ static int s3erofs_list_objects(struct s3erofs_object_iterator *it)
 	if (ret < 0)
 		return ret;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_WRITEFUNCTION,
+	if (curl_easy_setopt(s3->easy_curl, CURLOPT_WRITEFUNCTION,
 			     s3erofs_request_write_memory_cb) != CURLE_OK)
 		return -EIO;
 
@@ -547,43 +546,37 @@ s3erofs_get_next_object(struct s3erofs_object_iterator *it)
 	return NULL;
 }
 
-static int s3erofs_global_init(void)
+static int s3erofs_curl_easy_init(struct erofs_s3 *s3)
 {
-	if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK)
-		return -EIO;
+	CURL *curl;
 
-	easy_curl = curl_easy_init();
-	if (!easy_curl)
-		goto out_err;
+	curl = curl_easy_init();
+	if (!curl)
+		return -ENOMEM;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_FOLLOWLOCATION, 1L) != CURLE_OK)
-		goto out_err;
+	if (curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L) != CURLE_OK)
+		goto out_cleanup;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_CONNECTTIMEOUT, 30L) != CURLE_OK)
-		goto out_err;
+	if (curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L) != CURLE_OK)
+		goto out_cleanup;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_USERAGENT,
+	if (curl_easy_setopt(curl, CURLOPT_USERAGENT,
 			     "s3erofs/" PACKAGE_VERSION) != CURLE_OK)
-		goto out_err;
+		goto out_cleanup;
 
-	xmlInitParser();
+	s3->easy_curl = curl;
 	return 0;
-out_err:
-	curl_global_cleanup();
-	return -EIO;
+out_cleanup:
+	curl_easy_cleanup(curl);
+	return -EFAULT;
 }
 
-static void s3erofs_global_exit(void)
+static void s3erofs_curl_easy_exit(struct erofs_s3 *s3)
 {
-	if (!easy_curl)
+	if (!s3->easy_curl)
 		return;
-
-	xmlCleanupParser();
-
-	curl_easy_cleanup(easy_curl);
-	easy_curl = NULL;
-
-	curl_global_cleanup();
+	curl_easy_cleanup(s3->easy_curl);
+	s3->easy_curl = NULL;
 }
 
 struct s3erofs_curl_getobject_resp {
@@ -623,7 +616,7 @@ static int s3erofs_remote_getobject(struct erofs_s3 *s3,
 	if (ret < 0)
 		return ret;
 
-	if (curl_easy_setopt(easy_curl, CURLOPT_WRITEFUNCTION,
+	if (curl_easy_setopt(s3->easy_curl, CURLOPT_WRITEFUNCTION,
 			     s3erofs_remote_getobject_cb) != CURLE_OK)
 		return -EIO;
 
@@ -689,7 +682,7 @@ int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
 	st.st_uid = root->i_uid;
 	st.st_gid = root->i_gid;
 
-	ret = s3erofs_global_init();
+	ret = s3erofs_curl_easy_init(s3);
 	if (ret) {
 		erofs_err("failed to initialize s3erofs: %s", erofs_strerror(ret));
 		return ret;
@@ -764,6 +757,6 @@ int s3erofs_build_trees(struct erofs_inode *root, struct erofs_s3 *s3,
 err_iter:
 	s3erofs_destroy_object_iterator(iter);
 err_global:
-	s3erofs_global_exit();
+	s3erofs_curl_easy_exit(s3);
 	return ret;
 }

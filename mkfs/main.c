@@ -1481,10 +1481,12 @@ int main(int argc, char **argv)
 	struct timeval t;
 	FILE *blklst = NULL;
 	s64 mkfs_time = 0;
-	int err = 0;
+	int err;
 	u32 crc;
 
-	erofs_init_configure();
+	err = liberofs_global_init();
+	if (err)
+		return 1;
 	erofs_mkfs_default_options();
 
 	err = mkfs_parse_options_cfg(argc, argv);
@@ -1492,13 +1494,13 @@ int main(int argc, char **argv)
 	if (err) {
 		if (err == -EINVAL)
 			fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
-		return 1;
+		goto exit;
 	}
 
 	err = parse_source_date_epoch();
 	if (err) {
 		fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
-		return 1;
+		goto exit;
 	}
 
 	g_sbi.fixed_nsec = 0;
@@ -1521,14 +1523,14 @@ int main(int argc, char **argv)
 				(incremental_mode ? 0 : O_TRUNC));
 	if (err) {
 		fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
-		return 1;
+		goto exit;
 	}
 
 #ifdef WITH_ANDROID
 	if (cfg.fs_config_file &&
 	    load_canned_fs_config(cfg.fs_config_file) < 0) {
 		erofs_err("failed to load fs config %s", cfg.fs_config_file);
-		return 1;
+		goto exit;
 	}
 #endif
 	erofs_show_config();
@@ -1540,7 +1542,7 @@ int main(int argc, char **argv)
 		if (err) {
 			erofs_err("failed to initialize packedfile: %s",
 				  strerror(-err));
-			return 1;
+			goto exit;
 		}
 	}
 
@@ -1549,7 +1551,7 @@ int main(int argc, char **argv)
 		if (err) {
 			erofs_err("failed to initialize metabox: %s",
 				  erofs_strerror(err));
-			return 1;
+			goto exit;
 		}
 	}
 
@@ -1687,7 +1689,7 @@ int main(int argc, char **argv)
 	if (cfg.c_chunkbits) {
 		err = erofs_blob_init(cfg.c_blobdev_path, 1 << cfg.c_chunkbits);
 		if (err)
-			return 1;
+			goto exit;
 	}
 
 	if (tar_index_512b || cfg.c_blobdev_path) {
@@ -1851,7 +1853,6 @@ exit:
 	erofs_xattr_cleanup_name_prefixes();
 	erofs_rebuild_cleanup();
 	erofs_diskbuf_exit();
-	erofs_exit_configure();
 	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
 		erofs_iostream_close(&erofstar.ios);
 		if (erofstar.ios.dumpfd >= 0)
@@ -1866,5 +1867,6 @@ exit:
 	erofs_update_progressinfo("Build completed.\n");
 	erofs_mkfs_showsummaries();
 	erofs_put_super(&g_sbi);
+	liberofs_global_exit();
 	return 0;
 }
