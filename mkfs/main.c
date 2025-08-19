@@ -16,6 +16,7 @@
 #include "erofs/config.h"
 #include "erofs/print.h"
 #include "erofs/cache.h"
+#include "erofs/importer.h"
 #include "erofs/diskbuf.h"
 #include "erofs/inode.h"
 #include "erofs/tar.h"
@@ -1475,6 +1476,11 @@ static void erofs_mkfs_showsummaries(void)
 
 int main(int argc, char **argv)
 {
+	struct erofs_importer_params importer_params;
+	struct erofs_importer importer = {
+		.params = &importer_params,
+		.sbi = &g_sbi,
+	};
 	struct erofs_buffer_head *sb_bh;
 	struct erofs_inode *root = NULL;
 	bool tar_index_512b = false;
@@ -1488,6 +1494,7 @@ int main(int argc, char **argv)
 	if (err)
 		return 1;
 	erofs_mkfs_default_options();
+	erofs_importer_preset(&importer_params);
 
 	err = mkfs_parse_options_cfg(argc, argv);
 	erofs_show_progs(argc, argv);
@@ -1534,26 +1541,10 @@ int main(int argc, char **argv)
 	}
 #endif
 	erofs_show_config();
-	if (cfg.c_fragments || cfg.c_extra_ea_name_prefixes) {
-		if (!cfg.c_mkfs_pclustersize_packed)
-			cfg.c_mkfs_pclustersize_packed = cfg.c_mkfs_pclustersize_def;
 
-		err = erofs_packedfile_init(&g_sbi, cfg.c_fragments);
-		if (err) {
-			erofs_err("failed to initialize packedfile: %s",
-				  strerror(-err));
-			goto exit;
-		}
-	}
-
-	if (cfg.c_mkfs_pclustersize_metabox >= 0) {
-		err = erofs_metabox_init(&g_sbi);
-		if (err) {
-			erofs_err("failed to initialize metabox: %s",
-				  erofs_strerror(err));
-			goto exit;
-		}
-	}
+	err = erofs_importer_init(&importer);
+	if (err)
+		goto exit;
 
 #ifndef NDEBUG
 	if (cfg.c_random_pclusterblks)
@@ -1677,15 +1668,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (cfg.c_fragments) {
-		err = z_erofs_dedupe_ext_init();
-		if (err) {
-			erofs_err("failed to initialize extent deduplication: %s",
-				  erofs_strerror(err));
-			goto exit;
-		}
-	}
-
 	if (cfg.c_chunkbits) {
 		err = erofs_blob_init(cfg.c_blobdev_path, 1 << cfg.c_chunkbits);
 		if (err)
@@ -1700,8 +1682,6 @@ int main(int argc, char **argv)
 			goto exit;
 		}
 	}
-
-	erofs_inode_manager_init();
 
 	if (source_mode == EROFS_MKFS_SOURCE_LOCALDIR) {
 		err = erofs_build_shared_xattrs_from_path(&g_sbi, cfg.c_src_path);
@@ -1837,10 +1817,8 @@ int main(int argc, char **argv)
 exit:
 	if (root)
 		erofs_iput(root);
-	erofs_metabox_exit(&g_sbi);
 	z_erofs_compress_exit(&g_sbi);
 	z_erofs_dedupe_exit();
-	z_erofs_dedupe_ext_exit();
 	blklst = erofs_blocklist_close();
 	if (blklst)
 		fclose(blklst);
@@ -1849,7 +1827,6 @@ exit:
 	erofs_cleanup_exclude_rules();
 	if (cfg.c_chunkbits)
 		erofs_blob_exit();
-	erofs_packedfile_exit(&g_sbi);
 	erofs_xattr_cleanup_name_prefixes();
 	erofs_rebuild_cleanup();
 	erofs_diskbuf_exit();
@@ -1858,6 +1835,7 @@ exit:
 		if (erofstar.ios.dumpfd >= 0)
 			close(erofstar.ios.dumpfd);
 	}
+	erofs_importer_exit(&importer);
 
 	if (err) {
 		erofs_err("\tCould not format the device : %s\n",
