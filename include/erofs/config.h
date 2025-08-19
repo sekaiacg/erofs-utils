@@ -94,7 +94,6 @@ struct erofs_configure {
 #ifdef EROFS_MT_ENABLED
 	u64 c_mkfs_segment_size;
 	u32 c_mt_workers;
-	u32 c_mt_async_queue_limit;
 #endif
 #ifdef WITH_ANDROID
 	char *target_out_path;

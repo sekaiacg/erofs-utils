@@ -2023,6 +2023,7 @@ static int erofs_get_fdlimit(void)
 static int erofs_mkfs_build_tree(struct erofs_mkfs_buildtree_ctx *ctx)
 {
 	struct erofs_importer *im = ctx->im;
+	struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_mkfs_dfops *q;
 	int err, err2;
@@ -2032,8 +2033,12 @@ static int erofs_mkfs_build_tree(struct erofs_mkfs_buildtree_ctx *ctx)
 	if (!q)
 		return -ENOMEM;
 
-	if (cfg.c_mt_async_queue_limit) {
-		q->entries = cfg.c_mt_async_queue_limit;
+	if (params->mt_async_queue_limit) {
+		q->entries = params->mt_async_queue_limit;
+		if (q->entries & (q->entries - 1)) {
+			free(q);
+			return -EINVAL;
+		}
 	} else {
 		err = roundup_pow_of_two(erofs_get_fdlimit()) >> 1;
 		q->entries = err && err < 32768 ? err : 32768;

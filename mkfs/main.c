@@ -860,7 +860,8 @@ static int mkfs_parse_sources(int argc, char *argv[], int optind)
 	return 0;
 }
 
-static int mkfs_parse_options_cfg(int argc, char *argv[])
+static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
+				  int argc, char *argv[])
 {
 	char *endptr;
 	int opt, i, err;
@@ -1195,7 +1196,7 @@ static int mkfs_parse_options_cfg(int argc, char *argv[])
 			break;
 #ifdef EROFS_MT_ENABLED
 		case 530:
-			cfg.c_mt_async_queue_limit = strtoul(optarg, &endptr, 0);
+			params->mt_async_queue_limit = strtoul(optarg, &endptr, 0);
 			if (*endptr != '\0') {
 				erofs_err("invalid async-queue-limit %s", optarg);
 				return -EINVAL;
@@ -1497,7 +1498,7 @@ int main(int argc, char **argv)
 	erofs_mkfs_default_options();
 	erofs_importer_preset(&importer_params);
 
-	err = mkfs_parse_options_cfg(argc, argv);
+	err = mkfs_parse_options_cfg(&importer_params, argc, argv);
 	erofs_show_progs(argc, argv);
 	if (err) {
 		if (err == -EINVAL)
