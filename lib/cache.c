@@ -533,5 +533,6 @@ erofs_blk_t erofs_total_metablocks(struct erofs_bufmgr *bmgr)
 
 void erofs_buffer_exit(struct erofs_bufmgr *bmgr)
 {
+	DBG_BUGON(!list_empty(&bmgr->blkh.list));
 	free(bmgr);
 }

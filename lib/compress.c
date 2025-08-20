@@ -2035,11 +2035,12 @@ static int z_erofs_build_compr_cfgs(struct erofs_sb_info *sbi,
 	return ret;
 }
 
-int z_erofs_compress_init(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh)
+int z_erofs_compress_init(struct erofs_sb_info *sbi)
 {
-	int i, ret, id;
+	struct erofs_buffer_head *sb_bh = sbi->bh_sb;
 	u32 max_dict_size[Z_EROFS_COMPRESSION_MAX] = {};
 	u32 available_compr_algs = 0;
+	int i, ret, id;
 
 	if (!sbi->zmgr) {
 		sbi->zmgr = calloc(1, sizeof(*sbi->zmgr));

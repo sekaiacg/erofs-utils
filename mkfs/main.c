@@ -372,6 +372,7 @@ static int erofs_mkfs_feat_set_48bit(bool en, const char *val,
 }
 
 static bool mkfs_dot_omitted;
+static unsigned char mkfs_blkszbits;
 
 static int erofs_mkfs_feat_set_dot_omitted(bool en, const char *val,
 					   unsigned int vallen)
@@ -884,7 +885,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				erofs_err("invalid block size %s", optarg);
 				return -EINVAL;
 			}
-			g_sbi.blkszbits = ilog2(i);
+			mkfs_blkszbits = ilog2(i);
 			break;
 
 		case 'd':
@@ -1234,7 +1235,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 		}
 	}
 
-	if (cfg.c_blobdev_path && cfg.c_chunkbits < g_sbi.blkszbits) {
+	if (cfg.c_blobdev_path && cfg.c_chunkbits < mkfs_blkszbits) {
 		erofs_err("--blobdev must be used together with --chunksize");
 		return -EINVAL;
 	}
@@ -1283,8 +1284,8 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 	}
 
 	if (pclustersize_max) {
-		if (pclustersize_max < erofs_blksiz(&g_sbi) ||
-		    pclustersize_max % erofs_blksiz(&g_sbi)) {
+		if (pclustersize_max < (1U << mkfs_blkszbits) ||
+		    pclustersize_max % (1U << mkfs_blkszbits)) {
 			erofs_err("invalid physical clustersize %u",
 				  pclustersize_max);
 			return -EINVAL;
@@ -1292,15 +1293,15 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 		cfg.c_mkfs_pclustersize_max = pclustersize_max;
 		cfg.c_mkfs_pclustersize_def = cfg.c_mkfs_pclustersize_max;
 	}
-	if (cfg.c_chunkbits && cfg.c_chunkbits < g_sbi.blkszbits) {
+	if (cfg.c_chunkbits && cfg.c_chunkbits < mkfs_blkszbits) {
 		erofs_err("chunksize %u must be larger than block size",
 			  1u << cfg.c_chunkbits);
 		return -EINVAL;
 	}
 
 	if (pclustersize_packed) {
-		if (pclustersize_packed < erofs_blksiz(&g_sbi) ||
-		    pclustersize_packed % erofs_blksiz(&g_sbi)) {
+		if (pclustersize_packed < (1U << mkfs_blkszbits) ||
+		    pclustersize_packed % (1U << mkfs_blkszbits)) {
 			erofs_err("invalid pcluster size for the packed file %u",
 				  pclustersize_packed);
 			return -EINVAL;
@@ -1310,8 +1311,8 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 
 	if (pclustersize_metabox >= 0) {
 		if (pclustersize_metabox &&
-		    (pclustersize_metabox < erofs_blksiz(&g_sbi) ||
-		     pclustersize_metabox % erofs_blksiz(&g_sbi))) {
+		    (pclustersize_metabox < (1U << mkfs_blkszbits) ||
+		     pclustersize_metabox % (1U << mkfs_blkszbits))) {
 			erofs_err("invalid pcluster size %u for the metabox inode",
 				  pclustersize_metabox);
 			return -EINVAL;
@@ -1334,8 +1335,8 @@ static void erofs_mkfs_default_options(void)
 	cfg.c_mt_workers = erofs_get_available_processors();
 	cfg.c_mkfs_segment_size = 16ULL * 1024 * 1024;
 #endif
-	g_sbi.blkszbits = ilog2(min_t(u32, getpagesize(), EROFS_MAX_BLOCK_SIZE));
-	cfg.c_mkfs_pclustersize_max = erofs_blksiz(&g_sbi);
+	mkfs_blkszbits = ilog2(min_t(u32, getpagesize(), EROFS_MAX_BLOCK_SIZE));
+	cfg.c_mkfs_pclustersize_max = 1U << mkfs_blkszbits;
 	cfg.c_mkfs_pclustersize_def = cfg.c_mkfs_pclustersize_max;
 	g_sbi.feature_incompat = EROFS_FEATURE_INCOMPAT_ZERO_PADDING;
 	g_sbi.feature_compat = EROFS_FEATURE_COMPAT_SB_CHKSUM |
@@ -1468,7 +1469,7 @@ static void erofs_mkfs_showsummaries(void)
 		"Filesystem total inodes: %llu\n"
 		"Filesystem %s metadata blocks: %llu\n"
 		"Filesystem %s deduplicated bytes (of source files): %llu\n",
-		uuid_str, g_sbi.total_blocks | 0ULL, 1U << g_sbi.blkszbits,
+		uuid_str, g_sbi.total_blocks | 0ULL, 1U << mkfs_blkszbits,
 		g_sbi.inos | 0ULL,
 		incr, erofs_total_metablocks(g_sbi.bmgr) | 0ULL,
 		incr, g_sbi.saved_by_deduplication | 0ULL);
@@ -1481,7 +1482,6 @@ int main(int argc, char **argv)
 		.params = &importer_params,
 		.sbi = &g_sbi,
 	};
-	struct erofs_buffer_head *sb_bh;
 	struct erofs_inode *root = NULL;
 	bool tar_index_512b = false;
 	struct timeval t;
@@ -1539,16 +1539,6 @@ int main(int argc, char **argv)
 #endif
 	erofs_show_config();
 
-	importer_params.source = cfg.c_src_path;
-	importer_params.no_datainline = mkfs_no_datainline;
-	importer_params.dot_omitted = mkfs_dot_omitted;
-	if (importer_params.dot_omitted)
-		erofs_sb_set_48bit(&g_sbi);
-
-	err = erofs_importer_init(&importer);
-	if (err)
-		goto exit;
-
 #ifndef NDEBUG
 	if (cfg.c_random_pclusterblks)
 		srand(time(NULL));
@@ -1570,7 +1560,7 @@ int main(int argc, char **argv)
 			 * If mapfile is unspecified for tarfs index mode,
 			 * 512-byte block size is enforced here.
 			 */
-			g_sbi.blkszbits = 9;
+			mkfs_blkszbits = 9;
 			tar_index_512b = true;
 		}
 	} else if (source_mode == EROFS_MKFS_SOURCE_REBUILD) {
@@ -1586,46 +1576,15 @@ int main(int argc, char **argv)
 			erofs_err("failed to read superblock of %s", src->devname);
 			goto exit;
 		}
-		g_sbi.blkszbits = src->blkszbits;
+		mkfs_blkszbits = src->blkszbits;
 	}
 
-	if (!incremental_mode) {
-		g_sbi.bmgr = erofs_buffer_init(&g_sbi, 0, NULL);
-		if (!g_sbi.bmgr) {
-			err = -ENOMEM;
-			goto exit;
-		}
-		sb_bh = erofs_reserve_sb(g_sbi.bmgr);
-		if (IS_ERR(sb_bh)) {
-			err = PTR_ERR(sb_bh);
-			goto exit;
-		}
-	} else {
-		union {
-			struct stat st;
-			erofs_blk_t startblk;
-		} u;
-
-		erofs_warn("EXPERIMENTAL incremental build in use. Use at your own risk!");
-		err = erofs_read_superblock(&g_sbi);
-		if (err) {
-			erofs_err("failed to read superblock of %s", g_sbi.devname);
-			goto exit;
-		}
-
-		err = erofs_io_fstat(&g_sbi.bdev, &u.st);
-		if (!err && S_ISREG(u.st.st_mode))
-			u.startblk = DIV_ROUND_UP(u.st.st_size, erofs_blksiz(&g_sbi));
-		else
-			u.startblk = g_sbi.primarydevice_blocks;
-		g_sbi.bmgr = erofs_buffer_init(&g_sbi, u.startblk, NULL);
-		if (!g_sbi.bmgr) {
-			err = -ENOMEM;
-			goto exit;
-		}
-		sb_bh = NULL;
-	}
-	g_sbi.bmgr->dsunit = dsunit;
+	if (!incremental_mode)
+		err = erofs_mkfs_format_fs(&g_sbi, mkfs_blkszbits, dsunit);
+	else
+		err = erofs_mkfs_load_fs(&g_sbi, dsunit);
+	if (err)
+		goto exit;
 
 	/* Use the user-defined UUID or generate one for clean builds */
 	if (valid_fixeduuid)
@@ -1650,12 +1609,19 @@ int main(int argc, char **argv)
 		goto exit;
 	}
 
-	err = z_erofs_compress_init(&g_sbi, sb_bh);
+	err = z_erofs_compress_init(&g_sbi);
 	if (err) {
 		erofs_err("failed to initialize compressor: %s",
 			  erofs_strerror(err));
 		goto exit;
 	}
+
+	importer_params.source = cfg.c_src_path;
+	importer_params.no_datainline = mkfs_no_datainline;
+	importer_params.dot_omitted = mkfs_dot_omitted;
+	err = erofs_importer_init(&importer);
+	if (err)
+		goto exit;
 
 	if (cfg.c_dedupe) {
 		if (!cfg.c_compr_opts[0].alg) {
@@ -1771,12 +1737,7 @@ int main(int argc, char **argv)
 	erofs_iput(root);
 	root = NULL;
 
-	err = erofs_writesb(&g_sbi, sb_bh);
-	if (err)
-		goto exit;
-
-	/* flush all remaining buffers */
-	err = erofs_bflush(g_sbi.bmgr, NULL);
+	err = erofs_writesb(&g_sbi);
 	if (err)
 		goto exit;
 

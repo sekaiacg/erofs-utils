@@ -23,8 +23,7 @@ void z_erofs_drop_inline_pcluster(struct erofs_inode *inode);
 void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos);
 int erofs_write_compressed_file(struct z_erofs_compress_ictx *ictx);
 
-int z_erofs_compress_init(struct erofs_sb_info *sbi,
-			  struct erofs_buffer_head *bh);
+int z_erofs_compress_init(struct erofs_sb_info *sbi);
 int z_erofs_compress_exit(struct erofs_sb_info *sbi);
 
 const char *z_erofs_list_supported_algorithms(int i, unsigned int *mask);

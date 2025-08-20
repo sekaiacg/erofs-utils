@@ -172,8 +172,9 @@ void erofs_put_super(struct erofs_sb_info *sbi)
 	}
 }
 
-int erofs_writesb(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh)
+int erofs_writesb(struct erofs_sb_info *sbi)
 {
+	struct erofs_buffer_head *sb_bh = sbi->bh_sb;
 	struct erofs_super_block sb = {
 		.magic     = cpu_to_le32(EROFS_SUPER_MAGIC_V1),
 		.blkszbits = sbi->blkszbits,
@@ -406,5 +407,57 @@ int erofs_write_device_table(struct erofs_sb_info *sbi)
 	sbi->bh_devt = NULL;
 out:
 	sbi->total_blocks = nblocks;
+	return 0;
+}
+
+int erofs_mkfs_format_fs(struct erofs_sb_info *sbi,
+			 unsigned int blkszbits, unsigned int dsunit)
+{
+	struct erofs_buffer_head *bh;
+	struct erofs_bufmgr *bmgr;
+
+	sbi->blkszbits = blkszbits;
+	bmgr = erofs_buffer_init(sbi, 0, NULL);
+	if (!bmgr)
+		return -ENOMEM;
+	sbi->bmgr = bmgr;
+	bmgr->dsunit = dsunit;
+
+	bh = erofs_reserve_sb(bmgr);
+	if (IS_ERR(bh))
+		return PTR_ERR(bh);
+	sbi->bh_sb = bh;
+	return 0;
+}
+
+int erofs_mkfs_load_fs(struct erofs_sb_info *sbi, unsigned int dsunit)
+{
+	union {
+		struct stat st;
+		erofs_blk_t startblk;
+	} u;
+	struct erofs_bufmgr *bmgr;
+	int err;
+
+	sbi->bh_sb = NULL;
+	erofs_warn("EXPERIMENTAL incremental build in use. Use at your own risk!");
+	err = erofs_read_superblock(sbi);
+	if (err) {
+		erofs_err("failed to read superblock of %s: %s", sbi->devname,
+			  erofs_strerror(err));
+		return err;
+	}
+
+	err = erofs_io_fstat(&sbi->bdev, &u.st);
+	if (!err && S_ISREG(u.st.st_mode))
+		u.startblk = DIV_ROUND_UP(u.st.st_size, erofs_blksiz(sbi));
+	else
+		u.startblk = sbi->primarydevice_blocks;
+
+	bmgr = erofs_buffer_init(sbi, u.startblk, NULL);
+	if (!bmgr)
+		return -ENOMEM;
+	sbi->bmgr = bmgr;
+	bmgr->dsunit = dsunit;
 	return 0;
 }

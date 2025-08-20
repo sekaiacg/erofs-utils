@@ -39,6 +39,7 @@ void erofs_importer_global_init(void)
 int erofs_importer_init(struct erofs_importer *im)
 {
 	struct erofs_sb_info *sbi = im->sbi;
+	struct erofs_importer_params *params = im->params;
 	const char *subsys = NULL;
 	int err;
 
@@ -67,6 +68,9 @@ int erofs_importer_init(struct erofs_importer *im)
 		if (err)
 			goto out_err;
 	}
+
+	if (params->dot_omitted)
+		erofs_sb_set_48bit(sbi);
 	return 0;
 
 out_err:

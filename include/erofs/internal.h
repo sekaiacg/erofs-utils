@@ -150,6 +150,7 @@ struct erofs_sb_info {
 	struct z_erofs_mgr *zmgr;
 	struct erofs_metaboxmgr *m2gr;
 	struct erofs_packed_inode *packedinode;
+	struct erofs_buffer_head *bh_sb;
 	struct erofs_buffer_head *bh_devt;
 	bool useqpl;
 };
@@ -432,12 +433,15 @@ void liberofs_global_exit(void);
 /* super.c */
 int erofs_read_superblock(struct erofs_sb_info *sbi);
 void erofs_put_super(struct erofs_sb_info *sbi);
-int erofs_writesb(struct erofs_sb_info *sbi, struct erofs_buffer_head *sb_bh);
+int erofs_writesb(struct erofs_sb_info *sbi);
 struct erofs_buffer_head *erofs_reserve_sb(struct erofs_bufmgr *bmgr);
 int erofs_mkfs_init_devices(struct erofs_sb_info *sbi, unsigned int devices);
 int erofs_write_device_table(struct erofs_sb_info *sbi);
 int erofs_enable_sb_chksum(struct erofs_sb_info *sbi, u32 *crc);
 int erofs_superblock_csum_verify(struct erofs_sb_info *sbi);
+int erofs_mkfs_format_fs(struct erofs_sb_info *sbi,
+			 unsigned int blkszbits, unsigned int dsunit);
+int erofs_mkfs_load_fs(struct erofs_sb_info *sbi, unsigned int dsunit);
 
 /* namei.c */
 int erofs_read_inode_from_disk(struct erofs_inode *vi);
