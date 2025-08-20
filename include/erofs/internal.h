@@ -537,6 +537,9 @@ static inline int erofs_blk_read(struct erofs_sb_info *sbi, int device_id,
 /* vmdk.c */
 int erofs_dump_vmdk_desc(FILE *f, struct erofs_sb_info *sbi);
 
+/* XXX: will find a better way later */
+erofs_blk_t erofs_total_metablocks(struct erofs_bufmgr *bmgr);
+
 #ifdef EUCLEAN
 #define EFSCORRUPTED	EUCLEAN		/* Filesystem is corrupted */
 #else

@@ -4,7 +4,6 @@ noinst_LTLIBRARIES = liberofs.la
 noinst_HEADERS = $(top_srcdir)/include/erofs_fs.h \
       $(top_srcdir)/include/erofs/blobchunk.h \
       $(top_srcdir)/include/erofs/block_list.h \
-      $(top_srcdir)/include/erofs/cache.h \
       $(top_srcdir)/include/erofs/compress.h \
       $(top_srcdir)/include/erofs/config.h \
       $(top_srcdir)/include/erofs/decompress.h \
@@ -28,6 +27,7 @@ noinst_HEADERS = $(top_srcdir)/include/erofs_fs.h \
       $(top_srcdir)/include/erofs/fragments.h \
       $(top_srcdir)/include/erofs/rebuild.h \
       $(top_srcdir)/include/erofs/importer.h \
+      $(top_srcdir)/lib/liberofs_cache.h \
       $(top_srcdir)/lib/liberofs_private.h \
       $(top_srcdir)/lib/liberofs_xxhash.h \
       $(top_srcdir)/lib/liberofs_metabox.h \

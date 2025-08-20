@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0+ OR Apache-2.0 */
 /*
  * Copyright (C) 2018 HUAWEI, Inc.
- *             http://www.huawei.com/
- * Created by Miao Xie <miaoxie@huawei.com>
- * with heavy changes by Gao Xiang <xiang@kernel.org>
+ *             http://www.huawei.com
+ * Copyright (C) 2025 Alibaba Cloud
  */
-#ifndef __EROFS_CACHE_H
-#define __EROFS_CACHE_H
+#ifndef __EROFS_LIB_LIBEROFS_CACHE_H
+#define __EROFS_LIB_LIBEROFS_CACHE_H
 
 #ifdef __cplusplus
 extern "C"
@@ -14,7 +13,7 @@ extern "C"
 #endif
 
 #include <stdlib.h>
-#include "internal.h"
+#include "erofs/internal.h"
 
 struct erofs_buffer_head;
 struct erofs_buffer_block;
@@ -139,7 +138,6 @@ int erofs_bflush(struct erofs_bufmgr *bmgr,
 		 struct erofs_buffer_block *bb);
 
 void erofs_bdrop(struct erofs_buffer_head *bh, bool tryrevoke);
-erofs_blk_t erofs_total_metablocks(struct erofs_bufmgr *bmgr);
 void erofs_buffer_exit(struct erofs_bufmgr *bmgr);
 
 #ifdef __cplusplus

@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include "erofs/print.h"
 #include "erofs/xattr.h"
-#include "erofs/cache.h"
+#include "liberofs_cache.h"
 
 static bool check_layout_compatibility(struct erofs_sb_info *sbi,
 				       struct erofs_super_block *dsb)

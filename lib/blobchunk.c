@@ -8,7 +8,7 @@
 #include "erofs/hashmap.h"
 #include "erofs/blobchunk.h"
 #include "erofs/block_list.h"
-#include "erofs/cache.h"
+#include "liberofs_cache.h"
 #include "liberofs_private.h"
 #include "sha256.h"
 #include <unistd.h>

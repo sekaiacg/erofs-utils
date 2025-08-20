@@ -15,8 +15,8 @@
 #include "erofs/print.h"
 #include "erofs/hashtable.h"
 #include "erofs/xattr.h"
-#include "erofs/cache.h"
 #include "erofs/fragments.h"
+#include "liberofs_cache.h"
 #include "liberofs_xxhash.h"
 #include "liberofs_private.h"
 

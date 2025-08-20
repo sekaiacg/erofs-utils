@@ -4,12 +4,12 @@
  */
 #include "erofs/fragments.h"
 #include "erofs/importer.h"
-#include "erofs/cache.h"
 #include "erofs/config.h"
 #include "erofs/dedupe.h"
 #include "erofs/inode.h"
 #include "erofs/print.h"
 #include "erofs/lock.h"
+#include "liberofs_cache.h"
 #include "liberofs_metabox.h"
 
 static EROFS_DEFINE_MUTEX(erofs_importer_global_mutex);

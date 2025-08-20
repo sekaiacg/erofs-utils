@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+ OR Apache-2.0
 #include <stdlib.h>
-#include "erofs/cache.h"
 #include "erofs/inode.h"
 #include "erofs/importer.h"
+#include "liberofs_cache.h"
 #include "liberofs_private.h"
 #include "liberofs_metabox.h"
 

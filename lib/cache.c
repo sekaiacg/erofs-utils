@@ -6,9 +6,9 @@
  * with heavy changes by Gao Xiang <xiang@kernel.org>
  */
 #include <stdlib.h>
-#include <erofs/cache.h>
 #include <erofs/bitops.h>
 #include "erofs/print.h"
+#include "liberofs_cache.h"
 
 static int erofs_bh_flush_drop_directly(struct erofs_buffer_head *bh)
 {

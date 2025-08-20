@@ -4,7 +4,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "erofs/print.h"
-#include "erofs/cache.h"
 #include "erofs/diskbuf.h"
 #include "erofs/inode.h"
 #include "erofs/list.h"
@@ -16,6 +15,7 @@
 #if defined(HAVE_ZLIB)
 #include <zlib.h>
 #endif
+#include "liberofs_cache.h"
 
 /* This file is a tape/volume header.  Ignore it on extraction.  */
 #define GNUTYPE_VOLHDR 'V'

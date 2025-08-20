@@ -15,7 +15,6 @@
 #include <getopt.h>
 #include "erofs/config.h"
 #include "erofs/print.h"
-#include "erofs/cache.h"
 #include "erofs/importer.h"
 #include "erofs/diskbuf.h"
 #include "erofs/inode.h"
