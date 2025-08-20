@@ -281,7 +281,6 @@ static LIST_HEAD(rebuild_src_list);
 static u8 fixeduuid[16];
 static bool valid_fixeduuid;
 static unsigned int dsunit;
-static unsigned int fsalignblks = 1;
 static int tarerofs_decoder;
 static FILE *vmdk_dcf;
 
@@ -1203,7 +1202,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			break;
 #endif
 		case 531:
-			fsalignblks = strtoul(optarg, &endptr, 0);
+			params->fsalignblks = strtoul(optarg, &endptr, 0);
 			if (*endptr != '\0') {
 				erofs_err("invalid fsalignblks %s", optarg);
 				return -EINVAL;
@@ -1760,39 +1759,15 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (erofs_sb_has_metabox(&g_sbi)) {
-		erofs_update_progressinfo("Handling metabox ...");
-		erofs_metabox_iflush(&importer);
-		if (err)
-			goto exit;
-	}
-
-	if ((cfg.c_fragments || cfg.c_extra_ea_name_prefixes) &&
-	    erofs_sb_has_fragments(&g_sbi)) {
-		erofs_update_progressinfo("Handling packed data ...");
-		err = erofs_flush_packed_inode(&importer);
-		if (err)
-			goto exit;
-	}
-
 	if (erofstar.index_mode || cfg.c_chunkbits || g_sbi.extra_devices) {
 		err = erofs_mkfs_dump_blobs(&g_sbi);
 		if (err)
 			goto exit;
 	}
 
-	g_sbi.primarydevice_blocks =
-		roundup(erofs_mapbh(g_sbi.bmgr, NULL), fsalignblks);
-	err = erofs_write_device_table(&g_sbi);
+	err = erofs_importer_flush_all(&importer);
 	if (err)
 		goto exit;
-
-	/* flush all buffers except for the superblock */
-	err = erofs_bflush(g_sbi.bmgr, NULL);
-	if (err)
-		goto exit;
-
-	erofs_fixup_root_inode(root);
 	erofs_iput(root);
 	root = NULL;
 

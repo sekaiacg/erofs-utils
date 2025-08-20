@@ -4,6 +4,7 @@
  */
 #include "erofs/fragments.h"
 #include "erofs/importer.h"
+#include "erofs/cache.h"
 #include "erofs/config.h"
 #include "erofs/dedupe.h"
 #include "erofs/inode.h"
@@ -19,6 +20,7 @@ void erofs_importer_preset(struct erofs_importer_params *params)
 	*params = (struct erofs_importer_params) {
 		.fixed_uid = -1,
 		.fixed_gid = -1,
+		.fsalignblks = 1,
 	};
 }
 
@@ -70,6 +72,43 @@ int erofs_importer_init(struct erofs_importer *im)
 out_err:
 	erofs_err("failed to initialize %s: %s", subsys, erofs_strerror(-err));
 	return err;
+}
+
+int erofs_importer_flush_all(struct erofs_importer *im)
+{
+	struct erofs_sb_info *sbi = im->sbi;
+	unsigned int fsalignblks;
+	int err;
+
+	if (erofs_sb_has_metabox(sbi)) {
+		erofs_update_progressinfo("Handling metabox ...");
+		err = erofs_metabox_iflush(im);
+		if (err)
+			return err;
+	}
+
+	if ((cfg.c_fragments || cfg.c_extra_ea_name_prefixes) &&
+	    erofs_sb_has_fragments(sbi)) {
+		erofs_update_progressinfo("Handling packed data ...");
+		err = erofs_flush_packed_inode(im);
+		if (err)
+			return err;
+	}
+
+	fsalignblks = im->params->fsalignblks ?
+		roundup_pow_of_two(im->params->fsalignblks) : 1;
+	sbi->primarydevice_blocks = roundup(erofs_mapbh(sbi->bmgr, NULL),
+					    fsalignblks);
+	err = erofs_write_device_table(sbi);
+	if (err)
+		return err;
+
+	/* flush all buffers except for the superblock */
+	err = erofs_bflush(sbi->bmgr, NULL);
+	if (err)
+		return err;
+
+	return erofs_fixup_root_inode(im->root);
 }
 
 void erofs_importer_exit(struct erofs_importer *im)

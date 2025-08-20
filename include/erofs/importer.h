@@ -19,6 +19,7 @@ struct erofs_importer_params {
 	u32 fixed_gid;
 	u32 uid_offset;
 	u32 gid_offset;
+	u32 fsalignblks;
 	bool no_datainline;
 	bool hard_dereference;
 	bool ovlfs_strip;
@@ -33,6 +34,7 @@ struct erofs_importer {
 
 void erofs_importer_preset(struct erofs_importer_params *params);
 int erofs_importer_init(struct erofs_importer *im);
+int erofs_importer_flush_all(struct erofs_importer *im);
 void erofs_importer_exit(struct erofs_importer *im);
 
 #ifdef __cplusplus

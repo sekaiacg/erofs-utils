@@ -13,6 +13,7 @@ extern "C"
 {
 #endif
 
+#include <stdlib.h>
 #include "internal.h"
 
 struct erofs_buffer_head;
