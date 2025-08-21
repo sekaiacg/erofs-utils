@@ -87,25 +87,26 @@ static struct option long_options[] = {
 
 struct erofsdump_feature {
 	bool compat;
+	u16 lkver;
 	u32 flag;
 	const char *name;
 };
 
 static struct erofsdump_feature feature_lists[] = {
-	{ true, EROFS_FEATURE_COMPAT_SB_CHKSUM, "sb_csum" },
-	{ true, EROFS_FEATURE_COMPAT_MTIME, "mtime" },
-	{ true, EROFS_FEATURE_COMPAT_XATTR_FILTER, "xattr_filter" },
-	{ false, EROFS_FEATURE_INCOMPAT_ZERO_PADDING, "0padding" },
-	{ false, EROFS_FEATURE_INCOMPAT_COMPR_CFGS, "compr_cfgs" },
-	{ false, EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER, "big_pcluster" },
-	{ false, EROFS_FEATURE_INCOMPAT_CHUNKED_FILE, "chunked_file" },
-	{ false, EROFS_FEATURE_INCOMPAT_DEVICE_TABLE, "device_table" },
-	{ false, EROFS_FEATURE_INCOMPAT_ZTAILPACKING, "ztailpacking" },
-	{ false, EROFS_FEATURE_INCOMPAT_FRAGMENTS, "fragments" },
-	{ false, EROFS_FEATURE_INCOMPAT_DEDUPE, "dedupe" },
-	{ false, EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES, "xattr_prefixes" },
-	{ false, EROFS_FEATURE_INCOMPAT_48BIT, "48bit" },
-	{ false, EROFS_FEATURE_INCOMPAT_METABOX, "metabox" },
+	{  true,    0, EROFS_FEATURE_COMPAT_SB_CHKSUM, "sb_csum" },
+	{  true,    0, EROFS_FEATURE_COMPAT_MTIME, "mtime" },
+	{  true,    0, EROFS_FEATURE_COMPAT_XATTR_FILTER, "xattr_filter" },
+	{ false, 504U, EROFS_FEATURE_INCOMPAT_ZERO_PADDING, "0padding" },
+	{ false, 513U, EROFS_FEATURE_INCOMPAT_COMPR_CFGS, "compr_cfgs" },
+	{ false, 513U, EROFS_FEATURE_INCOMPAT_BIG_PCLUSTER, "big_pcluster" },
+	{ false, 515U, EROFS_FEATURE_INCOMPAT_CHUNKED_FILE, "chunked_file" },
+	{ false, 516U, EROFS_FEATURE_INCOMPAT_DEVICE_TABLE, "device_table" },
+	{ false, 517U, EROFS_FEATURE_INCOMPAT_ZTAILPACKING, "ztailpacking" },
+	{ false, 601U, EROFS_FEATURE_INCOMPAT_FRAGMENTS, "fragments" },
+	{ false, 601U, EROFS_FEATURE_INCOMPAT_DEDUPE, "dedupe" },
+	{ false, 604U, EROFS_FEATURE_INCOMPAT_XATTR_PREFIXES, "xattr_prefixes" },
+	{ false, 615U, EROFS_FEATURE_INCOMPAT_48BIT, "48bit" },
+	{ false, 617U, EROFS_FEATURE_INCOMPAT_METABOX, "metabox" },
 };
 
 static int erofsdump_readdir(struct erofs_dir_context *ctx);
@@ -630,8 +631,9 @@ static void erofsdump_print_supported_compressors(FILE *f, unsigned int mask)
 static void erofsdump_show_superblock(void)
 {
 	time_t time = g_sbi.epoch + g_sbi.build_time;
+	unsigned int minkver = 0;
 	char uuid_str[37];
-	int i = 0;
+	int i;
 
 	fprintf(stdout, "Filesystem magic number:                      0x%04X\n",
 			EROFS_SUPER_MAGIC_V1);
@@ -666,16 +668,30 @@ static void erofsdump_show_superblock(void)
 	fprintf(stdout, "Filesystem created:                           %s",
 			ctime(&time));
 	fprintf(stdout, "Filesystem features:                          ");
-	for (; i < ARRAY_SIZE(feature_lists); i++) {
+	for (i = 0; i < ARRAY_SIZE(feature_lists); i++) {
 		u32 feat = le32_to_cpu(feature_lists[i].compat ?
 				       g_sbi.feature_compat :
 				       g_sbi.feature_incompat);
-		if (feat & feature_lists[i].flag)
+		if (feat & feature_lists[i].flag) {
 			fprintf(stdout, "%s ", feature_lists[i].name);
+			if (feature_lists[i].lkver > minkver)
+				minkver = feature_lists[i].lkver;
+		}
 	}
 	erofs_uuid_unparse_lower(g_sbi.uuid, uuid_str);
-	fprintf(stdout, "\nFilesystem UUID:                              %s\n",
-			uuid_str);
+	fprintf(stdout, "\nFilesystem UUID:                              %s",
+		uuid_str);
+	if ((g_sbi.available_compr_algs >> Z_EROFS_COMPRESSION_LZMA) & 1)
+		minkver = max(minkver, 516U);
+	if ((g_sbi.available_compr_algs >> Z_EROFS_COMPRESSION_DEFLATE) & 1)
+		minkver = max(minkver, 606U);
+	if ((g_sbi.available_compr_algs >> Z_EROFS_COMPRESSION_ZSTD) & 1)
+		minkver = max(minkver, 610U);
+	if (minkver)
+		fprintf(stdout, "\nRequired upstream Linux kernel version:       %u.%u\n",
+			minkver / 100, minkver % 100);
+	else
+		fputs("\n", stdout);
 }
 
 static void erofsdump_show_file_content(void)
