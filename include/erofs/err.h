@@ -13,6 +13,16 @@ extern "C"
 #endif
 
 #include <errno.h>
+#include <string.h>
+#include <stdio.h>
+
+static inline const char *erofs_strerror(int err)
+{
+	static char msg[256];
+
+	sprintf(msg, "[Error %d] %s", -err, strerror(-err));
+	return msg;
+}
 
 #define MAX_ERRNO (4095)
 #define IS_ERR_VALUE(x)                                                        \

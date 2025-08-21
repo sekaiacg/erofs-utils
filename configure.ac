@@ -217,6 +217,7 @@ AC_CHECK_HEADERS(m4_flatten([
 	linux/aufs_type.h
 	linux/falloc.h
 	linux/fs.h
+	linux/loop.h
 	linux/types.h
 	linux/xattr.h
 	limits.h
@@ -799,5 +800,6 @@ AC_CONFIG_FILES([Makefile
 		 dump/Makefile
 		 fuse/Makefile
 		 fsck/Makefile
+		 mount/Makefile
 		 contrib/Makefile])
 AC_OUTPUT

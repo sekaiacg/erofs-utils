@@ -6,4 +6,4 @@ SUBDIRS = man lib mkfs dump fsck
 if ENABLE_FUSE
 SUBDIRS += fuse
 endif
-SUBDIRS += contrib
+SUBDIRS += mount contrib

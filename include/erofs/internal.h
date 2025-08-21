@@ -362,17 +362,6 @@ static inline bool is_dot_dotdot(const char *name)
 	return name[1] == '\0' || (name[1] == '.' && name[2] == '\0');
 }
 
-#include <stdio.h>
-#include <string.h>
-
-static inline const char *erofs_strerror(int err)
-{
-	static char msg[256];
-
-	sprintf(msg, "[Error %d] %s", -err, strerror(-err));
-	return msg;
-}
-
 enum {
 	BH_Meta,
 	BH_Mapped,
