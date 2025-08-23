@@ -168,6 +168,19 @@ the output filesystem, with no leading /.
 .TP
 .BI "\-\-dsunit=" #
 Align all data block addresses to multiples of #.
+
+If \fI--dsunit\fR and \fI--chunksize\fR are both set, \fI--dsunit\fR will be
+ignored if it is larger than \fI--chunksize\fR.
+
+If \fI--dsunit\fR is larger, it spans multiple chunks, for example:
+\fI-b 4096\fR, \fI--dsunit 512\fR (2MiB), \fI--chunksize 4096\fR
+
+Once a chunk is deduplicated, all subsequent chunks will no longer be
+aligned. For optimal performance, it is recommended to set \fI--dsunit\fR to
+the same value as \fI--chunksize\fR:
+
+E.g. \fI-b\fR 4096, \fI--dsunit 512\fR (2MiB), \fI--chunksize $((4096*512))\fR
+
 .TP
 .BI "\-\-exclude-path=" path
 Ignore file that matches the exact literal path.
