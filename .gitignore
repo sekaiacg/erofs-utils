@@ -13,6 +13,11 @@
 *.tar.*
 
 #
+# We don't want to ignore the following even if they are dot-files
+#
+!.mailmap
+
+#
 # Generated files
 #
 aclocal.m4
