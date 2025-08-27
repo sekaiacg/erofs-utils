@@ -31,6 +31,7 @@ noinst_HEADERS = $(top_srcdir)/include/erofs_fs.h \
       $(top_srcdir)/lib/liberofs_private.h \
       $(top_srcdir)/lib/liberofs_xxhash.h \
       $(top_srcdir)/lib/liberofs_metabox.h \
+      $(top_srcdir)/lib/liberofs_nbd.h \
       $(top_srcdir)/lib/liberofs_s3.h
 
 noinst_HEADERS += compressor.h
@@ -75,4 +76,7 @@ endif
 if ENABLE_EROFS_MT
 liberofs_la_LDFLAGS = -lpthread
 liberofs_la_SOURCES += workqueue.c
+endif
+if OS_LINUX
+liberofs_la_SOURCES += backends/nbd.c
 endif

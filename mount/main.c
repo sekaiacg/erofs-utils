@@ -6,10 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <pthread.h>
 #include <unistd.h>
 #include "erofs/config.h"
 #include "erofs/print.h"
 #include "erofs/err.h"
+#include "erofs/io.h"
+#include "../lib/liberofs_nbd.h"
 #ifdef HAVE_LINUX_LOOP_H
 #include <linux/loop.h>
 #else
@@ -30,6 +33,7 @@ enum erofs_backend_drv {
 	EROFSAUTO,
 	EROFSLOCAL,
 	EROFSFUSE,
+	EROFSNBD,
 };
 
 static struct erofsmount_cfg {
@@ -132,6 +136,8 @@ static int erofsmount_parse_options(int argc, char **argv)
 					mountcfg.backend = EROFSFUSE;
 				} else if (!strcmp(dot + 1, "local")) {
 					mountcfg.backend = EROFSLOCAL;
+				} else if (!strcmp(dot + 1, "nbd")) {
+					mountcfg.backend = EROFSNBD;
 				} else {
 					erofs_err("invalid filesystem subtype `%s`", dot + 1);
 					return -EINVAL;
@@ -196,11 +202,148 @@ static int erofsmount_fuse(const char *source, const char *mountpoint,
 	return 0;
 }
 
+struct erofsmount_nbd_ctx {
+	struct erofs_vfile vd;		/* virtual device */
+	struct erofs_vfile sk;		/* socket file */
+};
+
+static void *erofsmount_nbd_loopfn(void *arg)
+{
+	struct erofsmount_nbd_ctx *ctx = arg;
+	int err;
+
+	while (1) {
+		struct erofs_nbd_request rq;
+		ssize_t rem;
+		off_t pos;
+
+		err = erofs_nbd_get_request(ctx->sk.fd, &rq);
+		if (err < 0) {
+			if (err == -EPIPE)
+				err = 0;
+			break;
+		}
+
+		if (rq.type != EROFS_NBD_CMD_READ) {
+			err = erofs_nbd_send_reply_header(ctx->sk.fd,
+						rq.cookie, -EIO);
+			if (err)
+				break;
+		}
+
+		erofs_nbd_send_reply_header(ctx->sk.fd, rq.cookie, 0);
+		pos = rq.from;
+		rem = erofs_io_sendfile(&ctx->sk, &ctx->vd, &pos, rq.len);
+		if (rem < 0) {
+			err = -errno;
+			break;
+		}
+		err = __erofs_0write(ctx->sk.fd, rem);
+		if (err) {
+			if (err > 0)
+				err = -EIO;
+			break;
+		}
+	}
+	close(ctx->vd.fd);
+	close(ctx->sk.fd);
+	return (void *)(uintptr_t)err;
+}
+
+static int erofsmount_startnbd(int nbdfd, const char *source)
+{
+	struct erofsmount_nbd_ctx ctx = {};
+	uintptr_t retcode;
+	pthread_t th;
+	int err, err2;
+
+	err = open(source, O_RDONLY);
+	if (err < 0) {
+		err = -errno;
+		goto out_closefd;
+	}
+	ctx.vd.fd = err;
+
+	err = erofs_nbd_connect(nbdfd, 9, INT64_MAX >> 9);
+	if (err < 0) {
+		close(ctx.vd.fd);
+		goto out_closefd;
+	}
+	ctx.sk.fd = err;
+
+	err = -pthread_create(&th, NULL, erofsmount_nbd_loopfn, &ctx);
+	if (err) {
+		close(ctx.vd.fd);
+		close(ctx.sk.fd);
+		goto out_closefd;
+	}
+
+	err = erofs_nbd_do_it(nbdfd);
+	err2 = -pthread_join(th, (void **)&retcode);
+	if (!err2 && retcode) {
+		erofs_err("NBD worker failed with %s",
+		          erofs_strerror(retcode));
+		err2 = retcode;
+	}
+	return err ?: err2;
+out_closefd:
+	close(nbdfd);
+	return err;
+}
+
+static int erofsmount_nbd(const char *source, const char *mountpoint,
+			  const char *fstype, int flags,
+			  const char *options)
+{
+	char nbdpath[32];
+	int num, nbdfd;
+	pid_t pid;
+	long err;
+
+	if (strcmp(fstype, "erofs")) {
+		fprintf(stderr, "unsupported filesystem type `%s`\n",
+			mountcfg.fstype);
+		return -ENODEV;
+	}
+	flags |= MS_RDONLY;
+
+	num = erofs_nbd_devscan();
+	if (num < 0)
+		return num;
+
+	(void)snprintf(nbdpath, sizeof(nbdpath), "/dev/nbd%d", num);
+	nbdfd = open(nbdpath, O_RDWR);
+	if (nbdfd < 0)
+		return -errno;
+
+	if ((pid = fork()) == 0)
+		return erofsmount_startnbd(nbdfd, source) ?
+			EXIT_FAILURE : EXIT_SUCCESS;
+	close(nbdfd);
+
+	while (1) {
+		err = erofs_nbd_in_service(num);
+		if (err == -ENOENT || err == -ENOTCONN) {
+			usleep(50000);
+			continue;
+		}
+		if (err >= 0)
+			err = (err != pid ? -EBUSY : 0);
+		break;
+	}
+	if (!err) {
+		err = mount(nbdpath, mountpoint, fstype, flags, options);
+		if (err < 0)
+			err = -errno;
+	}
+	return err;
+}
+
 #define EROFSMOUNT_LOOPDEV_RETRIES	3
 
-int erofsmount_loopmount(const char *source, const char *mountpoint,
-			 const char *fstype, int flags,
-			 const char *options)
+static int erofsmount_loopmount(const char *source, const char *mountpoint,
+				const char *fstype, int flags,
+				const char *options)
 {
 	int fd, dfd, num;
 	struct loop_info li = {};
@@ -266,6 +409,13 @@ int main(int argc, char *argv[])
 	if (mountcfg.backend == EROFSFUSE) {
 		err = erofsmount_fuse(mountcfg.device, mountcfg.mountpoint,
 				      mountcfg.fstype, mountcfg.full_options);
+		goto exit;
+	}
+
+	if (mountcfg.backend == EROFSNBD) {
+		err = erofsmount_nbd(mountcfg.device, mountcfg.mountpoint,
+				     mountcfg.fstype, mountcfg.flags,
+				     mountcfg.options);
 		goto exit;
 	}
 

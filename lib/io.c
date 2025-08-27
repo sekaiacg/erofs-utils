@@ -147,10 +147,29 @@ int erofs_io_fsync(struct erofs_vfile *vf)
 	return 0;
 }
 
+static const char erofs_zeroed[EROFS_MAX_BLOCK_SIZE];
+
+int __erofs_0write(int fd, size_t len)
+{
+	int err = 0;
+
+	while (len) {
+		u32 count = min_t(u64, sizeof(erofs_zeroed), len);
+
+		err = write(fd, erofs_zeroed, count);
+		if (err <= 0) {
+			if (err < 0)
+				err = -errno;
+			break;
+		}
+		len -= err;
+	}
+	return err < 0 ? err : len;
+}
+
 int erofs_io_fallocate(struct erofs_vfile *vf, u64 offset,
 		       size_t len, bool zeroout)
 {
-	static const char zero[EROFS_MAX_BLOCK_SIZE] = {0};
 	ssize_t ret;
 
 	if (__erofs_unlikely(cfg.c_dry_run))
@@ -164,14 +183,15 @@ int erofs_io_fallocate(struct erofs_vfile *vf, u64 offset,
 		    FALLOC_FL_KEEP_SIZE, offset + vf->offset, len) >= 0)
 		return 0;
 #endif
-	while (len > EROFS_MAX_BLOCK_SIZE) {
-		ret = erofs_io_pwrite(vf, zero, offset, EROFS_MAX_BLOCK_SIZE);
+	while (len > sizeof(erofs_zeroed)) {
+		ret = erofs_io_pwrite(vf, erofs_zeroed, offset,
+				      sizeof(erofs_zeroed));
 		if (ret < 0)
 			return (int)ret;
 		len -= ret;
 		offset += ret;
 	}
-	return erofs_io_pwrite(vf, zero, offset, len) == len ? 0 : -EIO;
+	return erofs_io_pwrite(vf, erofs_zeroed, offset, len) == len ? 0 : -EIO;
 }
 
 int erofs_io_ftruncate(struct erofs_vfile *vf, u64 length)
@@ -549,6 +569,47 @@ off_t erofs_io_lseek(struct erofs_vfile *vf, u64 offset, int whence)
 		return vf->ops->lseek(vf, offset, whence);
 
 	return lseek(vf->fd, offset, whence);
+}
+
+ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
+			  off_t *pos, size_t count)
+{
+	ssize_t written;
+
+	if (vin->ops || vout->ops) {
+		if (vin->ops)
+			return vin->ops->sendfile(vout, vin, pos, count);
+		return vout->ops->sendfile(vout, vin, pos, count);
+	}
+#if defined(HAVE_SYS_SENDFILE_H) && defined(HAVE_SENDFILE)
+	do {
+		written = sendfile(vout->fd, vin->fd, pos, count);
+		if (written <= 0) {
+			if (written < 0) {
+				written = -errno;
+				if (written == -EOVERFLOW && pos)
+					written = 0;
+			}
+			break;
+		}
+		count -= written;
+	} while (written);
+#endif
+	while (count) {
+		char buf[EROFS_MAX_BLOCK_SIZE];
+
+		written = min_t(u64, count, sizeof(buf));
+		if (pos)
+			written = erofs_io_pread(vin, buf, written, *pos);
+		else
+			written = erofs_io_read(vin, buf, written);
+		if (written <= 0)
+			break;
+		count -= written;
+		if (pos)
+			*pos += written;
+	}
+	return written < 0 ? written : count;
 }
 
 int erofs_io_xcopy(struct erofs_vfile *vout, off_t pos,

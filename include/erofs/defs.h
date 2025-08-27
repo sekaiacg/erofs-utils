@@ -88,6 +88,10 @@ typedef int64_t         s64;
 #define le32_to_cpu(x) ((__u32)(x))
 #define le64_to_cpu(x) ((__u64)(x))
 
+#define cpu_to_be32(x) ((__be32)__builtin_bswap32(x))
+#define cpu_to_be64(x) ((__be64)__builtin_bswap64(x))
+#define be32_to_cpu(x) (__builtin_bswap32(x))
+#define be64_to_cpu(x) (__builtin_bswap64(x))
 #else
 #if __BYTE_ORDER == __BIG_ENDIAN
 #define cpu_to_le16(x) (__builtin_bswap16(x))
@@ -96,6 +100,11 @@ typedef int64_t         s64;
 #define le16_to_cpu(x) (__builtin_bswap16(x))
 #define le32_to_cpu(x) (__builtin_bswap32(x))
 #define le64_to_cpu(x) (__builtin_bswap64(x))
+
+#define cpu_to_be32(x) ((__be32)(x))
+#define cpu_to_be64(x) ((__be64)(x))
+#define be32_to_cpu(x) ((__u32)(x))
+#define be64_to_cpu(x) ((__u64)(x))
 #else
 #pragma error
 #endif
