@@ -460,7 +460,7 @@ static int z_erofs_map_blocks_fo(struct erofs_inode *vi,
 		end = (m.lcn << lclusterbits) | m.clusterofs;
 		map->m_flags |= EROFS_MAP_FULL_MAPPED;
 		m.delta[0] = 1;
-		fallthrough;
+		__erofs_fallthrough;
 	case Z_EROFS_LCLUSTER_TYPE_NONHEAD:
 		/* get the corresponding first chunk */
 		err = z_erofs_extent_lookback(&m, m.delta[0]);
