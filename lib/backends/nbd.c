@@ -24,6 +24,7 @@
 #define NBD_DO_IT		_IO( 0xab, 3 )
 #define NBD_CLEAR_SOCK		_IO( 0xab, 4 )
 #define NBD_SET_SIZE_BLOCKS     _IO( 0xab, 7 )
+#define NBD_DISCONNECT		_IO( 0xab, 8 )
 #define NBD_SET_TIMEOUT		_IO( 0xab, 9 )
 #define NBD_SET_FLAGS		_IO( 0xab, 10)
 
@@ -220,4 +221,13 @@ int erofs_nbd_send_reply_header(int skfd, __le64 cookie, int err)
 	if (ret == sizeof(reply))
 		return 0;
 	return ret < 0 ? -errno : -EIO;
+}
+
+int erofs_nbd_disconnect(int nbdfd)
+{
+	int err, err2;
+
+	err = ioctl(nbdfd, NBD_DISCONNECT);
+	err2 = ioctl(nbdfd, NBD_CLEAR_SOCK);
+	return err ?: err2;
 }

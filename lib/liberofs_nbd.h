@@ -7,6 +7,8 @@
 
 #include "erofs/defs.h"
 
+#define EROFS_NBD_MAJOR			43	/* Network block device */
+
 /* Supported request types */
 enum {
 	EROFS_NBD_CMD_READ		= 0,
@@ -35,5 +37,6 @@ int erofs_nbd_connect(int nbdfd, int blkbits, u64 blocks);
 int erofs_nbd_do_it(int nbdfd);
 int erofs_nbd_get_request(int skfd, struct erofs_nbd_request *rq);
 int erofs_nbd_send_reply_header(int skfd, __le64 cookie, int err);
+int erofs_nbd_disconnect(int nbdfd);
 
 #endif

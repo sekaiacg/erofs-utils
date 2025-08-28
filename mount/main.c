@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/types.h>
 #include <pthread.h>
 #include <unistd.h>
 #include "erofs/config.h"
@@ -28,6 +29,9 @@ struct loop_info {
 	char    pad1[120];
 };
 #endif
+#ifdef HAVE_SYS_SYSMACROS_H
+#include <sys/sysmacros.h>
+#endif
 
 enum erofs_backend_drv {
 	EROFSAUTO,
@@ -44,6 +48,7 @@ static struct erofsmount_cfg {
 	char *fstype;
 	long flags;
 	enum erofs_backend_drv backend;
+	bool umount;
 } mountcfg = {
 	.full_options = "ro",
 	.flags = MS_RDONLY,		/* default mountflags */
@@ -120,7 +125,7 @@ static int erofsmount_parse_options(int argc, char **argv)
 	char *dot;
 	int opt;
 
-	while ((opt = getopt_long(argc, argv, "Nfno:st:v",
+	while ((opt = getopt_long(argc, argv, "Nfno:st:uv",
 				  long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'o':
@@ -146,20 +151,23 @@ static int erofsmount_parse_options(int argc, char **argv)
 			}
 			mountcfg.fstype = optarg;
 			break;
+		case 'u':
+			mountcfg.umount = true;
+			break;
 		default:
 			return -EINVAL;
 		}
 	}
+	if (!mountcfg.umount) {
+		if (optind >= argc) {
+			erofs_err("missing argument: DEVICE");
+			return -EINVAL;
+		}
 
-	if (optind >= argc) {
-		erofs_err("missing argument: DEVICE");
-		return -EINVAL;
+		mountcfg.device = strdup(argv[optind++]);
+		if (!mountcfg.device)
+			return -ENOMEM;
 	}
-
-	mountcfg.device = strdup(argv[optind++]);
-	if (!mountcfg.device)
-		return -ENOMEM;
-
 	if (optind >= argc) {
 		erofs_err("missing argument: MOUNTPOINT");
 		return -EINVAL;
@@ -394,6 +402,106 @@ out_err:
 	return -errno;
 }
 
+int erofsmount_umount(char *target)
+{
+	char *device = NULL, *mountpoint = NULL;
+	struct stat st;
+	FILE *mounts;
+	int err, fd;
+	size_t n;
+	char *s;
+	bool isblk;
+
+	target = realpath(target, NULL);
+	if (!target)
+		return -errno;
+
+	err = lstat(target, &st);
+	if (err < 0) {
+		err = -errno;
+		goto err_out;
+	}
+
+	if (S_ISBLK(st.st_mode)) {
+		isblk = true;
+	} else if (S_ISDIR(st.st_mode)) {
+		isblk = false;
+	} else {
+		err = -EINVAL;
+		goto err_out;
+	}
+
+	mounts = fopen("/proc/mounts", "r");
+	if (!mounts) {
+		err = -ENOENT;
+		goto err_out;
+	}
+
+	for (s = NULL; (getline(&s, &n, mounts)) > 0;) {
+		bool hit = false;
+		char *f1, *f2, *end;
+
+		f1 = s;
+		end = strchr(f1, ' ');
+		if (end)
+			*end = '\0';
+		if (isblk && !strcmp(f1, target))
+			hit = true;
+		if (end) {
+			f2 = end + 1;
+			end = strchr(f2, ' ');
+			if (end)
+				*end = '\0';
+			if (!isblk && !strcmp(f2, target))
+				hit = true;
+		}
+		if (hit) {
+			if (isblk) {
+				err = -EBUSY;
+				free(s);
+				fclose(mounts);
+				goto err_out;
+			}
+			free(device);
+			device = strdup(f1);
+			if (!mountpoint)
+				mountpoint = strdup(f2);
+		}
+	}
+	free(s);
+	fclose(mounts);
+	if (!isblk && !device) {
+		err = -ENOENT;
+		goto err_out;
+	}
+
+	/* Avoid TOCTOU issue with NBD_CFLAG_DISCONNECT_ON_CLOSE */
+	fd = open(isblk ? target : device, O_RDWR);
+	if (fd < 0) {
+		err = -errno;
+		goto err_out;
+	}
+	if (mountpoint) {
+		err = umount(mountpoint);
+		if (err) {
+			err = -errno;
+			close(fd);
+			goto err_out;
+		}
+	}
+	err = fstat(fd, &st);
+	if (err < 0)
+		err = -errno;
+	else if (S_ISBLK(st.st_mode) && major(st.st_rdev) == EROFS_NBD_MAJOR)
+		err = erofs_nbd_disconnect(fd);
+	close(fd);
+err_out:
+	free(device);
+	free(mountpoint);
+	free(target);
+	return err < 0 ? err : 0;
+}
+
 int main(int argc, char *argv[])
 {
 	int err;
@@ -404,6 +512,14 @@ int main(int argc, char *argv[])
 		if (err == -EINVAL)
 			fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
 		return EXIT_FAILURE;
+	}
+
+	if (mountcfg.umount) {
+		err = erofsmount_umount(mountcfg.mountpoint);
+		if (err < 0)
+			fprintf(stderr, "Failed to unmount %s: %s\n",
+				mountcfg.mountpoint, erofs_strerror(err));
+		return err ? EXIT_FAILURE : EXIT_SUCCESS;
 	}
 
 	if (mountcfg.backend == EROFSFUSE) {
