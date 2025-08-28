@@ -32,6 +32,7 @@
 #include "../lib/liberofs_uuid.h"
 #include "../lib/liberofs_metabox.h"
 #include "../lib/liberofs_s3.h"
+#include "../lib/liberofs_oci.h"
 #include "../lib/compressor.h"
 
 static struct option long_options[] = {
@@ -95,6 +96,9 @@ static struct option long_options[] = {
 	{"vmdk-desc", required_argument, NULL, 532},
 #ifdef S3EROFS_ENABLED
 	{"s3", required_argument, NULL, 533},
+#endif
+#ifdef OCIEROFS_ENABLED
+	{"oci", optional_argument, NULL, 534},
 #endif
 	{0, 0, 0, 0},
 };
@@ -207,6 +211,12 @@ static void usage(int argc, char **argv)
 		"   [,urlstyle=Z]       S3 API calling style (Z = vhost|path) (default: vhost)\n"
 		"   [,sig=<2,4>]        S3 API signature version (default: 2)\n"
 #endif
+#ifdef OCIEROFS_ENABLED
+		" --oci[=platform=X]    X=platform (default: linux/amd64)\n"
+		"   [,layer=Y]          Y=layer index to extract (0-based; omit to extract all layers)\n"
+		"   [,username=Z]       Z=username for authentication (optional)\n"
+		"   [,password=W]       W=password for authentication (optional)\n"
+#endif
 		" --tar=X               generate a full or index-only image from a tarball(-ish) source\n"
 		"                       (X = f|i|headerball; f=full mode, i=index mode,\n"
 		"                                            headerball=file data is omited in the source stream)\n"
@@ -261,6 +271,11 @@ static u8 metabox_algorithmid;
 static struct erofs_s3 s3cfg;
 #endif
 
+#ifdef OCIEROFS_ENABLED
+static struct erofs_oci ocicfg;
+static char *mkfs_oci_options;
+#endif
+
 enum {
 	EROFS_MKFS_DATA_IMPORT_DEFAULT,
 	EROFS_MKFS_DATA_IMPORT_FULLDATA,
@@ -272,6 +287,7 @@ static enum {
 	EROFS_MKFS_SOURCE_LOCALDIR,
 	EROFS_MKFS_SOURCE_TAR,
 	EROFS_MKFS_SOURCE_S3,
+	EROFS_MKFS_SOURCE_OCI,
 	EROFS_MKFS_SOURCE_REBUILD,
 } source_mode;
 
@@ -672,6 +688,202 @@ static int mkfs_parse_s3_cfg(char *cfg_str)
 }
 #endif
 
+#ifdef OCIEROFS_ENABLED
+
+
+/**
+ * mkfs_parse_oci_options - Parse comma-separated OCI options string
+ * @options_str: comma-separated options string
+ *
+ * Parse OCI options string containing comma-separated key=value pairs.
+ * Supported options include platform, layer, username, and password.
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int mkfs_parse_oci_options(char *options_str)
+{
+	char *opt, *q, *p;
+	int ret;
+
+	if (!options_str)
+		return 0;
+
+	opt = options_str;
+	while (opt) {
+		q = strchr(opt, ',');
+		if (q)
+			*q = '\0';
+
+		p = strstr(opt, "platform=");
+		if (p) {
+			p += strlen("platform=");
+			ret = erofs_oci_params_set_string(&ocicfg.params.platform, p);
+			if (ret) {
+				erofs_err("failed to set platform");
+				return ret;
+			}
+		} else {
+			p = strstr(opt, "layer=");
+			if (p) {
+				p += strlen("layer=");
+				ocicfg.params.layer_index = atoi(p);
+				if (ocicfg.params.layer_index < 0) {
+					erofs_err("invalid layer index %d",
+						  ocicfg.params.layer_index);
+					return -EINVAL;
+				}
+			} else {
+				p = strstr(opt, "username=");
+				if (p) {
+					p += strlen("username=");
+					ret = erofs_oci_params_set_string(&ocicfg.params.username, p);
+					if (ret) {
+						erofs_err("failed to set username");
+						return ret;
+					}
+				} else {
+					p = strstr(opt, "password=");
+					if (p) {
+						p += strlen("password=");
+						ret = erofs_oci_params_set_string(&ocicfg.params.password, p);
+						if (ret) {
+							erofs_err("failed to set password");
+							return ret;
+						}
+					} else {
+						erofs_err("invalid --oci value %s", opt);
+						return -EINVAL;
+					}
+				}
+			}
+		}
+
+		opt = q ? q + 1 : NULL;
+	}
+
+	return 0;
+}
+
+/**
+ * mkfs_parse_oci_ref - Parse OCI image reference string
+ * @ref_str: OCI image reference in various formats
+ *
+ * Parse OCI image reference which can be in formats:
+ * - registry.example.com/namespace/repo:tag
+ * - namespace/repo:tag (uses default registry)
+ * - repo:tag (adds library/ prefix for Docker Hub)
+ * - repo (uses default tag "latest")
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int mkfs_parse_oci_ref(const char *ref_str)
+{
+	char *slash, *colon, *dot;
+	const char *repo_part;
+	size_t len;
+
+	slash = strchr(ref_str, '/');
+	if (slash) {
+		dot = strchr(ref_str, '.');
+		if (dot && dot < slash) {
+			char *registry_str;
+
+			len = slash - ref_str;
+			registry_str = strndup(ref_str, len);
+
+			if (!registry_str) {
+				erofs_err("failed to allocate memory for registry");
+				return -ENOMEM;
+			}
+			if (erofs_oci_params_set_string(&ocicfg.params.registry,
+							registry_str)) {
+				free(registry_str);
+				erofs_err("failed to set registry");
+				return -ENOMEM;
+			}
+			free(registry_str);
+			repo_part = slash + 1;
+		} else {
+			repo_part = ref_str;
+		}
+	} else {
+		repo_part = ref_str;
+	}
+
+	colon = strchr(repo_part, ':');
+	if (colon) {
+		char *repo_str;
+
+		len = colon - repo_part;
+		repo_str = strndup(repo_part, len);
+
+		if (!repo_str) {
+			erofs_err("failed to allocate memory for repository");
+			return -ENOMEM;
+		}
+
+		if (!strchr(repo_str, '/') &&
+		    (!strcmp(ocicfg.params.registry, DOCKER_API_REGISTRY) ||
+		     !strcmp(ocicfg.params.registry, DOCKER_REGISTRY))) {
+			char *full_repo;
+
+			if (asprintf(&full_repo, "library/%s", repo_str) == -1) {
+				free(repo_str);
+				erofs_err("failed to allocate memory for full repository name");
+				return -ENOMEM;
+			}
+			free(repo_str);
+			repo_str = full_repo;
+		}
+
+		if (erofs_oci_params_set_string(&ocicfg.params.repository,
+						repo_str)) {
+			free(repo_str);
+			erofs_err("failed to set repository");
+			return -ENOMEM;
+		}
+		free(repo_str);
+
+		if (erofs_oci_params_set_string(&ocicfg.params.tag,
+						colon + 1)) {
+			erofs_err("failed to set tag");
+			return -ENOMEM;
+		}
+	} else {
+		char *repo_str = strdup(repo_part);
+
+		if (!repo_str) {
+			erofs_err("failed to allocate memory for repository");
+			return -ENOMEM;
+		}
+
+		if (!strchr(repo_str, '/') &&
+		    (!strcmp(ocicfg.params.registry, DOCKER_API_REGISTRY) ||
+		     !strcmp(ocicfg.params.registry, DOCKER_REGISTRY))) {
+			char *full_repo;
+
+			if (asprintf(&full_repo, "library/%s", repo_str) == -1) {
+				free(repo_str);
+				erofs_err("failed to allocate memory for full repository name");
+				return -ENOMEM;
+			}
+			free(repo_str);
+			repo_str = full_repo;
+		}
+
+		if (erofs_oci_params_set_string(&ocicfg.params.repository,
+						repo_str)) {
+			free(repo_str);
+			erofs_err("failed to set repository");
+			return -ENOMEM;
+		}
+		free(repo_str);
+	}
+
+	return 0;
+}
+#endif
+
 static int mkfs_parse_one_compress_alg(char *alg,
 				       struct erofs_compr_opts *copts)
 {
@@ -825,6 +1037,18 @@ static int mkfs_parse_sources(int argc, char *argv[], int optind)
 		cfg.c_src_path = strdup(argv[optind++]);
 		if (!cfg.c_src_path)
 			return -ENOMEM;
+		break;
+#endif
+#ifdef OCIEROFS_ENABLED
+	case EROFS_MKFS_SOURCE_OCI:
+		if (optind < argc) {
+			cfg.c_src_path = strdup(argv[optind++]);
+			if (!cfg.c_src_path)
+				return -ENOMEM;
+		} else {
+			erofs_err("missing OCI source argument");
+			return -EINVAL;
+		}
 		break;
 #endif
 	default:
@@ -1222,6 +1446,12 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				return err;
 			break;
 #endif
+#ifdef OCIEROFS_ENABLED
+		case 534:
+			mkfs_oci_options = optarg;
+			source_mode = EROFS_MKFS_SOURCE_OCI;
+			break;
+#endif
 		case 'V':
 			version();
 			exit(0);
@@ -1607,7 +1837,8 @@ int main(int argc, char **argv)
 		erofs_uuid_generate(g_sbi.uuid);
 
 	if ((source_mode == EROFS_MKFS_SOURCE_TAR && !erofstar.index_mode) ||
-	    (source_mode == EROFS_MKFS_SOURCE_S3)) {
+	    (source_mode == EROFS_MKFS_SOURCE_S3) ||
+	    (source_mode == EROFS_MKFS_SOURCE_OCI)) {
 		err = erofs_diskbuf_init(1);
 		if (err) {
 			erofs_err("failed to initialize diskbuf: %s",
@@ -1718,6 +1949,28 @@ int main(int argc, char **argv)
 						  cfg.c_src_path,
 				dataimport_mode == EROFS_MKFS_DATA_IMPORT_ZEROFILL);
 #endif
+#ifdef OCIEROFS_ENABLED
+		} else if (source_mode == EROFS_MKFS_SOURCE_OCI) {
+			err = ocierofs_init(&ocicfg);
+			if (err)
+				goto exit;
+
+			err = mkfs_parse_oci_options(mkfs_oci_options);
+			if (err)
+				goto exit;
+			err = mkfs_parse_oci_ref(cfg.c_src_path);
+			if (err)
+				goto exit;
+
+			if (incremental_mode ||
+			    dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP ||
+			    dataimport_mode == EROFS_MKFS_DATA_IMPORT_ZEROFILL)
+				err = -EOPNOTSUPP;
+			else
+				err = ocierofs_build_trees(&importer, &ocicfg);
+			if (err)
+				goto exit;
+#endif
 	}
 	if (err < 0)
 		goto exit;
@@ -1782,6 +2035,9 @@ exit:
 		erofs_blob_exit();
 	erofs_xattr_cleanup_name_prefixes();
 	erofs_rebuild_cleanup();
+#ifdef OCIEROFS_ENABLED
+	ocierofs_cleanup(&ocicfg);
+#endif
 	erofs_diskbuf_exit();
 	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
 		erofs_iostream_close(&erofstar.ios);
