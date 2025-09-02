@@ -1509,21 +1509,6 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 		return -EINVAL;
 	}
 
-	/*
-	 * chunksize must be greater than or equal to dsunit to keep
-	 * data alignment working.
-	 *
-	 * If chunksize is smaller than dsunit (e.g., chunksize=4K, dsunit=2M),
-	 * deduplicating a chunk will cause all subsequent data to become
-	 * unaligned. Therefore, let's issue a warning here and still skip
-	 * alignment for now.
-	 */
-	if (cfg.c_chunkbits && dsunit &&
-	    (1u << (cfg.c_chunkbits - g_sbi.blkszbits)) < dsunit) {
-		erofs_warn("chunksize %u bytes is smaller than dsunit %u blocks, ignore dsunit !",
-			   1u << cfg.c_chunkbits, dsunit);
-	}
-
 	if (pclustersize_packed) {
 		if (pclustersize_packed < (1U << mkfs_blkszbits) ||
 		    pclustersize_packed % (1U << mkfs_blkszbits)) {

@@ -312,25 +312,6 @@ int erofs_blob_write_chunked_file(struct erofs_inode *inode, int fd,
 	minextblks = BLK_ROUND_UP(sbi, inode->i_size);
 	interval_start = 0;
 
-	/*
-	 * If dsunit <= chunksize, deduplication will not cause misalignment,
-	 * so it's uncontroversial to apply the current data alignment policy.
-	 */
-	if (sbi->bmgr->dsunit > 1 &&
-	    sbi->bmgr->dsunit <= (1u << (chunkbits - sbi->blkszbits))) {
-		off_t off = lseek(blobfile, 0, SEEK_CUR);
-
-		off = roundup(off, sbi->bmgr->dsunit * erofs_blksiz(sbi));
-		if (lseek(blobfile, off, SEEK_SET) != off) {
-			ret = -errno;
-			erofs_err("failed to lseek blobdev@0x%llx: %s", off,
-				  erofs_strerror(ret));
-			goto err;
-		}
-		erofs_dbg("Align /%s on block #%d (0x%llx)",
-			  erofs_fspath(inode->i_srcpath), erofs_blknr(sbi, off), off);
-	}
-
 	for (pos = 0; pos < inode->i_size; pos += len) {
 #ifdef SEEK_DATA
 		off_t offset = lseek(fd, pos + startoff, SEEK_DATA);
