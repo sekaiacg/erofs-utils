@@ -300,6 +300,71 @@ out_closefd:
 	return err;
 }
 
+static char *erofsmount_write_recovery_info(const char *source)
+{
+	char recp[] = "/var/run/erofs/mountnbd_XXXXXX";
+	char *realp;
+	int fd, err;
+	FILE *f;
+
+	fd = mkstemp(recp);
+	if (fd < 0 && errno == ENOENT) {
+		err = mkdir("/var/run/erofs", 0700);
+		if (err)
+			return ERR_PTR(-errno);
+		fd = mkstemp(recp);
+	}
+	if (fd < 0)
+		return ERR_PTR(-errno);
+
+	f = fdopen(fd, "w+");
+	if (!f) {
+		close(fd);
+		return ERR_PTR(-errno);
+	}
+
+	realp = realpath(source, NULL);
+	if (!realp) {
+		fclose(f);
+		return ERR_PTR(-errno);
+	}
+	/* TYPE<LOCAL> <SOURCE PATH>\n(more..) */
+	err = fprintf(f, "LOCAL %s\n", realp) < 0;
+	fclose(f);
+	free(realp);
+	if (err)
+		return ERR_PTR(-ENOMEM);
+	return strdup(recp) ?: ERR_PTR(-ENOMEM);
+}
+
+static int erofsmount_nbd_fix_backend_linkage(int num, char **recp)
+{
+	char *newrecp;
+	int err;
+
+	newrecp = erofs_nbd_get_identifier(num);
+	if (!IS_ERR(newrecp)) {
+		err = strlen(newrecp);
+		if (newrecp[err - 1] == '\n')
+			newrecp[err - 1] = '\0';
+		err = strcmp(newrecp, *recp) ? -EFAULT : 0;
+		free(newrecp);
+		return err;
+	}
+
+	if (asprintf(&newrecp, "/var/run/erofs/mountnbd_nbd%d", num) <= 0)
+		return -ENOMEM;
+
+	if (rename(*recp, newrecp) < 0) {
+		err = -errno;
+		free(newrecp);
+		return err;
+	}
+	free(*recp);
+	*recp = newrecp;
+	return 0;
+}
+
 static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
 {
 	struct erofsmount_nbd_ctx ctx = {};
@@ -318,26 +383,42 @@ static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
 		return err;
 	}
 	if ((*pid = fork()) == 0) {
+		char *recp;
+
 		/* Otherwise, NBD disconnect sends SIGPIPE, skipping cleanup */
 		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
 			close(ctx.vd.fd);
 			exit(EXIT_FAILURE);
 		}
-
+		recp = erofsmount_write_recovery_info(source);
+		if (IS_ERR(recp)) {
+			close(ctx.vd.fd);
+			exit(EXIT_FAILURE);
+		}
 		num = -1;
-		err = erofs_nbd_nl_connect(&num, 9, INT64_MAX >> 9, NULL);
+		err = erofs_nbd_nl_connect(&num, 9, INT64_MAX >> 9, recp);
 		if (err >= 0) {
 			ctx.sk.fd = err;
-			err = write(pipefd[1], &num, sizeof(int));
-			if (err >= sizeof(int)) {
+			err = erofsmount_nbd_fix_backend_linkage(num, &recp);
+			if (err) {
+				close(ctx.sk.fd);
+			} else {
+				err = write(pipefd[1], &num, sizeof(int));
+				if (err < 0)
+					err = -errno;
 				close(pipefd[1]);
 				close(pipefd[0]);
-				err = (int)(uintptr_t)erofsmount_nbd_loopfn(&ctx);
-				exit(err ? EXIT_FAILURE : EXIT_SUCCESS);
+				if (err >= sizeof(int)) {
+					err = (int)(uintptr_t)erofsmount_nbd_loopfn(&ctx);
+					goto out_fork;
+				}
 			}
 		}
 		close(ctx.vd.fd);
-		exit(EXIT_FAILURE);
+out_fork:
+		(void)unlink(recp);
+		free(recp);
+		exit(err ? EXIT_FAILURE : EXIT_SUCCESS);
 	}
 	close(pipefd[1]);
 	err = read(pipefd[0], &num, sizeof(int));
