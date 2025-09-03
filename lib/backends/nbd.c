@@ -466,6 +466,46 @@ err_out:
 	close(sv[1]);
 	return err;
 }
+
+int erofs_nbd_nl_reconfigure(int index, const char *identifier,
+			     bool autoclear)
+{
+	struct nl_sock *socket;
+	struct nl_msg *msg;
+	int err, driver_id;
+	unsigned int cflags;
+
+	socket = erofs_nbd_get_nl_sock(&driver_id);
+	if (IS_ERR(socket))
+		return PTR_ERR(socket);
+
+	msg = nlmsg_alloc();
+	if (!msg) {
+		erofs_err("Couldn't allocate netlink message");
+		err = -ENOMEM;
+		goto err_nls_free;
+	}
+
+	err = -EINVAL;
+	genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, driver_id, 0, 0,
+		    NBD_CMD_RECONFIGURE, 0);
+	NLA_PUT_U32(msg, NBD_ATTR_INDEX, index);
+	if (identifier)
+		NLA_PUT_STRING(msg, NBD_ATTR_BACKEND_IDENTIFIER, identifier);
+
+	cflags = (autoclear ? NBD_CFLAG_DISCONNECT_ON_CLOSE : 0);
+	NLA_PUT_U64(msg, NBD_ATTR_CLIENT_FLAGS, cflags);
+
+	err = nl_send_sync(socket, msg);
+	nl_socket_free(socket);
+	return err;
+
+nla_put_failure:
+	nlmsg_free(msg);
+err_nls_free:
+	nl_socket_free(socket);
+	return err;
+}
 #else
 int erofs_nbd_nl_connect(int *index, int blkbits, u64 blocks,
 			 const char *identifier)
@@ -474,6 +514,12 @@ int erofs_nbd_nl_connect(int *index, int blkbits, u64 blocks,
 }
 
 int erofs_nbd_nl_reconnect(int index, const char *identifier)
+{
+	return -EOPNOTSUPP;
+}
+
+int erofs_nbd_nl_reconfigure(int index, const char *identifier,
+			     bool autoclear)
 {
 	return -EOPNOTSUPP;
 }

@@ -544,7 +544,8 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 			  const char *fstype, int flags,
 			  const char *options)
 {
-	char nbdpath[32];
+	bool is_netlink = false;
+	char nbdpath[32], *id;
 	int num, nbdfd;
 	pid_t pid = 0;
 	long err;
@@ -575,6 +576,7 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 	} else {
 		num = err;
 		(void)snprintf(nbdpath, sizeof(nbdpath), "/dev/nbd%d", num);
+		is_netlink = true;
 	}
 
 	while (1) {
@@ -591,6 +593,18 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 		err = mount(nbdpath, mountpoint, fstype, flags, options);
 		if (err < 0)
 			err = -errno;
+
+		if (!err && is_netlink) {
+			id = erofs_nbd_get_identifier(num);
+			if (id == ERR_PTR(-ENOENT))
+				id = NULL;
+
+			err = IS_ERR(id) ? PTR_ERR(id) :
+				erofs_nbd_nl_reconfigure(num, id, true);
+			if (err)
+				erofs_warn("failed to turn on autoclear for nbd%d: %s",
+					   num, erofs_strerror(err));
+		}
 	}
 	return err;
 }
