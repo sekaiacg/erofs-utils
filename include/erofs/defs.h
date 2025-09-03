@@ -384,6 +384,9 @@ unsigned long __roundup_pow_of_two(unsigned long n)
 # define __erofs_fallthrough	do {} while (0)  /* fallthrough */
 #endif
 
+#define __erofs_stringify_1(x...)	#x
+#define __erofs_stringify(x...)		__erofs_stringify_1(x)
+
 #ifdef __cplusplus
 }
 #endif

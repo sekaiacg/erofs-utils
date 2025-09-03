@@ -194,6 +194,29 @@ char *erofs_nbd_get_identifier(int nbdnum)
 	return err ? ERR_PTR(err) : line;
 }
 
+int erofs_nbd_get_index_from_minor(int minor)
+{
+	char s[32], *line = NULL;
+	int ret = -ENOENT;
+	size_t n;
+	FILE *f;
+
+	(void)snprintf(s, sizeof(s),
+		       "/sys/dev/block/" __erofs_stringify(EROFS_NBD_MAJOR) ":%d/uevent", minor);
+	f = fopen(s, "r");
+	if (!f)
+		return -errno;
+
+	while (getline(&line, &n, f) >= 0) {
+		if (strncmp(line, "DEVNAME=nbd", sizeof("DEVNAME=nbd") - 1))
+			continue;
+		ret = strtoul(line + sizeof("DEVNAME=nbd") - 1, NULL, 10);
+		break;
+	}
+	free(line);
+	return ret;
+}
+
 #if defined(HAVE_NETLINK_GENL_GENL_H) && defined(HAVE_LIBNL_GENL_3)
 enum {
 	NBD_ATTR_UNSPEC,

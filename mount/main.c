@@ -41,15 +41,21 @@ enum erofs_backend_drv {
 	EROFSNBD,
 };
 
+enum erofsmount_mode {
+	EROFSMOUNT_MODE_MOUNT,
+	EROFSMOUNT_MODE_UMOUNT,
+	EROFSMOUNT_MODE_REATTACH,
+};
+
 static struct erofsmount_cfg {
 	char *device;
-	char *mountpoint;
+	char *target;
 	char *options;
 	char *full_options;		/* used for erofsfuse */
 	char *fstype;
 	long flags;
 	enum erofs_backend_drv backend;
-	bool umount;
+	enum erofsmount_mode mountmode;
 } mountcfg = {
 	.full_options = "ro",
 	.flags = MS_RDONLY,		/* default mountflags */
@@ -121,6 +127,7 @@ static int erofsmount_parse_options(int argc, char **argv)
 {
 	static const struct option long_options[] = {
 		{"help", no_argument, 0, 'h'},
+		{"reattach", no_argument, 0, 512},
 		{0, 0, 0, 0},
 	};
 	char *dot;
@@ -153,13 +160,16 @@ static int erofsmount_parse_options(int argc, char **argv)
 			mountcfg.fstype = optarg;
 			break;
 		case 'u':
-			mountcfg.umount = true;
+			mountcfg.mountmode = EROFSMOUNT_MODE_UMOUNT;
+			break;
+		case 512:
+			mountcfg.mountmode = EROFSMOUNT_MODE_REATTACH;
 			break;
 		default:
 			return -EINVAL;
 		}
 	}
-	if (!mountcfg.umount) {
+	if (mountcfg.mountmode == EROFSMOUNT_MODE_MOUNT) {
 		if (optind >= argc) {
 			erofs_err("missing argument: DEVICE");
 			return -EINVAL;
@@ -170,12 +180,15 @@ static int erofsmount_parse_options(int argc, char **argv)
 			return -ENOMEM;
 	}
 	if (optind >= argc) {
-		erofs_err("missing argument: MOUNTPOINT");
+		if (mountcfg.mountmode == EROFSMOUNT_MODE_MOUNT)
+			erofs_err("missing argument: MOUNTPOINT");
+		else
+			erofs_err("missing argument: TARGET");
 		return -EINVAL;
 	}
 
-	mountcfg.mountpoint = strdup(argv[optind++]);
-	if (!mountcfg.mountpoint)
+	mountcfg.target = strdup(argv[optind++]);
+	if (!mountcfg.target)
 		return -ENOMEM;
 
 	if (optind < argc) {
@@ -428,6 +441,105 @@ out_fork:
 	return num;
 }
 
+static int erofsmount_reattach(const char *target)
+{
+	char *identifier, *line, *source, *recp = NULL;
+	struct erofsmount_nbd_ctx ctx = {};
+	int nbdnum, err;
+	struct stat st;
+	size_t n;
+	FILE *f;
+
+	err = lstat(target, &st);
+	if (err < 0)
+		return -errno;
+
+	if (!S_ISBLK(st.st_mode) || major(st.st_rdev) != EROFS_NBD_MAJOR)
+		return -ENOTBLK;
+
+	nbdnum = erofs_nbd_get_index_from_minor(minor(st.st_rdev));
+	if (nbdnum < 0)
+		return nbdnum;
+	identifier = erofs_nbd_get_identifier(nbdnum);
+	if (IS_ERR(identifier))
+		identifier = NULL;
+	else if (identifier) {
+		n = strlen(identifier);
+		if (__erofs_unlikely(!n)) {
+			free(identifier);
+			identifier = NULL;
+		} else if (identifier[n - 1] == '\n') {
+			identifier[n - 1] = '\0';
+		}
+	}
+
+	if (!identifier &&
+	    (asprintf(&recp, "/var/run/erofs/mountnbd_nbd%d", nbdnum) <= 0)) {
+		err = -ENOMEM;
+		goto err_identifier;
+	}
+
+	f = fopen(identifier ?: recp, "r");
+	if (!f) {
+		err = -errno;
+		free(recp);
+		goto err_identifier;
+	}
+	free(recp);
+
+	line = NULL;
+	if ((err = getline(&line, &n, f)) <= 0) {
+		err = -errno;
+		fclose(f);
+		goto err_identifier;
+	}
+	fclose(f);
+	if (err && line[err - 1] == '\n')
+		line[err - 1] = '\0';
+
+	source = strchr(line, ' ');
+	if (!source) {
+		erofs_err("invalid source recorded in recovery file: %s", line);
+		err = -EINVAL;
+		goto err_line;
+	} else {
+		*(source++) = '\0';
+	}
+
+	if (strcmp(line, "LOCAL")) {
+		err = -EOPNOTSUPP;
+		erofs_err("unsupported source type %s recorded in recovery file", line);
+		goto err_line;
+	}
+
+	err = open(source, O_RDONLY);
+	if (err < 0) {
+		err = -errno;
+		goto err_line;
+	}
+	ctx.vd.fd = err;
+
+	err = erofs_nbd_nl_reconnect(nbdnum, identifier);
+	if (err >= 0) {
+		ctx.sk.fd = err;
+		if (fork() == 0) {
+			free(line);
+			free(identifier);
+			if ((uintptr_t)erofsmount_nbd_loopfn(&ctx))
+				return EXIT_FAILURE;
+			return EXIT_SUCCESS;
+		}
+		close(ctx.sk.fd);
+		err = 0;
+	}
+	close(ctx.vd.fd);
+err_line:
+	free(line);
+err_identifier:
+	free(identifier);
+	return err;
+}
+
 static int erofsmount_nbd(const char *source, const char *mountpoint,
 			  const char *fstype, int flags,
 			  const char *options)
@@ -446,6 +558,7 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 
 	err = erofsmount_startnbd_nl(&pid, source);
 	if (err < 0) {
+		erofs_info("Fall back to ioctl-based NBD; failover is unsupported");
 		num = erofs_nbd_devscan();
 		if (num < 0)
 			return num;
@@ -649,37 +762,45 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	if (mountcfg.umount) {
-		err = erofsmount_umount(mountcfg.mountpoint);
+	if (mountcfg.mountmode == EROFSMOUNT_MODE_UMOUNT) {
+		err = erofsmount_umount(mountcfg.target);
 		if (err < 0)
 			fprintf(stderr, "Failed to unmount %s: %s\n",
-				mountcfg.mountpoint, erofs_strerror(err));
+				mountcfg.target, erofs_strerror(err));
+		return err ? EXIT_FAILURE : EXIT_SUCCESS;
+	}
+
+	if (mountcfg.mountmode == EROFSMOUNT_MODE_REATTACH) {
+		err = erofsmount_reattach(mountcfg.target);
+		if (err < 0)
+			fprintf(stderr, "Failed to reattach %s: %s\n",
+				mountcfg.target, erofs_strerror(err));
 		return err ? EXIT_FAILURE : EXIT_SUCCESS;
 	}
 
 	if (mountcfg.backend == EROFSFUSE) {
-		err = erofsmount_fuse(mountcfg.device, mountcfg.mountpoint,
+		err = erofsmount_fuse(mountcfg.device, mountcfg.target,
 				      mountcfg.fstype, mountcfg.full_options);
 		goto exit;
 	}
 
 	if (mountcfg.backend == EROFSNBD) {
-		err = erofsmount_nbd(mountcfg.device, mountcfg.mountpoint,
+		err = erofsmount_nbd(mountcfg.device, mountcfg.target,
 				     mountcfg.fstype, mountcfg.flags,
 				     mountcfg.options);
 		goto exit;
 	}
 
-	err = mount(mountcfg.device, mountcfg.mountpoint, mountcfg.fstype,
+	err = mount(mountcfg.device, mountcfg.target, mountcfg.fstype,
 		    mountcfg.flags, mountcfg.options);
 	if (err < 0)
 		err = -errno;
 
 	if ((err == -ENODEV || err == -EPERM) && mountcfg.backend == EROFSAUTO)
-		err = erofsmount_fuse(mountcfg.device, mountcfg.mountpoint,
+		err = erofsmount_fuse(mountcfg.device, mountcfg.target,
 				      mountcfg.fstype, mountcfg.full_options);
 	else if (err == -ENOTBLK)
-		err = erofsmount_loopmount(mountcfg.device, mountcfg.mountpoint,
+		err = erofsmount_loopmount(mountcfg.device, mountcfg.target,
 					   mountcfg.fstype, mountcfg.flags,
 					   mountcfg.options);
 exit:

@@ -37,6 +37,8 @@ struct erofs_nbd_request {
 long erofs_nbd_in_service(int nbdnum);
 int erofs_nbd_devscan(void);
 int erofs_nbd_connect(int nbdfd, int blkbits, u64 blocks);
+char *erofs_nbd_get_identifier(int nbdnum);
+int erofs_nbd_get_index_from_minor(int minor);
 int erofs_nbd_do_it(int nbdfd);
 int erofs_nbd_get_request(int skfd, struct erofs_nbd_request *rq);
 int erofs_nbd_send_reply_header(int skfd, __le64 cookie, int err);
