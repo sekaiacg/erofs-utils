@@ -39,4 +39,6 @@ int erofs_nbd_get_request(int skfd, struct erofs_nbd_request *rq);
 int erofs_nbd_send_reply_header(int skfd, __le64 cookie, int err);
 int erofs_nbd_disconnect(int nbdfd);
 
+int erofs_nbd_nl_connect(int *index, int blkbits, u64 blocks,
+			 const char *identifier);
 #endif

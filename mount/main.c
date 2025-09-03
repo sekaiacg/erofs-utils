@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <sys/mount.h>
 #include <sys/types.h>
 #include <pthread.h>
@@ -299,13 +300,60 @@ out_closefd:
 	return err;
 }
 
+static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
+{
+	struct erofsmount_nbd_ctx ctx = {};
+	int err, num;
+	int pipefd[2];
+
+	err = open(source, O_RDONLY);
+	if (err < 0)
+		return -errno;
+	ctx.vd.fd = err;
+
+	err = pipe(pipefd);
+	if (err < 0) {
+		err = -errno;
+		close(ctx.vd.fd);
+		return err;
+	}
+	if ((*pid = fork()) == 0) {
+		/* Otherwise, NBD disconnect sends SIGPIPE, skipping cleanup */
+		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+			close(ctx.vd.fd);
+			exit(EXIT_FAILURE);
+		}
+
+		num = -1;
+		err = erofs_nbd_nl_connect(&num, 9, INT64_MAX >> 9, NULL);
+		if (err >= 0) {
+			ctx.sk.fd = err;
+			err = write(pipefd[1], &num, sizeof(int));
+			if (err >= sizeof(int)) {
+				close(pipefd[1]);
+				close(pipefd[0]);
+				err = (int)(uintptr_t)erofsmount_nbd_loopfn(&ctx);
+				exit(err ? EXIT_FAILURE : EXIT_SUCCESS);
+			}
+		}
+		close(ctx.vd.fd);
+		exit(EXIT_FAILURE);
+	}
+	close(pipefd[1]);
+	err = read(pipefd[0], &num, sizeof(int));
+	close(pipefd[0]);
+	if (err < sizeof(int))
+		return -EPIPE;
+	return num;
+}
+
 static int erofsmount_nbd(const char *source, const char *mountpoint,
 			  const char *fstype, int flags,
 			  const char *options)
 {
 	char nbdpath[32];
 	int num, nbdfd;
-	pid_t pid;
+	pid_t pid = 0;
 	long err;
 
 	if (strcmp(fstype, "erofs")) {
@@ -315,19 +363,25 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 	}
 	flags |= MS_RDONLY;
 
-	num = erofs_nbd_devscan();
-	if (num < 0)
-		return num;
+	err = erofsmount_startnbd_nl(&pid, source);
+	if (err < 0) {
+		num = erofs_nbd_devscan();
+		if (num < 0)
+			return num;
 
-	(void)snprintf(nbdpath, sizeof(nbdpath), "/dev/nbd%d", num);
-	nbdfd = open(nbdpath, O_RDWR);
-	if (nbdfd < 0)
-		return -errno;
+		(void)snprintf(nbdpath, sizeof(nbdpath), "/dev/nbd%d", num);
+		nbdfd = open(nbdpath, O_RDWR);
+		if (nbdfd < 0)
+			return -errno;
 
-	if ((pid = fork()) == 0)
-		return erofsmount_startnbd(nbdfd, source) ?
-			EXIT_FAILURE : EXIT_SUCCESS;
-	close(nbdfd);
+		if ((pid = fork()) == 0)
+			return erofsmount_startnbd(nbdfd, source) ?
+				EXIT_FAILURE : EXIT_SUCCESS;
+		close(nbdfd);
+	} else {
+		num = err;
+		(void)snprintf(nbdpath, sizeof(nbdpath), "/dev/nbd%d", num);
+	}
 
 	while (1) {
 		err = erofs_nbd_in_service(num);

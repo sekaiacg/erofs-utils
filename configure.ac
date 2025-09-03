@@ -181,6 +181,10 @@ AC_ARG_WITH(json_c,
    [AS_HELP_STRING([--with-json-c],
       [Enable and build with json-c support @<:@default=auto@:>@])])
 
+AC_ARG_WITH(libnl3,
+   [AS_HELP_STRING([--with-libnl3],
+      [Enable and build with libnl3 support @<:@default=auto@:>@])])
+
 AC_ARG_ENABLE(s3,
    [AS_HELP_STRING([--enable-s3], [enable s3 image generation support @<:@default=no@:>@])],
    [enable_s3="$enableval"], [enable_s3="no"])
@@ -714,6 +718,31 @@ AS_IF([test "x$with_libxml2" != "xno"], [
     CPPFLAGS="${saved_CPPFLAGS}"], [
     AS_IF([test "x$with_libxml2" = "xyes"], [
       AC_MSG_ERROR([Cannot find proper libxml2])
+    ])
+  ])
+])
+
+# Configure libnl3
+have_libnl3="no"
+AS_IF([test "x$with_libnl3" != "xno"], [
+  PKG_CHECK_MODULES([libnl3], [libnl-genl-3.0 >= 3.1], [
+    # Paranoia: don't trust the result reported by pkgconfig before trying out
+    saved_LIBS="$LIBS"
+    saved_CPPFLAGS=${CPPFLAGS}
+    CPPFLAGS="${libnl3_CFLAGS} ${CPPFLAGS}"
+    LIBS="${libnl3_LIBS} $LIBS"
+    AC_CHECK_HEADERS([netlink/genl/genl.h],[
+      AC_CHECK_LIB(nl-genl-3, genl_connect, [], [
+        AC_MSG_ERROR([libnl3 doesn't work properly])])
+      AC_CHECK_DECL(genl_connect, [have_libnl3="yes"],
+        [AC_MSG_ERROR([libnl3 doesn't work properly])], [[
+#include <netlink/genl/genl.h>
+      ]])
+    ])
+    LIBS="${saved_LIBS}"
+    CPPFLAGS="${saved_CPPFLAGS}"], [
+    AS_IF([test "x$with_libnl3" = "xyes"], [
+      AC_MSG_ERROR([Cannot find proper libnl3])
     ])
   ])
 ])

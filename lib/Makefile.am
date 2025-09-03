@@ -79,6 +79,7 @@ liberofs_la_LDFLAGS += -lpthread
 liberofs_la_SOURCES += workqueue.c
 endif
 if OS_LINUX
+liberofs_la_CFLAGS += ${libnl3_CFLAGS}
 liberofs_la_SOURCES += backends/nbd.c
 endif
 if ENABLE_OCI
