@@ -31,6 +31,9 @@ struct erofs_nbd_request {
         u32 len;
 } __packed;
 
+/* 30-day timeout for NBD recovery */
+#define EROFS_NBD_DEAD_CONN_TIMEOUT	(3600 * 24 * 30)
+
 long erofs_nbd_in_service(int nbdnum);
 int erofs_nbd_devscan(void);
 int erofs_nbd_connect(int nbdfd, int blkbits, u64 blocks);
@@ -41,4 +44,5 @@ int erofs_nbd_disconnect(int nbdfd);
 
 int erofs_nbd_nl_connect(int *index, int blkbits, u64 blocks,
 			 const char *identifier);
+int erofs_nbd_nl_reconnect(int index, const char *identifier);
 #endif

@@ -174,6 +174,26 @@ err_out:
 	return err;
 }
 
+char *erofs_nbd_get_identifier(int nbdnum)
+{
+	char s[32], *line = NULL;
+	size_t n;
+	FILE *f;
+	int err;
+
+	(void)snprintf(s, sizeof(s), "/sys/block/nbd%d/backend", nbdnum);
+	f = fopen(s, "r");
+	if (!f)
+		return ERR_PTR(-errno);
+
+	if (getline(&line, &n, f) < 0)
+		err = -errno;
+	else
+		err = 0;
+	fclose(f);
+	return err ? ERR_PTR(err) : line;
+}
+
 #if defined(HAVE_NETLINK_GENL_GENL_H) && defined(HAVE_LIBNL_GENL_3)
 enum {
 	NBD_ATTR_UNSPEC,
@@ -209,6 +229,7 @@ enum {
 	NBD_CMD_UNSPEC,
 	NBD_CMD_CONNECT,
 	NBD_CMD_DISCONNECT,
+	NBD_CMD_RECONFIGURE,
 	__NBD_CMD_MAX,
 };
 
@@ -312,6 +333,7 @@ int erofs_nbd_nl_connect(int *index, int blkbits, u64 blocks,
 	NLA_PUT_U64(msg, NBD_ATTR_SIZE_BYTES, blocks << blkbits);
 	NLA_PUT_U64(msg, NBD_ATTR_SERVER_FLAGS, NBD_FLAG_READ_ONLY);
 	NLA_PUT_U64(msg, NBD_ATTR_TIMEOUT, 0);
+	NLA_PUT_U64(msg, NBD_ATTR_DEAD_CONN_TIMEOUT, EROFS_NBD_DEAD_CONN_TIMEOUT);
 	if (identifier)
 		NLA_PUT_STRING(msg, NBD_ATTR_BACKEND_IDENTIFIER, identifier);
 
@@ -353,9 +375,82 @@ err_out:
 	close(sv[1]);
 	return err;
 }
+
+int erofs_nbd_nl_reconnect(int index, const char *identifier)
+{
+	struct nlattr *sock_attr = NULL, *sock_opt = NULL;
+	struct nl_sock *socket;
+	struct nl_msg *msg;
+	int sv[2], err;
+	int driver_id;
+
+	err = socketpair(AF_UNIX, SOCK_STREAM, 0, sv);
+	if (err < 0)
+		return -errno;
+
+	socket = erofs_nbd_get_nl_sock(&driver_id);
+	if (IS_ERR(socket)) {
+		err = PTR_ERR(socket);
+		goto err_out;
+	}
+
+	msg = nlmsg_alloc();
+	if (!msg) {
+		erofs_err("Couldn't allocate netlink message");
+		err = -ENOMEM;
+		goto err_nls_free;
+	}
+
+	genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, driver_id, 0, 0,
+		    NBD_CMD_RECONFIGURE, 0);
+	NLA_PUT_U32(msg, NBD_ATTR_INDEX, index);
+	if (identifier)
+		NLA_PUT_STRING(msg, NBD_ATTR_BACKEND_IDENTIFIER, identifier);
+
+	err = -EINVAL;
+	sock_attr = nla_nest_start(msg, NBD_ATTR_SOCKETS);
+	if (!sock_attr) {
+		erofs_err("Couldn't nest the sockets for our connection");
+		goto err_nlm_free;
+	}
+
+	sock_opt = nla_nest_start(msg, NBD_SOCK_ITEM);
+	if (!sock_opt) {
+		nla_nest_cancel(msg, sock_attr);
+		goto err_nlm_free;
+	}
+	NLA_PUT_U32(msg, NBD_SOCK_FD, sv[1]);
+	nla_nest_end(msg, sock_opt);
+	nla_nest_end(msg, sock_attr);
+
+	err = nl_send_sync(socket, msg);
+	if (err)
+		goto err_out;
+	nl_socket_free(socket);
+	return sv[0];
+
+nla_put_failure:
+	if (sock_opt)
+		nla_nest_cancel(msg, sock_opt);
+	if (sock_attr)
+		nla_nest_cancel(msg, sock_attr);
+err_nlm_free:
+	nlmsg_free(msg);
+err_nls_free:
+	nl_socket_free(socket);
+err_out:
+	close(sv[0]);
+	close(sv[1]);
+	return err;
+}
 #else
 int erofs_nbd_nl_connect(int *index, int blkbits, u64 blocks,
 			 const char *identifier)
+{
+	return -EOPNOTSUPP;
+}
+
+int erofs_nbd_nl_reconnect(int index, const char *identifier)
 {
 	return -EOPNOTSUPP;
 }
