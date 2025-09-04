@@ -8,9 +8,6 @@
 
 #include <stdbool.h>
 
-#define DOCKER_REGISTRY "docker.io"
-#define DOCKER_API_REGISTRY "registry-1.docker.io"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -78,6 +75,15 @@ void ocierofs_cleanup(struct erofs_oci *oci);
  * Return: 0 on success, negative errno on failure
  */
 int erofs_oci_params_set_string(char **field, const char *value);
+
+/*
+ * ocierofs_parse_ref - Parse OCI image reference string
+ * @oci: OCI client structure
+ * @ref_str: OCI image reference string
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+int ocierofs_parse_ref(struct erofs_oci *oci, const char *ref_str);
 
 /*
  * ocierofs_build_trees - Build file trees from OCI container image layers
