@@ -272,7 +272,7 @@ static struct erofs_s3 s3cfg;
 #endif
 
 #ifdef OCIEROFS_ENABLED
-static struct erofs_oci ocicfg;
+static struct ocierofs_config ocicfg;
 static char *mkfs_oci_options;
 #endif
 
@@ -689,10 +689,9 @@ static int mkfs_parse_s3_cfg(char *cfg_str)
 #endif
 
 #ifdef OCIEROFS_ENABLED
-
-
-/**
+/*
  * mkfs_parse_oci_options - Parse comma-separated OCI options string
+ * @cfg: OCI configuration structure to update
  * @options_str: comma-separated options string
  *
  * Parse OCI options string containing comma-separated key=value pairs.
@@ -700,10 +699,9 @@ static int mkfs_parse_s3_cfg(char *cfg_str)
  *
  * Return: 0 on success, negative errno on failure
  */
-static int mkfs_parse_oci_options(char *options_str)
+static int mkfs_parse_oci_options(struct ocierofs_config *oci_cfg, char *options_str)
 {
 	char *opt, *q, *p;
-	int ret;
 
 	if (!options_str)
 		return 0;
@@ -717,41 +715,43 @@ static int mkfs_parse_oci_options(char *options_str)
 		p = strstr(opt, "platform=");
 		if (p) {
 			p += strlen("platform=");
-			ret = erofs_oci_params_set_string(&ocicfg.params.platform, p);
-			if (ret) {
-				erofs_err("failed to set platform");
-				return ret;
-			}
+			free(oci_cfg->platform);
+			oci_cfg->platform = strdup(p);
+			if (!oci_cfg->platform)
+				return -ENOMEM;
 		} else {
 			p = strstr(opt, "layer=");
 			if (p) {
 				p += strlen("layer=");
-				ocicfg.params.layer_index = atoi(p);
-				if (ocicfg.params.layer_index < 0) {
-					erofs_err("invalid layer index %d",
-						  ocicfg.params.layer_index);
-					return -EINVAL;
+				{
+					char *endptr;
+					unsigned long v = strtoul(p, &endptr, 10);
+
+					if (endptr == p || *endptr != '\0') {
+						erofs_err("invalid layer index %s",
+						  p);
+						return -EINVAL;
+					}
+					oci_cfg->layer_index = (int)v;
 				}
 			} else {
 				p = strstr(opt, "username=");
 				if (p) {
 					p += strlen("username=");
-					ret = erofs_oci_params_set_string(&ocicfg.params.username, p);
-					if (ret) {
-						erofs_err("failed to set username");
-						return ret;
-					}
+					free(oci_cfg->username);
+					oci_cfg->username = strdup(p);
+					if (!oci_cfg->username)
+						return -ENOMEM;
 				} else {
 					p = strstr(opt, "password=");
 					if (p) {
 						p += strlen("password=");
-						ret = erofs_oci_params_set_string(&ocicfg.params.password, p);
-						if (ret) {
-							erofs_err("failed to set password");
-							return ret;
-						}
+					free(oci_cfg->password);
+					oci_cfg->password = strdup(p);
+					if (!oci_cfg->password)
+						return -ENOMEM;
 					} else {
-						erofs_err("invalid --oci value %s", opt);
+						erofs_err("mkfs: invalid --oci value %s", opt);
 						return -EINVAL;
 					}
 				}
@@ -1832,16 +1832,12 @@ int main(int argc, char **argv)
 #endif
 #ifdef OCIEROFS_ENABLED
 		} else if (source_mode == EROFS_MKFS_SOURCE_OCI) {
-			err = ocierofs_init(&ocicfg);
-			if (err)
-				goto exit;
+			ocicfg.layer_index = -1;
 
-			err = mkfs_parse_oci_options(mkfs_oci_options);
+			err = mkfs_parse_oci_options(&ocicfg, mkfs_oci_options);
 			if (err)
 				goto exit;
-			err = ocierofs_parse_ref(&ocicfg, cfg.c_src_path);
-			if (err)
-				goto exit;
+			ocicfg.image_ref = cfg.c_src_path;
 
 			if (incremental_mode ||
 			    dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP ||
@@ -1916,9 +1912,6 @@ exit:
 		erofs_blob_exit();
 	erofs_xattr_cleanup_name_prefixes();
 	erofs_rebuild_cleanup();
-#ifdef OCIEROFS_ENABLED
-	ocierofs_cleanup(&ocicfg);
-#endif
 	erofs_diskbuf_exit();
 	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
 		erofs_iostream_close(&erofstar.ios);

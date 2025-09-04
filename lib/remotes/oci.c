@@ -33,28 +33,61 @@
 #define OCI_MEDIATYPE_MANIFEST "application/vnd.oci.image.manifest.v1+json"
 #define OCI_MEDIATYPE_INDEX "application/vnd.oci.image.index.v1+json"
 
-struct erofs_oci_request {
+struct ocierofs_request {
 	char *url;
 	struct curl_slist *headers;
 };
 
-struct erofs_oci_response {
+struct ocierofs_response {
 	char *data;
 	size_t size;
 	long http_code;
 };
 
-struct erofs_oci_stream {
-	struct erofs_tarfile tarfile;
+struct ocierofs_stream {
 	const char *digest;
 	int blobfd;
 };
+
+static inline const char *ocierofs_get_api_registry(const char *registry)
+{
+	if (!registry)
+		return DOCKER_API_REGISTRY;
+	return !strcmp(registry, DOCKER_REGISTRY) ? DOCKER_API_REGISTRY : registry;
+}
+
+static inline bool ocierofs_is_manifest(const char *media_type)
+{
+	return media_type && (!strcmp(media_type, DOCKER_MEDIATYPE_MANIFEST_V2) ||
+			       !strcmp(media_type, OCI_MEDIATYPE_MANIFEST));
+}
+
+static inline void ocierofs_request_cleanup(struct ocierofs_request *req)
+{
+	if (!req)
+		return;
+	if (req->headers)
+		curl_slist_free_all(req->headers);
+	free(req->url);
+	req->url = NULL;
+	req->headers = NULL;
+}
+
+static inline void ocierofs_response_cleanup(struct ocierofs_response *resp)
+{
+	if (!resp)
+		return;
+	free(resp->data);
+	resp->data = NULL;
+	resp->size = 0;
+	resp->http_code = 0;
+}
 
 static size_t ocierofs_write_callback(void *contents, size_t size,
 				      size_t nmemb, void *userp)
 {
 	size_t realsize = size * nmemb;
-	struct erofs_oci_response *resp = userp;
+	struct ocierofs_response *resp = userp;
 	char *ptr;
 
 	if (!resp->data)
@@ -75,16 +108,23 @@ static size_t ocierofs_write_callback(void *contents, size_t size,
 static size_t ocierofs_layer_write_callback(void *contents, size_t size,
 					    size_t nmemb, void *userp)
 {
-	struct erofs_oci_stream *stream = userp;
+	struct ocierofs_stream *stream = userp;
 	size_t realsize = size * nmemb;
+	const char *buf = contents;
+	size_t written = 0;
 
 	if (stream->blobfd < 0)
 		return 0;
 
-	if (write(stream->blobfd, contents, realsize) != realsize) {
-		erofs_err("failed to write layer data for layer %s",
-			  stream->digest);
-		return 0;
+	while (written < realsize) {
+		ssize_t n = write(stream->blobfd, buf + written, realsize - written);
+
+		if (n < 0) {
+			erofs_err("failed to write layer data for layer %s",
+				  stream->digest);
+			return 0;
+		}
+		written += n;
 	}
 	return realsize;
 }
@@ -96,6 +136,14 @@ static int ocierofs_curl_setup_common_options(struct CURL *curl)
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
 	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "ocierofs/" PACKAGE_VERSION);
+	curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+#if defined(CURLOPT_TCP_KEEPIDLE)
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 30L);
+#endif
+#if defined(CURLOPT_TCP_KEEPINTVL)
+	curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 15L);
+#endif
 	return 0;
 }
 
@@ -114,10 +162,10 @@ static int ocierofs_curl_setup_basic_auth(struct CURL *curl, const char *usernam
 	return 0;
 }
 
-static int ocierofs_curl_clear_auth(struct CURL *curl)
+static int ocierofs_curl_clear_auth(struct ocierofs_ctx *ctx)
 {
-	curl_easy_setopt(curl, CURLOPT_USERPWD, NULL);
-	curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_NONE);
+	curl_easy_setopt(ctx->curl, CURLOPT_USERPWD, NULL);
+	curl_easy_setopt(ctx->curl, CURLOPT_HTTPAUTH, CURLAUTH_NONE);
 	return 0;
 }
 
@@ -176,20 +224,20 @@ static int ocierofs_curl_perform(struct CURL *curl, long *http_code_out)
 	return 0;
 }
 
-static int ocierofs_request_perform(struct erofs_oci *oci,
-				    struct erofs_oci_request *req,
-				    struct erofs_oci_response *resp)
+static int ocierofs_request_perform(struct ocierofs_ctx *ctx,
+				    struct ocierofs_request *req,
+				    struct ocierofs_response *resp)
 {
 	int ret;
 
-	ret = ocierofs_curl_setup_rq(oci->curl, req->url,
+	ret = ocierofs_curl_setup_rq(ctx->curl, req->url,
 				     OCIEROFS_HTTP_GET, req->headers,
 			             ocierofs_write_callback, resp,
 				     NULL, NULL);
 	if (ret)
 		return ret;
 
-	ret = ocierofs_curl_perform(oci->curl, &resp->http_code);
+	ret = ocierofs_curl_perform(ctx->curl, &resp->http_code);
 	if (ret)
 		return ret;
 
@@ -338,7 +386,7 @@ static int ocierofs_extract_www_auth_info(const char *resp_data,
 
 /**
  * ocierofs_get_auth_token_with_url - Get authentication token from auth server
- * @oci: OCI client structure
+ * @ctx: OCI context structure
  * @auth_url: authentication server URL
  * @service: service name for authentication
  * @repository: repository name
@@ -350,15 +398,12 @@ static int ocierofs_extract_www_auth_info(const char *resp_data,
  *
  * Return: authentication header string on success, ERR_PTR on failure
  */
-static char *ocierofs_get_auth_token_with_url(struct erofs_oci *oci,
-					      const char *auth_url,
-					      const char *service,
-					      const char *repository,
-					      const char *username,
-					      const char *password)
+static char *ocierofs_get_auth_token_with_url(struct ocierofs_ctx *ctx, const char *auth_url,
+					      const char *service, const char *repository,
+					      const char *username, const char *password)
 {
-	struct erofs_oci_request req = {};
-	struct erofs_oci_response resp = {};
+	struct ocierofs_request req = {};
+	struct ocierofs_response resp = {};
 	json_object *root, *token_obj, *access_token_obj;
 	const char *token;
 	char *auth_header = NULL;
@@ -373,14 +418,14 @@ static char *ocierofs_get_auth_token_with_url(struct erofs_oci *oci,
 	}
 
 	if (username && password && *username) {
-		ret = ocierofs_curl_setup_basic_auth(oci->curl, username,
+		ret = ocierofs_curl_setup_basic_auth(ctx->curl, username,
 						     password);
 		if (ret)
 			goto out_url;
 	}
 
-	ret = ocierofs_request_perform(oci, &req, &resp);
-	ocierofs_curl_clear_auth(oci->curl);
+	ret = ocierofs_request_perform(ctx, &req, &resp);
+	ocierofs_curl_clear_auth(ctx);
 	if (ret)
 		goto out_url;
 
@@ -394,7 +439,7 @@ static char *ocierofs_get_auth_token_with_url(struct erofs_oci *oci,
 	if (!root) {
 		erofs_err("failed to parse auth response");
 		ret = -EINVAL;
-		goto out_url;
+		goto out_json;
 	}
 
 	if (!json_object_object_get_ex(root, "token", &token_obj) &&
@@ -419,16 +464,16 @@ static char *ocierofs_get_auth_token_with_url(struct erofs_oci *oci,
 out_json:
 	json_object_put(root);
 out_url:
-	free(req.url);
-	free(resp.data);
+	ocierofs_response_cleanup(&resp);
+	ocierofs_request_cleanup(&req);
 	return ret ? ERR_PTR(ret) : auth_header;
 }
 
-static char *ocierofs_discover_auth_endpoint(struct erofs_oci *oci,
+static char *ocierofs_discover_auth_endpoint(struct ocierofs_ctx *ctx,
 					     const char *registry,
 					     const char *repository)
 {
-	struct erofs_oci_response resp = {};
+	struct ocierofs_response resp = {};
 	char *realm = NULL;
 	char *service = NULL;
 	char *result = NULL;
@@ -437,20 +482,20 @@ static char *ocierofs_discover_auth_endpoint(struct erofs_oci *oci,
 	CURLcode res;
 	long http_code;
 
-	api_registry = (!strcmp(registry, DOCKER_REGISTRY)) ? DOCKER_API_REGISTRY : registry;
+	api_registry = ocierofs_get_api_registry(registry);
 
 	if (asprintf(&test_url, "https://%s/v2/%s/manifests/nonexistent",
 	     api_registry, repository) < 0)
 		return NULL;
 
-	curl_easy_reset(oci->curl);
-	ocierofs_curl_setup_common_options(oci->curl);
+	curl_easy_reset(ctx->curl);
+	ocierofs_curl_setup_common_options(ctx->curl);
 
-	ocierofs_curl_setup_rq(oci->curl, test_url, OCIEROFS_HTTP_HEAD, NULL,
+	ocierofs_curl_setup_rq(ctx->curl, test_url, OCIEROFS_HTTP_HEAD, NULL,
 			       NULL, NULL, ocierofs_write_callback, &resp);
 
-	res = curl_easy_perform(oci->curl);
-	curl_easy_getinfo(oci->curl, CURLINFO_RESPONSE_CODE, &http_code);
+	res = curl_easy_perform(ctx->curl);
+	curl_easy_getinfo(ctx->curl, CURLINFO_RESPONSE_CODE, &http_code);
 
 	if (res == CURLE_OK && (http_code == 401 || http_code == 403 ||
 	    http_code == 404) && resp.data) {
@@ -461,12 +506,12 @@ static char *ocierofs_discover_auth_endpoint(struct erofs_oci *oci,
 	}
 	free(realm);
 	free(service);
-	free(resp.data);
+	ocierofs_response_cleanup(&resp);
 	free(test_url);
 	return result;
 }
 
-static char *ocierofs_get_auth_token(struct erofs_oci *oci, const char *registry,
+static char *ocierofs_get_auth_token(struct ocierofs_ctx *ctx, const char *registry,
 				     const char *repository, const char *username,
 				     const char *password)
 {
@@ -487,35 +532,35 @@ static char *ocierofs_get_auth_token(struct erofs_oci *oci, const char *registry
 		!strcmp(registry, DOCKER_REGISTRY);
 	if (docker_reg) {
 		service = "registry.docker.io";
-		auth_header = ocierofs_get_auth_token_with_url(oci,
+		auth_header = ocierofs_get_auth_token_with_url(ctx,
 				"https://auth.docker.io/token", service, repository,
 				username, password);
 		if (!IS_ERR(auth_header))
 			return auth_header;
 	}
 
-	discovered_auth_url = ocierofs_discover_auth_endpoint(oci, registry, repository);
+	discovered_auth_url = ocierofs_discover_auth_endpoint(ctx, registry, repository);
 	if (discovered_auth_url) {
 		const char *api_registry, *auth_service;
-		struct erofs_oci_response resp = {};
+		struct ocierofs_response resp = {};
 		char *test_url;
 		CURLcode res;
 		long http_code;
 
-		api_registry = (!strcmp(registry, DOCKER_REGISTRY)) ? DOCKER_API_REGISTRY : registry;
+		api_registry = ocierofs_get_api_registry(registry);
 
 		if (asprintf(&test_url, "https://%s/v2/%s/manifests/nonexistent",
 		     api_registry, repository) >= 0) {
-			curl_easy_reset(oci->curl);
-			ocierofs_curl_setup_common_options(oci->curl);
+			curl_easy_reset(ctx->curl);
+			ocierofs_curl_setup_common_options(ctx->curl);
 
-			ocierofs_curl_setup_rq(oci->curl, test_url,
+			ocierofs_curl_setup_rq(ctx->curl, test_url,
 					       OCIEROFS_HTTP_HEAD, NULL,
 					       NULL, NULL,
 					       ocierofs_write_callback, &resp);
 
-			res = curl_easy_perform(oci->curl);
-			curl_easy_getinfo(oci->curl, CURLINFO_RESPONSE_CODE, &http_code);
+			res = curl_easy_perform(ctx->curl);
+			curl_easy_getinfo(ctx->curl, CURLINFO_RESPONSE_CODE, &http_code);
 
 			if (res == CURLE_OK && (http_code == 401 || http_code == 403 ||
 			    http_code == 404) && resp.data) {
@@ -524,12 +569,12 @@ static char *ocierofs_get_auth_token(struct erofs_oci *oci, const char *registry
 				ocierofs_extract_www_auth_info(resp.data, &realm, &discovered_service, NULL);
 				free(realm);
 			}
-			free(resp.data);
+			ocierofs_response_cleanup(&resp);
 			free(test_url);
 		}
 
 		auth_service = discovered_service ? discovered_service : service;
-		auth_header = ocierofs_get_auth_token_with_url(oci, discovered_auth_url,
+		auth_header = ocierofs_get_auth_token_with_url(ctx, discovered_auth_url,
 							       auth_service, repository,
 							       username, password);
 		free(discovered_auth_url);
@@ -544,7 +589,7 @@ static char *ocierofs_get_auth_token(struct erofs_oci *oci, const char *registry
 		if (asprintf(&auth_url, auth_patterns[i], registry) < 0)
 			continue;
 
-		auth_header = ocierofs_get_auth_token_with_url(oci, auth_url,
+		auth_header = ocierofs_get_auth_token_with_url(ctx, auth_url,
 							       service, repository,
 							       username, password);
 		free(auth_url);
@@ -557,24 +602,21 @@ static char *ocierofs_get_auth_token(struct erofs_oci *oci, const char *registry
 	return ERR_PTR(-ENOENT);
 }
 
-static char *ocierofs_get_manifest_digest(struct erofs_oci *oci,
+static char *ocierofs_get_manifest_digest(struct ocierofs_ctx *ctx,
 					  const char *registry,
 					  const char *repository, const char *tag,
 					  const char *platform,
 					  const char *auth_header)
 {
-	struct erofs_oci_request req = {};
-	struct erofs_oci_response resp = {};
+	struct ocierofs_request req = {};
+	struct ocierofs_response resp = {};
 	json_object *root, *manifests, *manifest, *platform_obj, *arch_obj;
 	json_object *os_obj, *digest_obj, *schema_obj, *media_type_obj;
 	char *digest = NULL;
 	const char *api_registry;
 	int ret = 0, len, i;
 
-	if (!registry || !repository || !tag || !platform)
-		return ERR_PTR(-EINVAL);
-
-	api_registry = (!strcmp(registry, DOCKER_REGISTRY)) ? DOCKER_API_REGISTRY : registry;
+	api_registry = ocierofs_get_api_registry(registry);
 	if (asprintf(&req.url, "https://%s/v2/%s/manifests/%s",
 	     api_registry, repository, tag) < 0)
 		return ERR_PTR(-ENOMEM);
@@ -584,10 +626,10 @@ static char *ocierofs_get_manifest_digest(struct erofs_oci *oci,
 
 	req.headers = curl_slist_append(req.headers,
 		"Accept: " DOCKER_MEDIATYPE_MANIFEST_LIST ","
-		OCI_MEDIATYPE_INDEX "," DOCKER_MEDIATYPE_MANIFEST_V1 ","
-		DOCKER_MEDIATYPE_MANIFEST_V2);
+		OCI_MEDIATYPE_INDEX "," OCI_MEDIATYPE_MANIFEST ","
+		DOCKER_MEDIATYPE_MANIFEST_V1 "," DOCKER_MEDIATYPE_MANIFEST_V2);
 
-	ret = ocierofs_request_perform(oci, &req, &resp);
+	ret = ocierofs_request_perform(ctx, &req, &resp);
 	if (ret)
 		goto out;
 
@@ -615,8 +657,7 @@ static char *ocierofs_get_manifest_digest(struct erofs_oci *oci,
 	if (json_object_object_get_ex(root, "mediaType", &media_type_obj)) {
 		const char *media_type = json_object_get_string(media_type_obj);
 
-		if (!strcmp(media_type, DOCKER_MEDIATYPE_MANIFEST_V2) ||
-		    !strcmp(media_type, OCI_MEDIATYPE_MANIFEST)) {
+		if (ocierofs_is_manifest(media_type)) {
 			digest = strdup(tag);
 			ret = 0;
 			goto out_json;
@@ -658,38 +699,47 @@ static char *ocierofs_get_manifest_digest(struct erofs_oci *oci,
 out_json:
 	json_object_put(root);
 out:
-	free(resp.data);
-	if (req.headers)
-		curl_slist_free_all(req.headers);
-	free(req.url);
-
+	ocierofs_response_cleanup(&resp);
+	ocierofs_request_cleanup(&req);
 	return ret ? ERR_PTR(ret) : digest;
 }
 
-static char **ocierofs_get_layers_info(struct erofs_oci *oci,
-				       const char *registry,
-				       const char *repository,
-				       const char *digest,
-				       const char *auth_header,
-				       int *layer_count)
+static void ocierofs_free_layers_info(struct ocierofs_layer_info **layers, int count)
 {
-	struct erofs_oci_request req = {};
-	struct erofs_oci_response resp = {};
-	json_object *root, *layers, *layer, *digest_obj;
-	char **layers_info = NULL;
+	int i;
+
+	if (!layers)
+		return;
+
+	for (i = 0; i < count; i++) {
+		if (layers[i]) {
+			free(layers[i]->digest);
+			free(layers[i]->media_type);
+			free(layers[i]);
+		}
+	}
+	free(layers);
+}
+
+static int ocierofs_fetch_layers_info(struct ocierofs_ctx *ctx)
+{
+	const char *registry = ctx->registry;
+	const char *repository = ctx->repository;
+	const char *digest = ctx->manifest_digest;
+	const char *auth_header = ctx->auth_header;
+	struct ocierofs_request req = {};
+	struct ocierofs_response resp = {};
+	json_object *root, *layers, *layer, *digest_obj, *media_type_obj, *size_obj;
+	struct ocierofs_layer_info **layers_info = NULL;
 	const char *api_registry;
-	int ret, len, i, j;
+	int ret, len, i;
 
-	if (!registry || !repository || !digest || !layer_count)
-		return ERR_PTR(-EINVAL);
-
-	*layer_count = 0;
-	api_registry = (!strcmp(registry, DOCKER_REGISTRY) ?
-			DOCKER_API_REGISTRY : registry);
+	ctx->layer_count = 0;
+	api_registry = ocierofs_get_api_registry(registry);
 
 	if (asprintf(&req.url, "https://%s/v2/%s/manifests/%s",
 		     api_registry, repository, digest) < 0)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
 	if (auth_header && strstr(auth_header, "Bearer"))
 		req.headers = curl_slist_append(req.headers, auth_header);
@@ -697,7 +747,7 @@ static char **ocierofs_get_layers_info(struct erofs_oci *oci,
 	req.headers = curl_slist_append(req.headers,
 			"Accept: " OCI_MEDIATYPE_MANIFEST "," DOCKER_MEDIATYPE_MANIFEST_V2);
 
-	ret = ocierofs_request_perform(oci, &req, &resp);
+	ret = ocierofs_request_perform(ctx, &req, &resp);
 	if (ret)
 		goto out;
 
@@ -723,12 +773,11 @@ static char **ocierofs_get_layers_info(struct erofs_oci *oci,
 
 	len = json_object_array_length(layers);
 	if (!len) {
-		erofs_err("empty layer list in manifest");
 		ret = -EINVAL;
 		goto out_json;
 	}
 
-	layers_info = calloc(len, sizeof(char *));
+	layers_info = calloc(len, sizeof(*layers_info));
 	if (!layers_info) {
 		ret = -ENOMEM;
 		goto out_json;
@@ -738,364 +787,182 @@ static char **ocierofs_get_layers_info(struct erofs_oci *oci,
 		layer = json_object_array_get_idx(layers, i);
 
 		if (!json_object_object_get_ex(layer, "digest", &digest_obj)) {
-			erofs_err("failed to parse layer %d", i);
 			ret = -EINVAL;
 			goto out_free;
 		}
 
-		layers_info[i] = strdup(json_object_get_string(digest_obj));
+		layers_info[i] = calloc(1, sizeof(**layers_info));
 		if (!layers_info[i]) {
 			ret = -ENOMEM;
 			goto out_free;
 		}
+		layers_info[i]->digest = strdup(json_object_get_string(digest_obj));
+		if (!layers_info[i]->digest) {
+			ret = -ENOMEM;
+			goto out_free;
+		}
+		if (json_object_object_get_ex(layer, "mediaType", &media_type_obj))
+			layers_info[i]->media_type = strdup(json_object_get_string(media_type_obj));
+		else
+			layers_info[i]->media_type = NULL;
+
+		if (json_object_object_get_ex(layer, "size", &size_obj))
+			layers_info[i]->size = json_object_get_int64(size_obj);
+		else
+			layers_info[i]->size = 0;
 	}
 
-	*layer_count = len;
+	ctx->layer_count = len;
 	json_object_put(root);
-	free(resp.data);
-	if (req.headers)
-		curl_slist_free_all(req.headers);
-	free(req.url);
-	return layers_info;
+	ocierofs_response_cleanup(&resp);
+	ocierofs_request_cleanup(&req);
+	ctx->layers = layers_info;
+	return 0;
 
 out_free:
-	if (layers_info) {
-		for (j = 0; j < i; j++)
-			free(layers_info[j]);
-	}
-	free(layers_info);
+	ocierofs_free_layers_info(layers_info, i);
 out_json:
 	json_object_put(root);
 out:
-	free(resp.data);
-	if (req.headers)
-		curl_slist_free_all(req.headers);
-	free(req.url);
-	return ERR_PTR(ret);
+	ocierofs_response_cleanup(&resp);
+	ocierofs_request_cleanup(&req);
+	return ret;
 }
 
-static int ocierofs_extract_layer(struct erofs_oci *oci, struct erofs_importer *importer,
-				  const char *digest, const char *auth_header)
+static int ocierofs_process_tar_stream(struct erofs_importer *importer, int fd)
 {
-	struct erofs_oci_request req = {};
-	struct erofs_oci_stream stream = {};
-	const char *api_registry;
-	long http_code;
+	struct erofs_tarfile tarfile = {};
 	int ret;
 
-	stream = (struct erofs_oci_stream) {
-		.digest = digest,
-		.blobfd = erofs_tmpfile(),
-	};
-	if (stream.blobfd < 0) {
-		erofs_err("failed to create temporary file for %s", digest);
-		return -errno;
-	}
+	init_list_head(&tarfile.global.xattrs);
 
-	api_registry = (!strcmp(oci->params.registry, DOCKER_REGISTRY)) ?
-		       DOCKER_API_REGISTRY : oci->params.registry;
-	if (asprintf(&req.url, "https://%s/v2/%s/blobs/%s",
-	     api_registry, oci->params.repository, digest) == -1) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	if (auth_header && strstr(auth_header, "Bearer"))
-		req.headers = curl_slist_append(req.headers, auth_header);
-
-	curl_easy_reset(oci->curl);
-
-	ret = ocierofs_curl_setup_common_options(oci->curl);
-	if (ret)
-		goto out;
-
-	ret = ocierofs_curl_setup_rq(oci->curl, req.url, OCIEROFS_HTTP_GET,
-				     req.headers,
-				     ocierofs_layer_write_callback,
-				     &stream, NULL, NULL);
-	if (ret)
-		goto out;
-
-	ret = ocierofs_curl_perform(oci->curl, &http_code);
-	if (ret)
-		goto out;
-
-	if (http_code < 200 || http_code >= 300) {
-		erofs_err("HTTP request failed with code %ld", http_code);
-		ret = -EIO;
-		goto out;
-	}
-
-	if (lseek(stream.blobfd, 0, SEEK_SET) < 0) {
-		erofs_err("failed to seek to beginning of temp file: %s",
-			  strerror(errno));
-		ret = -errno;
-		goto out;
-	}
-
-	memset(&stream.tarfile, 0, sizeof(stream.tarfile));
-	init_list_head(&stream.tarfile.global.xattrs);
-
-	ret = erofs_iostream_open(&stream.tarfile.ios, stream.blobfd,
-				  EROFS_IOS_DECODER_GZIP);
+	ret = erofs_iostream_open(&tarfile.ios, fd, EROFS_IOS_DECODER_GZIP);
 	if (ret) {
 		erofs_err("failed to initialize tar stream: %s",
 			  erofs_strerror(ret));
-		goto out;
+		return ret;
 	}
 
 	do {
-		ret = tarerofs_parse_tar(importer, &stream.tarfile);
+		ret = tarerofs_parse_tar(importer, &tarfile);
 		/* Continue parsing until end of archive */
 	} while (!ret);
-	erofs_iostream_close(&stream.tarfile.ios);
+	erofs_iostream_close(&tarfile.ios);
 
 	if (ret < 0 && ret != -ENODATA) {
 		erofs_err("failed to process tar stream: %s",
 			  erofs_strerror(ret));
-		goto out;
-	}
-	ret = 0;
-
-out:
-	if (stream.blobfd >= 0)
-		close(stream.blobfd);
-	if (req.headers)
-		curl_slist_free_all(req.headers);
-	free(req.url);
-	return ret;
-}
-
-/**
- * ocierofs_build_trees - Build file trees from OCI container image layers
- * @importer: EROFS importer structure
- * @oci: OCI client structure with configured parameters
- *
- * Extract and build file system trees from all layers of an OCI container
- * image.
- *
- * Return: 0 on success, negative errno on failure
- */
-int ocierofs_build_trees(struct erofs_importer *importer, struct erofs_oci *oci)
-{
-	char *auth_header = NULL;
-	char *manifest_digest = NULL;
-	char **layers = NULL;
-	int layer_count = 0;
-	int ret, i;
-
-	if (!importer || !oci)
-		return -EINVAL;
-
-	if (oci->params.username && oci->params.password &&
-	    oci->params.username[0] && oci->params.password[0]) {
-		auth_header = ocierofs_get_auth_token(oci,
-						      oci->params.registry,
-						      oci->params.repository,
-						      oci->params.username,
-						      oci->params.password);
-		if (IS_ERR(auth_header)) {
-			auth_header = NULL;
-			ret = ocierofs_curl_setup_basic_auth(oci->curl,
-							     oci->params.username,
-							     oci->params.password);
-			if (ret)
-				goto out;
-		}
-	} else {
-		auth_header = ocierofs_get_auth_token(oci,
-						      oci->params.registry,
-						      oci->params.repository,
-						      NULL, NULL);
-		if (IS_ERR(auth_header))
-			auth_header = NULL;
+		return ret;
 	}
 
-	manifest_digest = ocierofs_get_manifest_digest(oci, oci->params.registry,
-						       oci->params.repository,
-						       oci->params.tag,
-						       oci->params.platform,
-						       auth_header);
-	if (IS_ERR(manifest_digest)) {
-		ret = PTR_ERR(manifest_digest);
-		erofs_err("failed to get manifest digest: %s",
-			  erofs_strerror(ret));
-		goto out_auth;
-	}
-
-	layers = ocierofs_get_layers_info(oci, oci->params.registry,
-					  oci->params.repository,
-					  manifest_digest, auth_header,
-					  &layer_count);
-	if (IS_ERR(layers)) {
-		ret = PTR_ERR(layers);
-		erofs_err("failed to get image layers: %s", erofs_strerror(ret));
-		goto out_manifest;
-	}
-
-	if (oci->params.layer_index >= 0) {
-		if (oci->params.layer_index >= layer_count) {
-			erofs_err("layer index %d exceeds available layers (%d)",
-				  oci->params.layer_index, layer_count);
-			ret = -EINVAL;
-			goto out_layers;
-		}
-		layer_count = 1;
-		i = oci->params.layer_index;
-	} else {
-		i = 0;
-	}
-
-	while (i < layer_count) {
-		char *trimmed = erofs_trim_for_progressinfo(layers[i],
-				sizeof("Extracting layer  ...") - 1);
-		erofs_update_progressinfo("Extracting layer %d: %s ...", i,
-					  trimmed);
-		free(trimmed);
-		ret = ocierofs_extract_layer(oci, importer, layers[i],
-					     auth_header);
-		if (ret) {
-			erofs_err("failed to extract layer %d: %s", i,
-				  erofs_strerror(ret));
-			break;
-		}
-		i++;
-	}
-out_layers:
-	for (i = 0; i < layer_count; i++)
-		free(layers[i]);
-	free(layers);
-out_manifest:
-	free(manifest_digest);
-out_auth:
-	free(auth_header);
-
-	if (oci->params.username && oci->params.password &&
-	    oci->params.username[0] && oci->params.password[0] &&
-	    !auth_header) {
-		ocierofs_curl_clear_auth(oci->curl);
-	}
-out:
-	return ret;
-}
-
-/**
- * ocierofs_init - Initialize OCI client with default parameters
- * @oci: OCI client structure to initialize
- *
- * Initialize OCI client structure, set up CURL handle, and configure
- * default parameters including platform (linux/amd64), registry
- * (registry-1.docker.io), and tag (latest).
- *
- * Return: 0 on success, negative errno on failure
- */
-int ocierofs_init(struct erofs_oci *oci)
-{
-	if (!oci)
-		return -EINVAL;
-
-	*oci = (struct erofs_oci){};
-	oci->curl = curl_easy_init();
-	if (!oci->curl)
-		return -EIO;
-
-	if (ocierofs_curl_setup_common_options(oci->curl)) {
-		ocierofs_cleanup(oci);
-		return -EIO;
-	}
-
-	if (erofs_oci_params_set_string(&oci->params.platform,
-				"linux/amd64") ||
-	    erofs_oci_params_set_string(&oci->params.registry,
-				DOCKER_API_REGISTRY) ||
-	    erofs_oci_params_set_string(&oci->params.tag, "latest")) {
-		ocierofs_cleanup(oci);
-		return -ENOMEM;
-	}
-	oci->params.layer_index = -1; /* -1 means extract all layers */
 	return 0;
 }
 
-/**
- * ocierofs_cleanup - Clean up OCI client and free allocated resources
- * @oci: OCI client structure to clean up
- *
- * Clean up CURL handle, free all allocated string parameters, and
- * reset the OCI client structure to a clean state.
- */
-void ocierofs_cleanup(struct erofs_oci *oci)
+static int ocierofs_prepare_auth(struct ocierofs_ctx *ctx,
+				 const char *username,
+				 const char *password)
 {
-	if (!oci)
-		return;
+	char *auth_header = NULL;
+	int ret = 0;
 
-	if (oci->curl) {
-		curl_easy_cleanup(oci->curl);
-		oci->curl = NULL;
-	}
+	ctx->using_basic = false;
+	free(ctx->auth_header);
+	ctx->auth_header = NULL;
 
-	free(oci->params.registry);
-	free(oci->params.repository);
-	free(oci->params.tag);
-	free(oci->params.platform);
-	free(oci->params.username);
-	free(oci->params.password);
-
-	oci->params.registry = NULL;
-	oci->params.repository = NULL;
-	oci->params.tag = NULL;
-	oci->params.platform = NULL;
-	oci->params.username = NULL;
-	oci->params.password = NULL;
-}
-
-int erofs_oci_params_set_string(char **field, const char *value)
-{
-	char *new_value;
-
-	if (!field)
-		return -EINVAL;
-
-	if (!value) {
-		free(*field);
-		*field = NULL;
+	auth_header = ocierofs_get_auth_token(ctx, ctx->registry,
+					      ctx->repository,
+					      username, password);
+	if (!IS_ERR(auth_header)) {
+		ctx->auth_header = auth_header;
 		return 0;
 	}
 
-	new_value = strdup(value);
-	if (!new_value)
-		return -ENOMEM;
-
-	free(*field);
-	*field = new_value;
+	if (username && password && *username && *password) {
+		ret = ocierofs_curl_setup_basic_auth(ctx->curl,
+						    username, password);
+		if (ret)
+			return ret;
+		ctx->using_basic = true;
+	}
 	return 0;
 }
 
-int ocierofs_parse_ref(struct erofs_oci *oci, const char *ref_str)
+static int ocierofs_prepare_layers(struct ocierofs_ctx *ctx,
+				   const struct ocierofs_config *config)
+{
+	int ret;
+
+	ret = ocierofs_prepare_auth(ctx, config->username, config->password);
+	if (ret)
+		return ret;
+
+	ctx->manifest_digest = ocierofs_get_manifest_digest(ctx, ctx->registry,
+			ctx->repository, ctx->tag, ctx->platform,
+			ctx->auth_header);
+	if (IS_ERR(ctx->manifest_digest)) {
+		ret = PTR_ERR(ctx->manifest_digest);
+		erofs_err("failed to get manifest digest: %s",
+			  erofs_strerror(ret));
+		ctx->manifest_digest = NULL;
+		goto out_auth;
+	}
+
+	ret = ocierofs_fetch_layers_info(ctx);
+	if (ret) {
+		erofs_err("failed to get image layers: %s", erofs_strerror(ret));
+		ctx->layers = NULL;
+		goto out_manifest;
+	}
+
+	if (ctx->layer_index >= ctx->layer_count) {
+		erofs_err("layer index %d exceeds available layers (%d)",
+			  ctx->layer_index, ctx->layer_count);
+		ret = -EINVAL;
+		goto out_layers;
+	}
+	return 0;
+
+out_layers:
+	free(ctx->layers);
+	ctx->layers = NULL;
+out_manifest:
+	free(ctx->manifest_digest);
+	ctx->manifest_digest = NULL;
+out_auth:
+	free(ctx->auth_header);
+	ctx->auth_header = NULL;
+	if (ctx->using_basic)
+		ocierofs_curl_clear_auth(ctx);
+	return ret;
+}
+
+/*
+ * ocierofs_parse_ref - Parse OCI image reference string
+ * @ctx: OCI context structure
+ * @ref_str: OCI image reference string
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int ocierofs_parse_ref(struct ocierofs_ctx *ctx, const char *ref_str)
 {
 	char *slash, *colon, *dot;
 	const char *repo_part;
 	size_t len;
+	char *tmp;
+
+	if (!ctx || !ref_str)
+		return -EINVAL;
 
 	slash = strchr(ref_str, '/');
 	if (slash) {
 		dot = strchr(ref_str, '.');
 		if (dot && dot < slash) {
-			char *registry_str;
-
 			len = slash - ref_str;
-			registry_str = strndup(ref_str, len);
-
-			if (!registry_str) {
-				erofs_err("failed to allocate memory for registry");
+			tmp = strndup(ref_str, len);
+			if (!tmp)
 				return -ENOMEM;
-			}
-			if (erofs_oci_params_set_string(&oci->params.registry,
-							registry_str)) {
-				free(registry_str);
-				erofs_err("failed to set registry");
-				return -ENOMEM;
-			}
-			free(registry_str);
+			free(ctx->registry);
+			ctx->registry = tmp;
 			repo_part = slash + 1;
 		} else {
 			repo_part = ref_str;
@@ -1106,73 +973,256 @@ int ocierofs_parse_ref(struct erofs_oci *oci, const char *ref_str)
 
 	colon = strchr(repo_part, ':');
 	if (colon) {
-		char *repo_str;
-
 		len = colon - repo_part;
-		repo_str = strndup(repo_part, len);
-
-		if (!repo_str) {
-			erofs_err("failed to allocate memory for repository");
+		tmp = strndup(repo_part, len);
+		if (!tmp)
 			return -ENOMEM;
-		}
 
-		if (!strchr(repo_str, '/') &&
-		    (!strcmp(oci->params.registry, DOCKER_API_REGISTRY) ||
-		     !strcmp(oci->params.registry, DOCKER_REGISTRY))) {
+		if (!strchr(tmp, '/') &&
+		    (!strcmp(ctx->registry, DOCKER_API_REGISTRY) ||
+		     !strcmp(ctx->registry, DOCKER_REGISTRY))) {
 			char *full_repo;
 
-			if (asprintf(&full_repo, "library/%s", repo_str) == -1) {
-				free(repo_str);
-				erofs_err("failed to allocate memory for full repository name");
+			if (asprintf(&full_repo, "library/%s", tmp) == -1) {
+				free(tmp);
 				return -ENOMEM;
 			}
-			free(repo_str);
-			repo_str = full_repo;
+			free(tmp);
+			tmp = full_repo;
 		}
+		free(ctx->repository);
+		ctx->repository = tmp;
 
-		if (erofs_oci_params_set_string(&oci->params.repository,
-						repo_str)) {
-			free(repo_str);
-			erofs_err("failed to set repository");
+		free(ctx->tag);
+		ctx->tag = strdup(colon + 1);
+		if (!ctx->tag)
 			return -ENOMEM;
-		}
-		free(repo_str);
-
-		if (erofs_oci_params_set_string(&oci->params.tag,
-						colon + 1)) {
-			erofs_err("failed to set tag");
-			return -ENOMEM;
-		}
 	} else {
-		char *repo_str = strdup(repo_part);
-
-		if (!repo_str) {
-			erofs_err("failed to allocate memory for repository");
+		tmp = strdup(repo_part);
+		if (!tmp)
 			return -ENOMEM;
-		}
 
-		if (!strchr(repo_str, '/') &&
-		    (!strcmp(oci->params.registry, DOCKER_API_REGISTRY) ||
-		     !strcmp(oci->params.registry, DOCKER_REGISTRY))) {
+		if (!strchr(tmp, '/') &&
+		    (!strcmp(ctx->registry, DOCKER_API_REGISTRY) ||
+		     !strcmp(ctx->registry, DOCKER_REGISTRY))) {
+
 			char *full_repo;
 
-			if (asprintf(&full_repo, "library/%s", repo_str) == -1) {
-				free(repo_str);
-				erofs_err("failed to allocate memory for full repository name");
+			if (asprintf(&full_repo, "library/%s", tmp) == -1) {
+				free(tmp);
 				return -ENOMEM;
 			}
-			free(repo_str);
-			repo_str = full_repo;
+			free(tmp);
+			tmp = full_repo;
 		}
-
-		if (erofs_oci_params_set_string(&oci->params.repository,
-						repo_str)) {
-			free(repo_str);
-			erofs_err("failed to set repository");
-			return -ENOMEM;
-		}
-		free(repo_str);
+		free(ctx->repository);
+		ctx->repository = tmp;
 	}
+	return 0;
+}
+
+/**
+ * ocierofs_init - Initialize OCI context
+ * @ctx: OCI context structure to initialize
+ * @config: OCI configuration
+ *
+ * Initialize OCI context structure, set up CURL handle, and configure
+ * default parameters including platform (linux/amd64), registry
+ * (registry-1.docker.io), and tag (latest).
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config *config)
+{
+	int ret;
+
+	ctx->curl = curl_easy_init();
+	if (!ctx->curl)
+		return -EIO;
+
+	if (ocierofs_curl_setup_common_options(ctx->curl))
+		return -EIO;
+
+	if (config->layer_index >= 0)
+		ctx->layer_index = config->layer_index;
+	else
+		ctx->layer_index = -1;
+	ctx->registry = strdup("registry-1.docker.io");
+	ctx->tag = strdup("latest");
+	if (config->platform)
+		ctx->platform = strdup(config->platform);
+	else
+		ctx->platform = strdup("linux/amd64");
+	if (!ctx->registry || !ctx->tag || !ctx->platform)
+		return -ENOMEM;
+
+	ret = ocierofs_parse_ref(ctx, config->image_ref);
+	if (ret)
+		return ret;
+
+	ret = ocierofs_prepare_layers(ctx, config);
+	if (ret)
+		return ret;
 
 	return 0;
+}
+
+static int ocierofs_download_blob_to_fd(struct ocierofs_ctx *ctx,
+					const char *digest,
+					const char *auth_header,
+					int outfd)
+{
+	struct ocierofs_request req = {};
+	struct ocierofs_stream stream = {};
+	const char *api_registry;
+	long http_code;
+	int ret;
+
+	stream = (struct ocierofs_stream) {
+		.digest = digest,
+		.blobfd = outfd,
+	};
+
+	api_registry = ocierofs_get_api_registry(ctx->registry);
+	if (asprintf(&req.url, "https://%s/v2/%s/blobs/%s",
+	     api_registry, ctx->repository, digest) == -1)
+		return -ENOMEM;
+
+	if (auth_header && strstr(auth_header, "Bearer"))
+		req.headers = curl_slist_append(req.headers, auth_header);
+
+	curl_easy_reset(ctx->curl);
+
+	ret = ocierofs_curl_setup_common_options(ctx->curl);
+	if (ret)
+		goto out;
+
+	ret = ocierofs_curl_setup_rq(ctx->curl, req.url, OCIEROFS_HTTP_GET,
+				     req.headers,
+				     ocierofs_layer_write_callback,
+				     &stream, NULL, NULL);
+	if (ret)
+		goto out;
+
+	ret = ocierofs_curl_perform(ctx->curl, &http_code);
+	if (ret)
+		goto out;
+
+	if (http_code < 200 || http_code >= 300) {
+		erofs_err("HTTP request failed with code %ld", http_code);
+		ret = -EIO;
+		goto out;
+	}
+	ret = 0;
+out:
+	ocierofs_request_cleanup(&req);
+	return ret;
+}
+
+static int ocierofs_extract_layer(struct ocierofs_ctx *ctx,
+				  const char *digest, const char *auth_header)
+{
+	struct ocierofs_stream stream = {};
+	int ret;
+
+	stream = (struct ocierofs_stream) {
+		.digest = digest,
+		.blobfd = erofs_tmpfile(),
+	};
+	if (stream.blobfd < 0) {
+		erofs_err("failed to create temporary file for %s", digest);
+		return -errno;
+	}
+
+	ret = ocierofs_download_blob_to_fd(ctx, digest, auth_header, stream.blobfd);
+	if (ret)
+		goto out;
+
+	if (lseek(stream.blobfd, 0, SEEK_SET) < 0) {
+		erofs_err("failed to seek to beginning of temp file: %s",
+			  strerror(errno));
+		ret = -errno;
+		goto out;
+	}
+
+	return stream.blobfd;
+
+out:
+	if (stream.blobfd >= 0)
+		close(stream.blobfd);
+	return ret;
+}
+
+
+/**
+ * ocierofs_ctx_cleanup - Clean up OCI context and free allocated resources
+ * @ctx: OCI context structure to clean up
+ *
+ * Clean up CURL handle, free all allocated string parameters, and
+ * reset the OCI context structure to a clean state.
+ */
+static void ocierofs_ctx_cleanup(struct ocierofs_ctx *ctx)
+{
+	if (!ctx)
+		return;
+
+	if (ctx->curl) {
+		curl_easy_cleanup(ctx->curl);
+		ctx->curl = NULL;
+	}
+	free(ctx->auth_header);
+	ctx->auth_header = NULL;
+
+	ocierofs_free_layers_info(ctx->layers, ctx->layer_count);
+	free(ctx->registry);
+	free(ctx->repository);
+	free(ctx->tag);
+	free(ctx->platform);
+	free(ctx->manifest_digest);
+}
+
+int ocierofs_build_trees(struct erofs_importer *importer,
+			 const struct ocierofs_config *config)
+{
+	struct ocierofs_ctx ctx = {};
+	int ret, i, end, fd;
+
+	ret = ocierofs_init(&ctx, config);
+	if (ret) {
+		ocierofs_ctx_cleanup(&ctx);
+		return ret;
+	}
+
+	if (ctx.layer_index >= 0) {
+		i = ctx.layer_index;
+		end = i + 1;
+	} else {
+		i = 0;
+		end = ctx.layer_count;
+	}
+
+	while (i < end) {
+		char *trimmed = erofs_trim_for_progressinfo(ctx.layers[i]->digest,
+				sizeof("Extracting layer  ...") - 1);
+		erofs_update_progressinfo("Extracting layer %d: %s ...", i,
+				  trimmed);
+		free(trimmed);
+		fd = ocierofs_extract_layer(&ctx, ctx.layers[i]->digest,
+					    ctx.auth_header);
+		if (fd < 0) {
+			erofs_err("failed to extract layer %d: %s", i,
+				  erofs_strerror(fd));
+			break;
+		}
+		ret = ocierofs_process_tar_stream(importer, fd);
+		close(fd);
+		if (ret) {
+			erofs_err("failed to process tar stream for layer %d: %s", i,
+				  erofs_strerror(ret));
+			break;
+		}
+		i++;
+	}
+	ocierofs_ctx_cleanup(&ctx);
+	return ret;
 }

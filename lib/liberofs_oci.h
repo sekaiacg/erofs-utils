@@ -12,15 +12,12 @@
 extern "C" {
 #endif
 
-struct erofs_inode;
 struct CURL;
 struct erofs_importer;
 
-/**
- * struct erofs_oci_params - OCI configuration parameters
- * @registry: registry hostname (e.g., "registry-1.docker.io")
- * @repository: image repository (e.g., "library/ubuntu")
- * @tag: image tag or digest (e.g., "latest" or sha256:...)
+/*
+ * struct ocierofs_config - OCI configuration structure
+ * @image_ref: OCI image reference (e.g., "ubuntu:latest", "myregistry.com/app:v1.0")
  * @platform: target platform in "os/arch" format (e.g., "linux/amd64")
  * @username: username for authentication (optional)
  * @password: password for authentication (optional)
@@ -30,69 +27,45 @@ struct erofs_importer;
  * location, image identification, platform specification, and authentication
  * credentials.
  */
-struct erofs_oci_params {
-	char *registry;
-	char *repository;
-	char *tag;
+struct ocierofs_config {
+	char *image_ref;
 	char *platform;
 	char *username;
 	char *password;
 	int layer_index;
 };
 
-/**
- * struct erofs_oci - Combined OCI client structure
- * @curl: CURL handle for HTTP requests
- * @params: OCI configuration parameters
- *
- * Main OCI client structure combining CURL HTTP client with
- * OCI-specific configuration parameters.
- */
-struct erofs_oci {
-	struct CURL *curl;
-	struct erofs_oci_params params;
+struct ocierofs_layer_info {
+	char *digest;
+	char *media_type;
+	u64 size;
 };
 
-/*
- * ocierofs_init - Initialize OCI client with default parameters
- * @oci: OCI client structure to initialize
- *
- * Return: 0 on success, negative errno on failure
- */
-int ocierofs_init(struct erofs_oci *oci);
+struct ocierofs_ctx {
+	struct CURL *curl;
+	char *auth_header;
+	bool using_basic;
+	char *registry;
+	char *repository;
+	char *platform;
+	char *tag;
+	char *manifest_digest;
+	struct ocierofs_layer_info **layers;
+	int layer_index;
+	int layer_count;
+};
 
-/*
- * ocierofs_cleanup - Clean up OCI client and free allocated resources
- * @oci: OCI client structure to clean up
- */
-void ocierofs_cleanup(struct erofs_oci *oci);
-
-/*
- * erofs_oci_params_set_string - Set a string field with dynamic allocation
- * @field: pointer to the string field to set
- * @value: string value to set
- *
- * Return: 0 on success, negative errno on failure
- */
-int erofs_oci_params_set_string(char **field, const char *value);
-
-/*
- * ocierofs_parse_ref - Parse OCI image reference string
- * @oci: OCI client structure
- * @ref_str: OCI image reference string
- *
- * Return: 0 on success, negative errno on failure
- */
-int ocierofs_parse_ref(struct erofs_oci *oci, const char *ref_str);
+int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config *config);
 
 /*
  * ocierofs_build_trees - Build file trees from OCI container image layers
- * @root:     root inode to build the file tree under
- * @oci:      OCI client structure with configured parameters
+ * @importer: erofs importer to populate
+ * @cfg:      oci configuration
  *
  * Return: 0 on success, negative errno on failure
  */
-int ocierofs_build_trees(struct erofs_importer *importer, struct erofs_oci *oci);
+int ocierofs_build_trees(struct erofs_importer *importer,
+			 const struct ocierofs_config *cfg);
 
 #ifdef __cplusplus
 }
