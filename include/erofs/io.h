@@ -41,6 +41,7 @@ struct erofs_vfops {
 			    off_t *pos, size_t count);
 	int (*xcopy)(struct erofs_vfile *vout, off_t pos,
 		     struct erofs_vfile *vin, unsigned int len, bool noseek);
+	void (*close)(struct erofs_vfile *vf);
 };
 
 /* don't extend this; instead, use payload for any extra information */
@@ -86,6 +87,8 @@ static inline int erofs_pread(struct erofs_vfile *vf, void *buf,
 		return read;
 	return read != len ? -EIO : 0;
 }
+
+void erofs_io_close(struct erofs_vfile *vf);
 
 #ifdef __cplusplus
 }

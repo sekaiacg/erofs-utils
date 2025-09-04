@@ -267,8 +267,8 @@ static void *erofsmount_nbd_loopfn(void *arg)
 			break;
 		}
 	}
-	close(ctx->vd.fd);
-	close(ctx->sk.fd);
+	erofs_io_close(&ctx->vd);
+	erofs_io_close(&ctx->sk);
 	return (void *)(uintptr_t)err;
 }
 
@@ -288,15 +288,15 @@ static int erofsmount_startnbd(int nbdfd, const char *source)
 
 	err = erofs_nbd_connect(nbdfd, 9, INT64_MAX >> 9);
 	if (err < 0) {
-		close(ctx.vd.fd);
+		erofs_io_close(&ctx.vd);
 		goto out_closefd;
 	}
 	ctx.sk.fd = err;
 
 	err = -pthread_create(&th, NULL, erofsmount_nbd_loopfn, &ctx);
 	if (err) {
-		close(ctx.vd.fd);
-		close(ctx.sk.fd);
+		erofs_io_close(&ctx.vd);
+		erofs_io_close(&ctx.sk);
 		goto out_closefd;
 	}
 
@@ -392,7 +392,7 @@ static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
 	err = pipe(pipefd);
 	if (err < 0) {
 		err = -errno;
-		close(ctx.vd.fd);
+		erofs_io_close(&ctx.vd);
 		return err;
 	}
 	if ((*pid = fork()) == 0) {
@@ -400,12 +400,12 @@ static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
 
 		/* Otherwise, NBD disconnect sends SIGPIPE, skipping cleanup */
 		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-			close(ctx.vd.fd);
+			erofs_io_close(&ctx.vd);
 			exit(EXIT_FAILURE);
 		}
 		recp = erofsmount_write_recovery_info(source);
 		if (IS_ERR(recp)) {
-			close(ctx.vd.fd);
+			erofs_io_close(&ctx.vd);
 			exit(EXIT_FAILURE);
 		}
 		num = -1;
@@ -414,7 +414,7 @@ static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
 			ctx.sk.fd = err;
 			err = erofsmount_nbd_fix_backend_linkage(num, &recp);
 			if (err) {
-				close(ctx.sk.fd);
+				erofs_io_close(&ctx.sk);
 			} else {
 				err = write(pipefd[1], &num, sizeof(int));
 				if (err < 0)
@@ -427,7 +427,7 @@ static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
 				}
 			}
 		}
-		close(ctx.vd.fd);
+		erofs_io_close(&ctx.vd);
 out_fork:
 		(void)unlink(recp);
 		free(recp);
@@ -529,10 +529,10 @@ static int erofsmount_reattach(const char *target)
 				return EXIT_FAILURE;
 			return EXIT_SUCCESS;
 		}
-		close(ctx.sk.fd);
+		erofs_io_close(&ctx.sk);
 		err = 0;
 	}
-	close(ctx.vd.fd);
+	erofs_io_close(&ctx.vd);
 err_line:
 	free(line);
 err_identifier:

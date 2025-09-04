@@ -21,7 +21,7 @@ void erofs_metabox_exit(struct erofs_sb_info *sbi)
 		return;
 	DBG_BUGON(!m2gr->bmgr);
 	erofs_buffer_exit(m2gr->bmgr);
-	close(m2gr->vf.fd);
+	erofs_io_close(&m2gr->vf);
 	free(m2gr);
 }
 

@@ -380,8 +380,7 @@ out:
 
 void erofs_dev_close(struct erofs_sb_info *sbi)
 {
-	if (!sbi->bdev.ops)
-		close(sbi->bdev.fd);
+	erofs_io_close(&sbi->bdev);
 	free(sbi->devname);
 	sbi->devname = NULL;
 	sbi->bdev.fd = -1;
@@ -656,4 +655,14 @@ int erofs_io_xcopy(struct erofs_vfile *vout, off_t pos,
 		len -= ret;
 	} while (len);
 	return 0;
+}
+
+void erofs_io_close(struct erofs_vfile *vf)
+{
+	if (vf->ops) {
+		vf->ops->close(vf);
+		return;
+	}
+	close(vf->fd);
+	vf->fd = -1;
 }

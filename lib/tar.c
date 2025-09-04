@@ -65,7 +65,7 @@ void erofs_iostream_close(struct erofs_iostream *ios)
 #endif
 		return;
 	}
-	close(ios->vf.fd);
+	erofs_io_close(&ios->vf);
 }
 
 int erofs_iostream_open(struct erofs_iostream *ios, int fd, int decoder)
