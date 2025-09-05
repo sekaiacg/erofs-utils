@@ -356,10 +356,7 @@ static int erofsmount_nbd_fix_backend_linkage(int num, char **recp)
 	int err;
 
 	newrecp = erofs_nbd_get_identifier(num);
-	if (!IS_ERR(newrecp)) {
-		err = strlen(newrecp);
-		if (newrecp[err - 1] == '\n')
-			newrecp[err - 1] = '\0';
+	if (!IS_ERR(newrecp) && newrecp) {
 		err = strcmp(newrecp, *recp) ? -EFAULT : 0;
 		free(newrecp);
 		return err;
@@ -461,16 +458,11 @@ static int erofsmount_reattach(const char *target)
 	if (nbdnum < 0)
 		return nbdnum;
 	identifier = erofs_nbd_get_identifier(nbdnum);
-	if (IS_ERR(identifier))
+	if (IS_ERR(identifier)) {
 		identifier = NULL;
-	else if (identifier) {
-		n = strlen(identifier);
-		if (__erofs_unlikely(!n)) {
-			free(identifier);
-			identifier = NULL;
-		} else if (identifier[n - 1] == '\n') {
-			identifier[n - 1] = '\0';
-		}
+	} else if (identifier && *identifier == '\0') {
+		free(identifier);
+		identifier = NULL;
 	}
 
 	if (!identifier &&
@@ -596,8 +588,6 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 
 		if (!err && is_netlink) {
 			id = erofs_nbd_get_identifier(num);
-			if (id == ERR_PTR(-ENOENT))
-				id = NULL;
 
 			err = IS_ERR(id) ? PTR_ERR(id) :
 				erofs_nbd_nl_reconfigure(num, id, true);

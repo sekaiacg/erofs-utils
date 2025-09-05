@@ -183,15 +183,24 @@ char *erofs_nbd_get_identifier(int nbdnum)
 
 	(void)snprintf(s, sizeof(s), "/sys/block/nbd%d/backend", nbdnum);
 	f = fopen(s, "r");
-	if (!f)
+	if (!f) {
+		if (errno == ENOENT)
+			return NULL;
 		return ERR_PTR(-errno);
-
-	if (getline(&line, &n, f) < 0)
+	}
+	err = getline(&line, &n, f);
+	if (err < 0)
 		err = -errno;
-	else
-		err = 0;
 	fclose(f);
-	return err ? ERR_PTR(err) : line;
+	if (err < 0)
+		return ERR_PTR(err);
+	if (!err) {
+		free(line);
+		return NULL;
+	}
+	if (line[err - 1] == '\n')
+		line[err - 1] = '\0';
+	return line;
 }
 
 int erofs_nbd_get_index_from_minor(int minor)
