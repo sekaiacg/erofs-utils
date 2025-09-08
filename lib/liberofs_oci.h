@@ -55,7 +55,10 @@ struct ocierofs_ctx {
 	int layer_count;
 };
 
-int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config *config);
+struct ocierofs_iostream {
+	struct ocierofs_ctx *ctx;
+	u64 offset;
+};
 
 /*
  * ocierofs_build_trees - Build file trees from OCI container image layers
@@ -66,6 +69,7 @@ int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config *config
  */
 int ocierofs_build_trees(struct erofs_importer *importer,
 			 const struct ocierofs_config *cfg);
+int ocierofs_io_open(struct erofs_vfile *vf, const struct ocierofs_config *cfg);
 
 #ifdef __cplusplus
 }

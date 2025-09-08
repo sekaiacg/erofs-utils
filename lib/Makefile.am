@@ -83,8 +83,6 @@ if OS_LINUX
 liberofs_la_CFLAGS += ${libnl3_CFLAGS}
 liberofs_la_SOURCES += backends/nbd.c
 endif
-if ENABLE_OCI
 liberofs_la_SOURCES += remotes/oci.c
 liberofs_la_CFLAGS += ${libcurl_CFLAGS} ${json_c_CFLAGS}
 liberofs_la_LDFLAGS += ${libcurl_LIBS} ${json_c_LIBS}
-endif

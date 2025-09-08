@@ -15,6 +15,7 @@
 #include "erofs/err.h"
 #include "erofs/io.h"
 #include "../lib/liberofs_nbd.h"
+#include "../lib/liberofs_oci.h"
 #ifdef HAVE_LINUX_LOOP_H
 #include <linux/loop.h>
 #else
@@ -62,6 +63,79 @@ static struct erofsmount_cfg {
 	.fstype = "erofs",
 };
 
+enum erofs_nbd_source_type {
+	EROFSNBD_SOURCE_LOCAL,
+	EROFSNBD_SOURCE_OCI,
+};
+
+static struct erofs_nbd_source {
+	enum erofs_nbd_source_type type;
+	union {
+		const char *device_path;
+		struct ocierofs_config ocicfg;
+	};
+} nbdsrc;
+
+#ifdef OCIEROFS_ENABLED
+static int erofsmount_parse_oci_option(const char *option)
+{
+	struct ocierofs_config *oci_cfg = &nbdsrc.ocicfg;
+	char *p;
+
+	p = strstr(option, "oci=");
+	if (p != NULL) {
+		p += strlen("oci=");
+		{
+			char *endptr;
+			unsigned long v = strtoul(p, &endptr, 10);
+
+			if (endptr == p || *endptr != '\0')
+				return -EINVAL;
+			oci_cfg->layer_index = (int)v;
+		}
+	} else {
+		p = strstr(option, "oci.platform=");
+		if (p != NULL) {
+			p += strlen("oci.platform=");
+			free(oci_cfg->platform);
+			oci_cfg->platform = strdup(p);
+			if (!oci_cfg->platform)
+				return -ENOMEM;
+		} else {
+			p = strstr(option, "oci.username=");
+			if (p != NULL) {
+				p += strlen("oci.username=");
+				free(oci_cfg->username);
+				oci_cfg->username = strdup(p);
+				if (!oci_cfg->username)
+					return -ENOMEM;
+			} else {
+				p = strstr(option, "oci.password=");
+				if (p != NULL) {
+					p += strlen("oci.password=");
+					free(oci_cfg->password);
+					oci_cfg->password = strdup(p);
+					if (!oci_cfg->password)
+						return -ENOMEM;
+				} else {
+					return -EINVAL;
+				}
+			}
+		}
+	}
+
+	if (oci_cfg->platform || oci_cfg->username || oci_cfg->password ||
+	    oci_cfg->layer_index)
+		nbdsrc.type = EROFSNBD_SOURCE_OCI;
+	return 0;
+}
+#else
+static int erofsmount_parse_oci_option(const char *option)
+{
+	return -EINVAL;
+}
+#endif
+
 static long erofsmount_parse_flagopts(char *s, long flags, char **more)
 {
 	static const struct {
@@ -86,33 +160,41 @@ static long erofsmount_parse_flagopts(char *s, long flags, char **more)
 	for (;;) {
 		char *comma;
 		int i;
+		int err;
 
 		comma = strchr(s, ',');
 		if (comma)
 			*comma = '\0';
-		for (i = 0; i < ARRAY_SIZE(opts); ++i) {
-			if (!strcasecmp(s, opts[i].name)) {
-				if (opts[i].flags < 0)
-					flags &= opts[i].flags;
-				else
-					flags |= opts[i].flags;
-				break;
+
+		if (strncmp(s, "oci", 3) == 0) {
+			err = erofsmount_parse_oci_option(s);
+			if (err < 0)
+				return err;
+		} else {
+			for (i = 0; i < ARRAY_SIZE(opts); ++i) {
+				if (!strcasecmp(s, opts[i].name)) {
+					if (opts[i].flags < 0)
+						flags &= opts[i].flags;
+					else
+						flags |= opts[i].flags;
+					break;
+				}
 			}
-		}
 
-		if (more && i >= ARRAY_SIZE(opts)) {
-			int sl = strlen(s);
-			char *new = *more;
+			if (more && i >= ARRAY_SIZE(opts)) {
+				int sl = strlen(s);
+				char *new = *more;
 
-			i = new ? strlen(new) : 0;
-			new = realloc(new, i + strlen(s) + 2);
-			if (!new)
-				return -ENOMEM;
-			if (i)
-				new[i++] = ',';
-			memcpy(new + i, s, sl);
-			new[i + sl] = '\0';
-			*more = new;
+				i = new ? strlen(new) : 0;
+				new = realloc(new, i + strlen(s) + 2);
+				if (!new)
+					return -ENOMEM;
+				if (i)
+					new[i++] = ',';
+				memcpy(new + i, s, sl);
+				new[i + sl] = '\0';
+				*more = new;
+			}
 		}
 
 		if (!comma)
@@ -272,19 +354,25 @@ static void *erofsmount_nbd_loopfn(void *arg)
 	return (void *)(uintptr_t)err;
 }
 
-static int erofsmount_startnbd(int nbdfd, const char *source)
+static int erofsmount_startnbd(int nbdfd, struct erofs_nbd_source *source)
 {
 	struct erofsmount_nbd_ctx ctx = {};
 	uintptr_t retcode;
 	pthread_t th;
 	int err, err2;
 
-	err = open(source, O_RDONLY);
-	if (err < 0) {
-		err = -errno;
-		goto out_closefd;
+	if (source->type == EROFSNBD_SOURCE_OCI) {
+		err = ocierofs_io_open(&ctx.vd, &source->ocicfg);
+		if (err)
+			goto out_closefd;
+	} else {
+		err = open(source->device_path, O_RDONLY);
+		if (err < 0) {
+			err = -errno;
+			goto out_closefd;
+		}
+		ctx.vd.fd = err;
 	}
-	ctx.vd.fd = err;
 
 	err = erofs_nbd_connect(nbdfd, 9, INT64_MAX >> 9);
 	if (err < 0) {
@@ -355,6 +443,8 @@ static int erofsmount_nbd_fix_backend_linkage(int num, char **recp)
 	char *newrecp;
 	int err;
 
+	if (!*recp)
+		return 0;
 	newrecp = erofs_nbd_get_identifier(num);
 	if (!IS_ERR(newrecp) && newrecp) {
 		err = strcmp(newrecp, *recp) ? -EFAULT : 0;
@@ -375,36 +465,43 @@ static int erofsmount_nbd_fix_backend_linkage(int num, char **recp)
 	return 0;
 }
 
-static int erofsmount_startnbd_nl(pid_t *pid, const char *source)
+static int erofsmount_startnbd_nl(pid_t *pid, struct erofs_nbd_source *source)
 {
-	struct erofsmount_nbd_ctx ctx = {};
-	int err, num;
-	int pipefd[2];
-
-	err = open(source, O_RDONLY);
-	if (err < 0)
-		return -errno;
-	ctx.vd.fd = err;
+	int pipefd[2], err, num;
 
 	err = pipe(pipefd);
-	if (err < 0) {
-		err = -errno;
-		erofs_io_close(&ctx.vd);
-		return err;
-	}
+	if (err < 0)
+		return -errno;
+
 	if ((*pid = fork()) == 0) {
+		struct erofsmount_nbd_ctx ctx = {};
 		char *recp;
 
 		/* Otherwise, NBD disconnect sends SIGPIPE, skipping cleanup */
-		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-			erofs_io_close(&ctx.vd);
+		if (signal(SIGPIPE, SIG_IGN) == SIG_ERR)
 			exit(EXIT_FAILURE);
+
+		if (source->type == EROFSNBD_SOURCE_OCI) {
+			err = ocierofs_io_open(&ctx.vd, &source->ocicfg);
+			if (err)
+				exit(EXIT_FAILURE);
+		} else {
+			err = open(source->device_path, O_RDONLY);
+			if (err < 0)
+				exit(EXIT_FAILURE);
+			ctx.vd.fd = err;
 		}
-		recp = erofsmount_write_recovery_info(source);
-		if (IS_ERR(recp)) {
-			erofs_io_close(&ctx.vd);
-			exit(EXIT_FAILURE);
+
+		if (source->type == EROFSNBD_SOURCE_LOCAL) {
+			recp = erofsmount_write_recovery_info(source->device_path);
+			if (IS_ERR(recp)) {
+				erofs_io_close(&ctx.vd);
+				exit(EXIT_FAILURE);
+			}
+		} else {
+			recp = NULL;
 		}
+
 		num = -1;
 		err = erofs_nbd_nl_connect(&num, 9, INT64_MAX >> 9, recp);
 		if (err >= 0) {
@@ -532,9 +629,9 @@ err_identifier:
 	return err;
 }
 
-static int erofsmount_nbd(const char *source, const char *mountpoint,
-			  const char *fstype, int flags,
-			  const char *options)
+static int erofsmount_nbd(struct erofs_nbd_source *source,
+			  const char *mountpoint, const char *fstype,
+			  int flags, const char *options)
 {
 	bool is_netlink = false;
 	char nbdpath[32], *id;
@@ -791,9 +888,12 @@ int main(int argc, char *argv[])
 	}
 
 	if (mountcfg.backend == EROFSNBD) {
-		err = erofsmount_nbd(mountcfg.device, mountcfg.target,
-				     mountcfg.fstype, mountcfg.flags,
-				     mountcfg.options);
+		if (nbdsrc.type == EROFSNBD_SOURCE_OCI)
+			nbdsrc.ocicfg.image_ref = mountcfg.device;
+		else
+			nbdsrc.device_path = mountcfg.device;
+		err = erofsmount_nbd(&nbdsrc, mountcfg.target,
+				     mountcfg.fstype, mountcfg.flags, mountcfg.options);
 		goto exit;
 	}
 

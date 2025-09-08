@@ -4,6 +4,7 @@
  *             http://www.tencent.com/
  */
 #define _GNU_SOURCE
+#include "erofs/internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,14 +13,21 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
+#ifdef HAVE_CURL_CURL_H
 #include <curl/curl.h>
+#endif
+#ifdef HAVE_JSON_C_JSON_H
 #include <json-c/json.h>
+#endif
 #include "erofs/importer.h"
 #include "erofs/internal.h"
+#include "erofs/io.h"
 #include "erofs/print.h"
 #include "erofs/tar.h"
 #include "liberofs_oci.h"
 #include "liberofs_private.h"
+
+#ifdef OCIEROFS_ENABLED
 
 #define DOCKER_REGISTRY "docker.io"
 #define DOCKER_API_REGISTRY "registry-1.docker.io"
@@ -32,6 +40,8 @@
 	"application/vnd.docker.distribution.manifest.list.v2+json"
 #define OCI_MEDIATYPE_MANIFEST "application/vnd.oci.image.manifest.v1+json"
 #define OCI_MEDIATYPE_INDEX "application/vnd.oci.image.index.v1+json"
+
+#define OCIEROFS_IO_CHUNK_SIZE 32768
 
 struct ocierofs_request {
 	char *url;
@@ -1032,7 +1042,7 @@ static int ocierofs_parse_ref(struct ocierofs_ctx *ctx, const char *ref_str)
  *
  * Return: 0 on success, negative errno on failure
  */
-int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config *config)
+static int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config *config)
 {
 	int ret;
 
@@ -1226,3 +1236,244 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 	ocierofs_ctx_cleanup(&ctx);
 	return ret;
 }
+
+static int ocierofs_download_blob_range(struct ocierofs_ctx *ctx, off_t offset, size_t length,
+					void **out_buf, size_t *out_size)
+{
+	struct ocierofs_request req = {};
+	struct ocierofs_response resp = {};
+	const char *api_registry;
+	char rangehdr[64];
+	long http_code = 0;
+	int ret;
+	int index = ctx->layer_index;
+	u64 blob_size = ctx->layers[index]->size;
+	size_t available;
+	size_t copy_size;
+
+	if (offset < 0)
+		return -EINVAL;
+
+	if (offset >= blob_size) {
+		*out_size = 0;
+		return 0;
+	}
+
+	if (length && offset + length > blob_size)
+		length = (size_t)(blob_size - offset);
+
+	api_registry = ocierofs_get_api_registry(ctx->registry);
+	if (asprintf(&req.url, "https://%s/v2/%s/blobs/%s",
+	     api_registry, ctx->repository, ctx->layers[index]->digest) == -1)
+		return -ENOMEM;
+
+	if (length)
+		snprintf(rangehdr, sizeof(rangehdr), "Range: bytes=%lld-%lld",
+			 (long long)offset, (long long)(offset + (off_t)length - 1));
+	else
+		snprintf(rangehdr, sizeof(rangehdr), "Range: bytes=%lld-",
+			 (long long)offset);
+
+	if (ctx->auth_header && strstr(ctx->auth_header, "Bearer"))
+		req.headers = curl_slist_append(req.headers, ctx->auth_header);
+	req.headers = curl_slist_append(req.headers, rangehdr);
+
+	curl_easy_reset(ctx->curl);
+
+	ret = ocierofs_curl_setup_common_options(ctx->curl);
+	if (ret)
+		goto out;
+
+	ret = ocierofs_curl_setup_rq(ctx->curl, req.url, OCIEROFS_HTTP_GET,
+				     req.headers,
+				     ocierofs_write_callback,
+				     &resp, NULL, NULL);
+	if (ret)
+		goto out;
+
+	ret = ocierofs_curl_perform(ctx->curl, &http_code);
+	if (ret)
+		goto out;
+
+	ret = 0;
+	if (http_code == 206) {
+		*out_buf = resp.data;
+		*out_size = resp.size;
+		resp.data = NULL;
+	} else if (http_code == 200) {
+		if (!offset) {
+			*out_buf = resp.data;
+			*out_size = resp.size;
+			resp.data = NULL;
+		} else if (offset < resp.size) {
+			available = resp.size - offset;
+			copy_size = length ? min_t(size_t, length, available) : available;
+
+			*out_buf = malloc(copy_size);
+			if (!*out_buf) {
+				ret = -ENOMEM;
+				goto out;
+			}
+			memcpy(*out_buf, resp.data + offset, copy_size);
+			*out_size = copy_size;
+		}
+	} else {
+		erofs_err("HTTP range request failed with code %ld", http_code);
+		ret = -EIO;
+	}
+
+out:
+	if (req.headers)
+		curl_slist_free_all(req.headers);
+	free(req.url);
+	free(resp.data);
+	return ret;
+}
+
+static ssize_t ocierofs_io_pread(struct erofs_vfile *vf, void *buf, size_t len, u64 offset)
+{
+	struct ocierofs_iostream *oci_iostream = *(struct ocierofs_iostream **)vf->payload;
+	void *download_buf = NULL;
+	size_t download_size = 0;
+	ssize_t ret;
+
+	ret = ocierofs_download_blob_range(oci_iostream->ctx, offset, len,
+					   &download_buf, &download_size);
+	if (ret < 0)
+		return ret;
+
+	if (download_buf && download_size > 0) {
+		memcpy(buf, download_buf, download_size);
+		free(download_buf);
+		return download_size;
+	}
+
+	return 0;
+}
+
+static ssize_t ocierofs_io_read(struct erofs_vfile *vf, void *buf, size_t len)
+{
+	struct ocierofs_iostream *oci_iostream = *(struct ocierofs_iostream **)vf->payload;
+	ssize_t ret;
+
+	ret = ocierofs_io_pread(vf, buf, len, oci_iostream->offset);
+	if (ret > 0)
+		oci_iostream->offset += ret;
+
+	return ret;
+}
+
+static ssize_t ocierofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
+				    off_t *pos, size_t count)
+{
+	struct ocierofs_iostream *oci_iostream = *(struct ocierofs_iostream **)vin->payload;
+	static char buf[OCIEROFS_IO_CHUNK_SIZE];
+	ssize_t total_written = 0;
+	ssize_t ret = 0;
+
+	while (count > 0) {
+		size_t to_read = min_t(size_t, count, OCIEROFS_IO_CHUNK_SIZE);
+		u64 read_offset = pos ? *pos : oci_iostream->offset;
+
+		ret = ocierofs_io_pread(vin, buf, to_read, read_offset);
+		if (ret <= 0) {
+			if (ret < 0 && total_written == 0)
+				return ret;
+			break;
+		}
+		ssize_t written = __erofs_io_write(vout->fd, buf, ret);
+
+		if (written < 0) {
+			erofs_err("OCI I/O sendfile: failed to write to output: %s",
+				  strerror(errno));
+			ret = -errno;
+			break;
+		}
+
+		if (written != ret) {
+			erofs_err("OCI I/O sendfile: partial write: %zd != %zd", written, ret);
+			ret = written;
+		}
+
+		total_written += ret;
+		count -= ret;
+		if (pos)
+			*pos += ret;
+		else
+			oci_iostream->offset += ret;
+	}
+	return count;
+}
+
+static void ocierofs_io_close(struct erofs_vfile *vfile)
+{
+	struct ocierofs_iostream *oci_iostream = *(struct ocierofs_iostream **)vfile->payload;
+
+	ocierofs_ctx_cleanup(oci_iostream->ctx);
+	free(oci_iostream->ctx);
+	free(oci_iostream);
+	*(struct ocierofs_iostream **)vfile->payload = NULL;
+}
+
+static int ocierofs_is_erofs_native_image(struct ocierofs_ctx *ctx)
+{
+	if (ctx->layer_count > 0 && ctx->layers[0] &&
+	    ctx->layers[0]->media_type) {
+		const char *media_type = ctx->layers[0]->media_type;
+		size_t len = strlen(media_type);
+
+		if (len >= 6 && strcmp(media_type + len - 6, ".erofs") == 0)
+			return 0;
+	}
+	return -ENOENT;
+}
+
+static struct erofs_vfops ocierofs_io_vfops = {
+	.pread = ocierofs_io_pread,
+	.read = ocierofs_io_read,
+	.sendfile = ocierofs_io_sendfile,
+	.close = ocierofs_io_close,
+};
+
+int ocierofs_io_open(struct erofs_vfile *vfile, const struct ocierofs_config *cfg)
+{
+	struct ocierofs_ctx *ctx;
+	struct ocierofs_iostream *oci_iostream = NULL;
+	int err;
+
+	ctx = calloc(1, sizeof(*ctx));
+	if (!ctx)
+		return -ENOMEM;
+
+	err = ocierofs_init(ctx, cfg);
+	if (err) {
+		free(ctx);
+		return err;
+	}
+
+	err = ocierofs_is_erofs_native_image(ctx);
+	if (err) {
+		ocierofs_ctx_cleanup(ctx);
+		free(ctx);
+		return err;
+	}
+
+	oci_iostream = calloc(1, sizeof(*oci_iostream));
+	if (!oci_iostream) {
+		ocierofs_ctx_cleanup(ctx);
+		free(ctx);
+		return -ENOMEM;
+	}
+
+	oci_iostream->ctx = ctx;
+	oci_iostream->offset = 0;
+	*vfile = (struct erofs_vfile){.ops = &ocierofs_io_vfops};
+	*(struct ocierofs_iostream **)vfile->payload = oci_iostream;
+	return 0;
+}
+#else
+int ocierofs_io_open(struct erofs_vfile *vfile, const struct ocierofs_config *cfg)
+{
+	return -EOPNOTSUPP;
+}
+#endif
