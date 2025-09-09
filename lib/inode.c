@@ -1076,10 +1076,10 @@ out:
 	return 0;
 }
 
-static bool erofs_should_use_inode_extended(struct erofs_inode *inode,
-					    const char *path)
+static bool erofs_should_use_inode_extended(struct erofs_importer *im,
+				struct erofs_inode *inode, const char *path)
 {
-	if (cfg.c_force_inodeversion == FORCE_INODE_EXTENDED)
+	if (im->params->force_inodeversion == EROFS_FORCE_INODE_EXTENDED)
 		return true;
 	if (inode->i_size > UINT_MAX)
 		return true;
@@ -1209,8 +1209,10 @@ int __erofs_fill_inode(struct erofs_importer *im, struct erofs_inode *inode,
 static int erofs_fill_inode(struct erofs_importer *im, struct erofs_inode *inode,
 			    struct stat *st, const char *path)
 {
-	int err = __erofs_fill_inode(im, inode, st, path);
+	const struct erofs_importer_params *params = im->params;
+	int err;
 
+	err =  __erofs_fill_inode(im, inode, st, path);
 	if (err)
 		return err;
 
@@ -1242,8 +1244,8 @@ static int erofs_fill_inode(struct erofs_importer *im, struct erofs_inode *inode
 			return -ENOMEM;
 	}
 
-	if (erofs_should_use_inode_extended(inode, path)) {
-		if (cfg.c_force_inodeversion == FORCE_INODE_COMPACT) {
+	if (erofs_should_use_inode_extended(im, inode, path)) {
+		if (params->force_inodeversion == EROFS_FORCE_INODE_COMPACT) {
 			erofs_err("file %s cannot be in compact form",
 				  inode->i_srcpath);
 			return -EINVAL;
@@ -1816,7 +1818,7 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 				    struct erofs_inode *inode, bool incremental)
 {
-	struct erofs_importer_params *params = im->params;
+	const struct erofs_importer_params *params = im->params;
 	char *trimmed;
 	int ret;
 
@@ -1825,8 +1827,8 @@ static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 	erofs_update_progressinfo("Processing %s ...", trimmed);
 	free(trimmed);
 
-	if (erofs_should_use_inode_extended(inode, inode->i_srcpath)) {
-		if (cfg.c_force_inodeversion == FORCE_INODE_COMPACT) {
+	if (erofs_should_use_inode_extended(im, inode, inode->i_srcpath)) {
+		if (params->force_inodeversion == EROFS_FORCE_INODE_COMPACT) {
 			erofs_err("file %s cannot be in compact form",
 				  inode->i_srcpath);
 			return -EINVAL;

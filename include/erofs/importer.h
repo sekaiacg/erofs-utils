@@ -12,6 +12,11 @@ extern "C"
 
 #include "internal.h"
 
+enum {
+	EROFS_FORCE_INODE_COMPACT = 1,
+	EROFS_FORCE_INODE_EXTENDED,
+};
+
 struct erofs_importer_params {
 	char *source;
 	u32 mt_async_queue_limit;
@@ -20,6 +25,7 @@ struct erofs_importer_params {
 	u32 uid_offset;
 	u32 gid_offset;
 	u32 fsalignblks;
+	char force_inodeversion;
 	bool no_datainline;
 	bool hard_dereference;
 	bool ovlfs_strip;

@@ -417,7 +417,8 @@ static struct {
 static bool mkfs_no_datainline;
 static bool mkfs_plain_xattr_pfx;
 
-static int parse_extended_opts(const char *opts)
+static int parse_extended_opts(struct erofs_importer_params *params,
+			       const char *opts)
 {
 #define MATCH_EXTENTED_OPT(opt, token, keylen) \
 	(keylen == strlen(opt) && !memcmp(token, opt, keylen))
@@ -462,12 +463,12 @@ static int parse_extended_opts(const char *opts)
 		if (MATCH_EXTENTED_OPT("force-inode-compact", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
-			cfg.c_force_inodeversion = FORCE_INODE_COMPACT;
+			params->force_inodeversion = EROFS_FORCE_INODE_COMPACT;
 			cfg.c_ignore_mtime = true;
 		} else if (MATCH_EXTENTED_OPT("force-inode-extended", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
-			cfg.c_force_inodeversion = FORCE_INODE_EXTENDED;
+			params->force_inodeversion = EROFS_FORCE_INODE_EXTENDED;
 		} else if (MATCH_EXTENTED_OPT("nosbcrc", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
@@ -1016,7 +1017,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			break;
 
 		case 'E':
-			opt = parse_extended_opts(optarg);
+			opt = parse_extended_opts(params, optarg);
 			if (opt)
 				return opt;
 			break;

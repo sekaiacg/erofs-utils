@@ -15,12 +15,6 @@ extern "C"
 #include "defs.h"
 #include "err.h"
 
-
-enum {
-	FORCE_INODE_COMPACT = 1,
-	FORCE_INODE_EXTENDED,
-};
-
 enum {
 	FORCE_INODE_BLOCK_MAP = 1,
 	FORCE_INODE_CHUNK_INDEXES,
@@ -73,7 +67,6 @@ struct erofs_configure {
 	char *c_blobdev_path;
 	char *c_compress_hints_file;
 	struct erofs_compr_opts c_compr_opts[EROFS_MAX_COMPR_CFGS];
-	char c_force_inodeversion;
 	char c_force_chunkformat;
 	u8 c_mkfs_metabox_algid;
 	/* < 0, xattr disabled and INT_MAX, always use inline xattrs */
