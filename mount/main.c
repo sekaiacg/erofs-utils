@@ -594,6 +594,8 @@ static int erofsmount_nbd(const char *source, const char *mountpoint,
 			if (err)
 				erofs_warn("failed to turn on autoclear for nbd%d: %s",
 					   num, erofs_strerror(err));
+			if (!IS_ERR(id))
+				free(id);
 		}
 	}
 	return err;
