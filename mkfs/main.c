@@ -464,7 +464,7 @@ static int parse_extended_opts(struct erofs_importer_params *params,
 			if (vallen)
 				return -EINVAL;
 			params->force_inodeversion = EROFS_FORCE_INODE_COMPACT;
-			cfg.c_ignore_mtime = true;
+			params->ignore_mtime = true;
 		} else if (MATCH_EXTENTED_OPT("force-inode-extended", token, keylen)) {
 			if (vallen)
 				return -EINVAL;
@@ -1175,10 +1175,10 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			cfg.c_blobdev_path = optarg;
 			break;
 		case 14:
-			cfg.c_ignore_mtime = true;
+			params->ignore_mtime = true;
 			break;
 		case 15:
-			cfg.c_ignore_mtime = false;
+			params->ignore_mtime = false;
 			break;
 		case 16:
 			errno = 0;

@@ -720,7 +720,7 @@ int erofs_iflush(struct erofs_inode *inode)
 	    inode->u.i_blocks > UINT32_MAX) {
 		nb.blocks_hi = cpu_to_le16(inode->u.i_blocks >> 32);
 	} else if (inode->datalayout != EROFS_INODE_CHUNK_BASED &&
-		 inode->u.i_blkaddr > UINT32_MAX) {
+		   inode->u.i_blkaddr > UINT32_MAX) {
 		nb.startblk_hi = cpu_to_le16(inode->u.i_blkaddr >> 32);
 		if (inode->u.i_blkaddr == EROFS_NULL_ADDR) {
 			nlink_1 = false;
@@ -747,8 +747,7 @@ int erofs_iflush(struct erofs_inode *inode)
 
 		u.dic.i_uid = cpu_to_le16((u16)inode->i_uid);
 		u.dic.i_gid = cpu_to_le16((u16)inode->i_gid);
-		if (!cfg.c_ignore_mtime)
-			u.dic.i_mtime = cpu_to_le64(inode->i_mtime - sbi->epoch);
+		u.dic.i_mtime = cpu_to_le64(inode->i_mtime - sbi->epoch);
 		u.dic.i_u = u1;
 
 		if (nlink_1) {
@@ -1079,7 +1078,9 @@ out:
 static bool erofs_should_use_inode_extended(struct erofs_importer *im,
 				struct erofs_inode *inode, const char *path)
 {
-	if (im->params->force_inodeversion == EROFS_FORCE_INODE_EXTENDED)
+	const struct erofs_importer_params *params = im->params;
+
+	if (params->force_inodeversion == EROFS_FORCE_INODE_EXTENDED)
 		return true;
 	if (inode->i_size > UINT_MAX)
 		return true;
@@ -1091,10 +1092,13 @@ static bool erofs_should_use_inode_extended(struct erofs_importer *im,
 		return true;
 	if (inode->i_nlink > USHRT_MAX)
 		return true;
-	if (!erofs_is_special_identifier(path) && !cfg.c_ignore_mtime &&
+	if (!erofs_is_special_identifier(path) &&
 	    !erofs_sb_has_48bit(inode->sbi) &&
-	    inode->i_mtime != inode->sbi->epoch)
-		return true;
+	    inode->i_mtime != inode->sbi->epoch) {
+		if (!params->ignore_mtime)
+			return true;
+		inode->i_mtime = inode->sbi->epoch;
+	}
 	return false;
 }
 

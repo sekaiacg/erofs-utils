@@ -26,6 +26,7 @@ struct erofs_importer_params {
 	u32 gid_offset;
 	u32 fsalignblks;
 	char force_inodeversion;
+	bool ignore_mtime;
 	bool no_datainline;
 	bool hard_dereference;
 	bool ovlfs_strip;
