@@ -24,6 +24,7 @@
 #include "erofs/io.h"
 #include "erofs/print.h"
 #include "erofs/tar.h"
+#include "liberofs_base64.h"
 #include "liberofs_oci.h"
 #include "liberofs_private.h"
 
@@ -1471,6 +1472,70 @@ int ocierofs_io_open(struct erofs_vfile *vfile, const struct ocierofs_config *cf
 	*(struct ocierofs_iostream **)vfile->payload = oci_iostream;
 	return 0;
 }
+
+char *ocierofs_encode_userpass(const char *username, const char *password)
+{
+	char *buf, *out;
+	int ret;
+	size_t outlen;
+
+	ret = asprintf(&buf, "%s:%s", username ?: "", password ?: "");
+	if (ret == -1)
+		return ERR_PTR(-ENOMEM);
+	outlen = 4 * DIV_ROUND_UP(ret, 3);
+	out = malloc(outlen + 1);
+	if (!out) {
+		ret = -ENOMEM;
+	} else {
+		ret = erofs_base64_encode((unsigned char *)buf, ret, out);
+		if (ret < 0)
+			free(out);
+		out[ret] = '\0';
+	}
+	free(buf);
+	return ret < 0 ? ERR_PTR(ret) : out;
+}
+
+int ocierofs_decode_userpass(const char *b64, char **out_user, char **out_pass)
+{
+	size_t len;
+	unsigned char *out;
+	int ret;
+	char *colon;
+
+	if (!b64 || !out_user || !out_pass)
+		return -EINVAL;
+	*out_user = NULL;
+	*out_pass = NULL;
+
+	len = strlen(b64);
+	out = malloc(len * 3 / 4 + 1);
+	if (!out)
+		return -ENOMEM;
+	ret = erofs_base64_decode(b64, len, out);
+	if (ret < 0) {
+		free(out);
+		return ret;
+	}
+	out[ret] = '\0';
+	colon = (char *)memchr(out, ':', ret);
+	if (!colon) {
+		free(out);
+		return -EINVAL;
+	}
+	*colon = '\0';
+	*out_user = strdup((char *)out);
+	*out_pass = strdup(colon + 1);
+	free(out);
+	if (!*out_user || !*out_pass) {
+		free(*out_user);
+		free(*out_pass);
+		*out_user = *out_pass = NULL;
+		return -ENOMEM;
+	}
+	return 0;
+}
+
 #else
 int ocierofs_io_open(struct erofs_vfile *vfile, const struct ocierofs_config *cfg)
 {

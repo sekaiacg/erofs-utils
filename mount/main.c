@@ -401,10 +401,51 @@ out_closefd:
 	return err;
 }
 
-static char *erofsmount_write_recovery_info(const char *source)
+#ifdef OCIEROFS_ENABLED
+static int erofsmount_write_recovery_oci(FILE *f, struct erofs_nbd_source *source)
+{
+	char *b64cred = NULL;
+	int ret;
+
+	if (source->ocicfg.username || source->ocicfg.password) {
+		b64cred = ocierofs_encode_userpass(source->ocicfg.username,
+						   source->ocicfg.password);
+		if (IS_ERR(b64cred))
+			return PTR_ERR(b64cred);
+	}
+	ret = fprintf(f, "OCI_LAYER %s %s %d %s\n",
+		       source->ocicfg.image_ref ?: "",
+		       source->ocicfg.platform ?: "",
+		       source->ocicfg.layer_index,
+		       b64cred ?: "");
+	free(b64cred);
+	return ret < 0 ? -ENOMEM : 0;
+}
+#else
+static int erofsmount_write_recovery_oci(FILE *f, struct erofs_nbd_source *source)
+{
+	return -EOPNOTSUPP;
+}
+#endif
+
+static int erofsmount_write_recovery_local(FILE *f, struct erofs_nbd_source *source)
+{
+	char *realp;
+	int err;
+
+	realp = realpath(source->device_path, NULL);
+	if (!realp)
+		return -errno;
+
+	/* TYPE<LOCAL> <SOURCE PATH>\n(more..) */
+	err = fprintf(f, "LOCAL %s\n", realp) < 0;
+	free(realp);
+	return err ? -ENOMEM : 0;
+}
+
+static char *erofsmount_write_recovery_info(struct erofs_nbd_source *source)
 {
 	char recp[] = "/var/run/erofs/mountnbd_XXXXXX";
-	char *realp;
 	int fd, err;
 	FILE *f;
 
@@ -424,19 +465,75 @@ static char *erofsmount_write_recovery_info(const char *source)
 		return ERR_PTR(-errno);
 	}
 
-	realp = realpath(source, NULL);
-	if (!realp) {
-		fclose(f);
-		return ERR_PTR(-errno);
-	}
-	/* TYPE<LOCAL> <SOURCE PATH>\n(more..) */
-	err = fprintf(f, "LOCAL %s\n", realp) < 0;
+	if (source->type == EROFSNBD_SOURCE_OCI)
+		err = erofsmount_write_recovery_oci(f, source);
+	else
+		err = erofsmount_write_recovery_local(f, source);
+
 	fclose(f);
-	free(realp);
 	if (err)
-		return ERR_PTR(-ENOMEM);
+		return ERR_PTR(err);
 	return strdup(recp) ?: ERR_PTR(-ENOMEM);
 }
+
+#ifdef OCIEROFS_ENABLED
+/* Parse input string in format: "image_ref platform layer [b64cred]" */
+static int erofsmount_parse_recovery_ocilayer(struct ocierofs_config *oci_cfg,
+					      char *source)
+{
+	char *tokens[4] = {0};
+	int token_count = 0;
+	char *p = source;
+	int err;
+	char *endptr;
+	unsigned long v;
+
+	while (token_count < 4 && (p = strchr(p, ' ')) != NULL) {
+		*p++ = '\0';
+		while (*p == ' ')
+			p++;
+		if (*p == '\0')
+			break;
+		tokens[token_count++] = p;
+	}
+
+	if (token_count < 2)
+		return -EINVAL;
+
+	oci_cfg->image_ref = source;
+	oci_cfg->platform = tokens[0];
+
+	v = strtoul(tokens[1], &endptr, 10);
+	if (endptr == tokens[1] || *endptr != '\0')
+		return -EINVAL;
+	oci_cfg->layer_index = (int)v;
+
+	if (token_count > 2) {
+		err = ocierofs_decode_userpass(tokens[2], &oci_cfg->username,
+					       &oci_cfg->password);
+		if (err)
+			return err;
+	}
+	return 0;
+}
+
+static int erofsmount_reattach_ocilayer(struct erofs_vfile *vf, char *source)
+{
+	struct ocierofs_config oci_cfg = {};
+	int err;
+
+	err = erofsmount_parse_recovery_ocilayer(&oci_cfg, source);
+	if (err)
+		return err;
+
+	return ocierofs_io_open(vf, &oci_cfg);
+}
+#else
+static int erofsmount_reattach_ocilayer(struct erofs_vfile *vf, char *source)
+{
+	return -EOPNOTSUPP;
+}
+#endif
 
 static int erofsmount_nbd_fix_backend_linkage(int num, char **recp)
 {
@@ -491,15 +588,10 @@ static int erofsmount_startnbd_nl(pid_t *pid, struct erofs_nbd_source *source)
 				exit(EXIT_FAILURE);
 			ctx.vd.fd = err;
 		}
-
-		if (source->type == EROFSNBD_SOURCE_LOCAL) {
-			recp = erofsmount_write_recovery_info(source->device_path);
-			if (IS_ERR(recp)) {
-				erofs_io_close(&ctx.vd);
-				exit(EXIT_FAILURE);
-			}
-		} else {
-			recp = NULL;
+		recp = erofsmount_write_recovery_info(source);
+		if (IS_ERR(recp)) {
+			erofs_io_close(&ctx.vd);
+			exit(EXIT_FAILURE);
 		}
 
 		num = -1;
@@ -595,18 +687,22 @@ static int erofsmount_reattach(const char *target)
 		*(source++) = '\0';
 	}
 
-	if (strcmp(line, "LOCAL")) {
+	if (!strcmp(line, "LOCAL")) {
+		err = open(source, O_RDONLY);
+		if (err < 0) {
+			err = -errno;
+			goto err_line;
+		}
+		ctx.vd.fd = err;
+	} else if (!strcmp(line, "OCI_LAYER")) {
+		err = erofsmount_reattach_ocilayer(&ctx.vd, source);
+		if (err)
+			goto err_line;
+	} else {
 		err = -EOPNOTSUPP;
 		erofs_err("unsupported source type %s recorded in recovery file", line);
 		goto err_line;
 	}
-
-	err = open(source, O_RDONLY);
-	if (err < 0) {
-		err = -errno;
-		goto err_line;
-	}
-	ctx.vd.fd = err;
 
 	err = erofs_nbd_nl_reconnect(nbdnum, identifier);
 	if (err >= 0) {
