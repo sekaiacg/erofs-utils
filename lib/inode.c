@@ -159,6 +159,9 @@ unsigned int erofs_iput(struct erofs_inode *inode)
 	} else {
 		free(inode->i_link);
 	}
+
+	if (inode->datalayout == EROFS_INODE_CHUNK_BASED)
+		free(inode->chunkindexes);
 	free(inode);
 	return 0;
 }

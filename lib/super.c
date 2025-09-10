@@ -78,6 +78,9 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 	struct erofs_super_block *dsb;
 	int read, ret;
 
+	if (sbi->sb_valid)
+		return 0;
+
 	read = erofs_io_pread(&sbi->bdev, data, EROFS_MAX_BLOCK_SIZE, 0);
 	if (read < EROFS_SUPER_OFFSET + sizeof(*dsb)) {
 		ret = read < 0 ? read : -EIO;
@@ -151,6 +154,8 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 		free(sbi->devs);
 		sbi->devs = NULL;
 	}
+
+	sbi->sb_valid = !ret;
 	return ret;
 }
 
@@ -170,6 +175,8 @@ void erofs_put_super(struct erofs_sb_info *sbi)
 		erofs_buffer_exit(sbi->bmgr);
 		sbi->bmgr = NULL;
 	}
+
+	sbi->sb_valid = false;
 }
 
 int erofs_writesb(struct erofs_sb_info *sbi)

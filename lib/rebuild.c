@@ -186,7 +186,7 @@ static int erofs_rebuild_write_blob_index(struct erofs_sb_info *dst_sb,
 
 	unit = sizeof(struct erofs_inode_chunk_index);
 	inode->extent_isize = count * unit;
-	idx = malloc(max(sizeof(*idx), sizeof(void *)));
+	idx = calloc(count, max(sizeof(*idx), sizeof(void *)));
 	if (!idx)
 		return -ENOMEM;
 	inode->chunkindexes = idx;
@@ -428,6 +428,7 @@ int erofs_rebuild_load_tree(struct erofs_inode *root, struct erofs_sb_info *sbi,
 		erofs_uuid_unparse_lower(sbi->uuid, uuid_str);
 		fsid = uuid_str;
 	}
+
 	ret = erofs_read_superblock(sbi);
 	if (ret) {
 		erofs_err("failed to read superblock of %s", fsid);

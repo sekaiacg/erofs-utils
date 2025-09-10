@@ -153,6 +153,7 @@ struct erofs_sb_info {
 	struct erofs_buffer_head *bh_sb;
 	struct erofs_buffer_head *bh_devt;
 	bool useqpl;
+	bool sb_valid;
 };
 
 /* make sure that any user of the erofs headers has atleast 64bit off_t type */

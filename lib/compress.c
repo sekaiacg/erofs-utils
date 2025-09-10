@@ -2171,5 +2171,7 @@ int z_erofs_compress_exit(struct erofs_sb_info *sbi)
 		}
 #endif
 	}
+
+	free(sbi->zmgr);
 	return 0;
 }
