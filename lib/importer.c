@@ -55,12 +55,10 @@ int erofs_importer_init(struct erofs_importer *im)
 			goto out_err;
 	}
 
-	if (cfg.c_mkfs_pclustersize_metabox >= 0) {
-		subsys = "metabox";
-		err = erofs_metabox_init(sbi);
-		if (err)
-			goto out_err;
-	}
+	subsys = "metabox";
+	err = erofs_metabox_init(sbi);
+	if (err)
+		goto out_err;
 
 	if (cfg.c_fragments) {
 		subsys = "dedupe_ext";

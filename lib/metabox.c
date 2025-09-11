@@ -30,6 +30,9 @@ int erofs_metabox_init(struct erofs_sb_info *sbi)
 	struct erofs_metaboxmgr *m2gr;
 	int ret;
 
+	if (!erofs_sb_has_metabox(sbi))
+		return 0;
+
 	m2gr = malloc(sizeof(*m2gr));
 	if (!m2gr)
 		return -ENOMEM;
@@ -41,7 +44,6 @@ int erofs_metabox_init(struct erofs_sb_info *sbi)
 	m2gr->vf = (struct erofs_vfile){ .fd = ret };
 	m2gr->bmgr = erofs_buffer_init(sbi, 0, &m2gr->vf);
 	if (m2gr->bmgr) {
-		erofs_sb_set_metabox(sbi);
 		sbi->m2gr = m2gr;
 		return 0;
 	}

@@ -1444,6 +1444,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 		}
 		cfg.c_mkfs_pclustersize_metabox = pclustersize_metabox;
 		cfg.c_mkfs_metabox_algid = metabox_algorithmid;
+		erofs_sb_set_metabox(&g_sbi);
 	}
 
 	if (has_timestamp && cfg.c_timeinherit == TIMESTAMP_UNSPECIFIED)
