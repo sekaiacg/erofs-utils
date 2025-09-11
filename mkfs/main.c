@@ -415,6 +415,7 @@ static struct {
 };
 
 static bool mkfs_no_datainline;
+static bool mkfs_plain_xattr_pfx;
 
 static int parse_extended_opts(const char *opts)
 {
@@ -491,6 +492,10 @@ static int parse_extended_opts(const char *opts)
 			if (vallen)
 				return -EINVAL;
 			cfg.c_xattr_name_filter = !clear;
+		} else if (MATCH_EXTENTED_OPT("plain-xattr-prefixes", token, keylen)) {
+			if (vallen)
+				return -EINVAL;
+			mkfs_plain_xattr_pfx = true;
 		} else {
 			int i, err;
 
@@ -1788,7 +1793,7 @@ int main(int argc, char **argv)
 		}
 
 		if (cfg.c_extra_ea_name_prefixes)
-			erofs_xattr_flush_name_prefixes(&g_sbi);
+			erofs_xattr_flush_name_prefixes(&g_sbi, mkfs_plain_xattr_pfx);
 
 		root = erofs_new_inode(&g_sbi);
 		if (IS_ERR(root)) {

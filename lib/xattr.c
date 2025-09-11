@@ -17,6 +17,7 @@
 #include "erofs/xattr.h"
 #include "erofs/fragments.h"
 #include "liberofs_cache.h"
+#include "liberofs_metabox.h"
 #include "liberofs_xxhash.h"
 #include "liberofs_private.h"
 
@@ -804,23 +805,50 @@ static int comp_shared_xattr_item(const void *a, const void *b)
 	return la > lb;
 }
 
-int erofs_xattr_flush_name_prefixes(struct erofs_sb_info *sbi)
+int erofs_xattr_flush_name_prefixes(struct erofs_sb_info *sbi, bool plain)
 {
-	int fd = erofs_packedfile(sbi);
+	bool may_fragments = cfg.c_fragments || erofs_sb_has_fragments(sbi);
+	struct erofs_vfile *vf = &sbi->bdev;
+	struct erofs_bufmgr *bmgr = sbi->bmgr;
+	struct erofs_buffer_head *bh = NULL;
+	struct erofs_vfile _vf;
 	struct ea_type_node *tnode;
-	s64 offset;
+	s64 start, offset = 0;
 	int err;
 
 	if (!ea_prefix_count)
 		return 0;
-	offset = lseek(fd, 0, SEEK_CUR);
-	if (offset < 0)
-		return -errno;
-	offset = round_up(offset, 4);
+
+	if (!plain) {
+		if (erofs_sb_has_metabox(sbi)) {
+			bmgr = erofs_metabox_bmgr(sbi);
+			vf = bmgr->vf;
+		} else if (may_fragments) {
+			erofs_sb_set_fragments(sbi);
+			_vf = (struct erofs_vfile){ .fd = erofs_packedfile(sbi) };
+			vf = &_vf;
+			offset = lseek(vf->fd, 0, SEEK_CUR);
+			if (offset < 0)
+				return -errno;
+			bmgr = NULL;
+		} else {
+			plain = true;
+		}
+	}
+	if (plain)
+		erofs_sb_set_plain_xattr_pfx(sbi);
+
+	if (bmgr) {
+		bh = erofs_balloc(bmgr, XATTR, 0, 0);
+		if (IS_ERR(bh))
+			return PTR_ERR(bh);
+		(void)erofs_mapbh(bmgr, bh->block);
+		offset = erofs_btell(bh, false);
+	}
+
 	if ((offset >> 2) > UINT32_MAX)
 		return -EOVERFLOW;
-	if (lseek(fd, offset, SEEK_SET) < 0)
-		return -errno;
+	start = offset;
 
 	sbi->xattr_prefix_start = (u32)offset >> 2;
 	sbi->xattr_prefix_count = ea_prefix_count;
@@ -842,17 +870,27 @@ int erofs_xattr_flush_name_prefixes(struct erofs_sb_info *sbi)
 		       infix_len);
 		len = sizeof(struct erofs_xattr_long_prefix) + infix_len;
 		u.s.size = cpu_to_le16(len);
-		err = __erofs_io_write(fd, &u.s, sizeof(__le16) + len);
+		err = erofs_io_pwrite(vf, &u.s, offset, sizeof(__le16) + len);
 		if (err != sizeof(__le16) + len) {
 			if (err < 0)
-				return -errno;
+				return err;
 			return -EIO;
 		}
 		offset = round_up(offset + sizeof(__le16) + len, 4);
-		if (lseek(fd, offset, SEEK_SET) < 0)
+	}
+
+	if (bh) {
+		bh->op = &erofs_drop_directly_bhops;
+		err = erofs_bh_balloon(bh, offset - start);
+		if (err < 0)
+			return err;
+		bh->op = &erofs_drop_directly_bhops;
+		erofs_bdrop(bh, false);
+	} else {
+		DBG_BUGON(bmgr);
+		if (lseek(vf->fd, offset, SEEK_CUR) < 0)
 			return -errno;
 	}
-	erofs_sb_set_fragments(sbi);
 	erofs_sb_set_xattr_prefixes(sbi);
 	return 0;
 }
@@ -1641,6 +1679,7 @@ void erofs_xattr_prefixes_cleanup(struct erofs_sb_info *sbi)
 
 int erofs_xattr_prefixes_init(struct erofs_sb_info *sbi)
 {
+	bool plain = erofs_sb_has_plain_xattr_pfx(sbi);
 	erofs_off_t pos = (erofs_off_t)sbi->xattr_prefix_start << 2;
 	struct erofs_xattr_prefix_item *pfs;
 	erofs_nid_t nid = 0;
@@ -1650,8 +1689,12 @@ int erofs_xattr_prefixes_init(struct erofs_sb_info *sbi)
 	if (!sbi->xattr_prefix_count)
 		return 0;
 
-	if (sbi->packed_nid)
-		nid = sbi->packed_nid;
+	if (!plain) {
+		if (sbi->metabox_nid)
+			nid = sbi->metabox_nid;
+		else if (sbi->packed_nid)
+			nid = sbi->packed_nid;
+	}
 
 	pfs = calloc(sbi->xattr_prefix_count, sizeof(*pfs));
 	if (!pfs)
