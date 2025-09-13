@@ -82,9 +82,9 @@ static int erofsmount_parse_oci_option(const char *option)
 	struct ocierofs_config *oci_cfg = &nbdsrc.ocicfg;
 	char *p;
 
-	p = strstr(option, "oci=");
+	p = strstr(option, "oci.layer=");
 	if (p != NULL) {
-		p += strlen("oci=");
+		p += strlen("oci.layer=");
 		{
 			char *endptr;
 			unsigned long v = strtoul(p, &endptr, 10);
