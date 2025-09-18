@@ -36,4 +36,5 @@ stamp-h1
 /fuse/erofsfuse
 /dump/dump.erofs
 /fsck/fsck.erofs
+/mount/mount.erofs
 /contrib/stress
