@@ -43,6 +43,8 @@ static inline unsigned int xattrblock_offset(struct erofs_inode *vi,
 	(_size - sizeof(struct erofs_xattr_ibody_header)) / \
 	sizeof(struct erofs_xattr_entry) + 1; })
 
+struct erofs_importer;
+
 int erofs_scan_file_xattrs(struct erofs_inode *inode);
 int erofs_prepare_xattr_ibody(struct erofs_inode *inode, bool noroom);
 char *erofs_export_xattr_ibody(struct erofs_inode *inode);
@@ -50,7 +52,7 @@ int erofs_build_shared_xattrs_from_path(struct erofs_sb_info *sbi, const char *p
 
 int erofs_xattr_insert_name_prefix(const char *prefix);
 void erofs_xattr_cleanup_name_prefixes(void);
-int erofs_xattr_flush_name_prefixes(struct erofs_sb_info *sbi, bool plain);
+int erofs_xattr_flush_name_prefixes(struct erofs_importer *im, bool plain);
 void erofs_xattr_prefixes_cleanup(struct erofs_sb_info *sbi);
 int erofs_xattr_prefixes_init(struct erofs_sb_info *sbi);
 

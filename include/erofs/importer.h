@@ -17,6 +17,12 @@ enum {
 	EROFS_FORCE_INODE_EXTENDED,
 };
 
+enum {
+	EROFS_FRAGDEDUPE_FULL,
+	EROFS_FRAGDEDUPE_INODE,
+	EROFS_FRAGDEDUPE_OFF,
+};
+
 struct erofs_importer_params {
 	char *source;
 	u32 mt_async_queue_limit;
@@ -35,6 +41,11 @@ struct erofs_importer_params {
 	bool hard_dereference;
 	bool ovlfs_strip;
 	bool dot_omitted;
+	bool ztailpacking;
+	bool dedupe;
+	bool fragments;
+	bool all_fragments;
+	char fragdedupe;
 };
 
 struct erofs_importer {

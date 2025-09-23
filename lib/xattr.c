@@ -16,6 +16,7 @@
 #include "erofs/hashtable.h"
 #include "erofs/xattr.h"
 #include "erofs/fragments.h"
+#include "erofs/importer.h"
 #include "liberofs_cache.h"
 #include "liberofs_metabox.h"
 #include "liberofs_xxhash.h"
@@ -805,9 +806,11 @@ static int comp_shared_xattr_item(const void *a, const void *b)
 	return la > lb;
 }
 
-int erofs_xattr_flush_name_prefixes(struct erofs_sb_info *sbi, bool plain)
+int erofs_xattr_flush_name_prefixes(struct erofs_importer *im, bool plain)
 {
-	bool may_fragments = cfg.c_fragments || erofs_sb_has_fragments(sbi);
+	const struct erofs_importer_params *params = im->params;
+	struct erofs_sb_info *sbi = im->sbi;
+	bool may_fragments = params->fragments || erofs_sb_has_fragments(sbi);
 	struct erofs_vfile *vf = &sbi->bdev;
 	struct erofs_bufmgr *bmgr = sbi->bmgr;
 	struct erofs_buffer_head *bh = NULL;

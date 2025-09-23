@@ -27,12 +27,6 @@ enum {
 	TIMESTAMP_CLAMPING,
 };
 
-enum {
-	FRAGDEDUPE_FULL,
-	FRAGDEDUPE_INODE,
-	FRAGDEDUPE_OFF,
-};
-
 #define EROFS_MAX_COMPR_CFGS		64
 
 struct erofs_compr_opts {
@@ -48,11 +42,6 @@ struct erofs_configure {
 	bool c_legacy_compress;
 	char c_timeinherit;
 	char c_chunkbits;
-	bool c_ztailpacking;
-	bool c_fragments;
-	bool c_all_fragments;
-	bool c_dedupe;
-	char c_fragdedupe;
 	bool c_showprogress;
 	bool c_extra_ea_name_prefixes;
 	bool c_xattr_name_filter;

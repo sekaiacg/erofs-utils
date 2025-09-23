@@ -298,7 +298,8 @@ static unsigned int dsunit;
 static int tarerofs_decoder;
 static FILE *vmdk_dcf;
 
-static int erofs_mkfs_feat_set_legacy_compress(bool en, const char *val,
+static int erofs_mkfs_feat_set_legacy_compress(struct erofs_importer_params *params,
+					       bool en, const char *val,
 					       unsigned int vallen)
 {
 	if (vallen)
@@ -308,22 +309,25 @@ static int erofs_mkfs_feat_set_legacy_compress(bool en, const char *val,
 	return 0;
 }
 
-static int erofs_mkfs_feat_set_ztailpacking(bool en, const char *val,
+static int erofs_mkfs_feat_set_ztailpacking(struct erofs_importer_params *params,
+					    bool en, const char *val,
 					    unsigned int vallen)
 {
 	if (vallen)
 		return -EINVAL;
-	cfg.c_ztailpacking = en;
+
+	params->ztailpacking = en;
 	return 0;
 }
 
-static int erofs_mkfs_feat_set_fragments(bool en, const char *val,
+static int erofs_mkfs_feat_set_fragments(struct erofs_importer_params *params,
+					 bool en, const char *val,
 					 unsigned int vallen)
 {
 	if (!en) {
 		if (vallen)
 			return -EINVAL;
-		cfg.c_fragments = false;
+		params->fragments = false;
 		return 0;
 	}
 
@@ -337,43 +341,47 @@ static int erofs_mkfs_feat_set_fragments(bool en, const char *val,
 		}
 		pclustersize_packed = i;
 	}
-	cfg.c_fragments = true;
+	params->fragments = true;
 	return 0;
 }
 
-static int erofs_mkfs_feat_set_all_fragments(bool en, const char *val,
+static int erofs_mkfs_feat_set_all_fragments(struct erofs_importer_params *params,
+					     bool en, const char *val,
 					     unsigned int vallen)
 {
-	cfg.c_all_fragments = en;
-	return erofs_mkfs_feat_set_fragments(en, val, vallen);
+	params->all_fragments = en;
+	return erofs_mkfs_feat_set_fragments(params, en, val, vallen);
 }
 
-static int erofs_mkfs_feat_set_dedupe(bool en, const char *val,
+static int erofs_mkfs_feat_set_dedupe(struct erofs_importer_params *params,
+				      bool en, const char *val,
 				      unsigned int vallen)
 {
 	if (vallen)
 		return -EINVAL;
-	cfg.c_dedupe = en;
+	params->dedupe = en;
 	return 0;
 }
 
-static int erofs_mkfs_feat_set_fragdedupe(bool en, const char *val,
+static int erofs_mkfs_feat_set_fragdedupe(struct erofs_importer_params *params,
+					  bool en, const char *val,
 					  unsigned int vallen)
 {
 	if (!en) {
 		if (vallen)
 			return -EINVAL;
-		cfg.c_fragdedupe = FRAGDEDUPE_OFF;
+		params->fragdedupe = EROFS_FRAGDEDUPE_OFF;
 	} else if (vallen == sizeof("inode") - 1 &&
 		   !memcmp(val, "inode", vallen)) {
-		cfg.c_fragdedupe = FRAGDEDUPE_INODE;
+		params->fragdedupe = EROFS_FRAGDEDUPE_INODE;
 	} else {
-		cfg.c_fragdedupe = FRAGDEDUPE_FULL;
+		params->fragdedupe = EROFS_FRAGDEDUPE_FULL;
 	}
 	return 0;
 }
 
-static int erofs_mkfs_feat_set_48bit(bool en, const char *val,
+static int erofs_mkfs_feat_set_48bit(struct erofs_importer_params *params,
+				     bool en, const char *val,
 				     unsigned int vallen)
 {
 	if (vallen)
@@ -388,7 +396,8 @@ static int erofs_mkfs_feat_set_48bit(bool en, const char *val,
 static bool mkfs_dot_omitted;
 static unsigned char mkfs_blkszbits;
 
-static int erofs_mkfs_feat_set_dot_omitted(bool en, const char *val,
+static int erofs_mkfs_feat_set_dot_omitted(struct erofs_importer_params *params,
+					   bool en, const char *val,
 					   unsigned int vallen)
 {
 	if (vallen)
@@ -400,7 +409,8 @@ static int erofs_mkfs_feat_set_dot_omitted(bool en, const char *val,
 
 static struct {
 	char *feat;
-	int (*set)(bool en, const char *val, unsigned int len);
+	int (*set)(struct erofs_importer_params *params, bool en,
+		   const char *val, unsigned int len);
 } z_erofs_mkfs_features[] = {
 	{"legacy-compress", erofs_mkfs_feat_set_legacy_compress},
 	{"ztailpacking", erofs_mkfs_feat_set_ztailpacking},
@@ -503,7 +513,8 @@ static int parse_extended_opts(struct erofs_importer_params *params,
 				if (!MATCH_EXTENTED_OPT(z_erofs_mkfs_features[i].feat,
 							token, keylen))
 					continue;
-				err = z_erofs_mkfs_features[i].set(!clear, value, vallen);
+				err = z_erofs_mkfs_features[i].set(params,
+						!clear, value, vallen);
 				if (err)
 					return err;
 				break;
@@ -519,7 +530,8 @@ static int parse_extended_opts(struct erofs_importer_params *params,
 	return 0;
 }
 
-static int mkfs_apply_zfeature_bits(uintmax_t bits)
+static int mkfs_apply_zfeature_bits(struct erofs_importer_params *params,
+				    uintmax_t bits)
 {
 	int i;
 
@@ -530,7 +542,7 @@ static int mkfs_apply_zfeature_bits(uintmax_t bits)
 			erofs_err("unsupported zfeature bit %u", i);
 			return -EINVAL;
 		}
-		err = z_erofs_mkfs_features[i].set(bits & 1, NULL, 0);
+		err = z_erofs_mkfs_features[i].set(params, bits & 1, NULL, 0);
 		if (err) {
 			erofs_err("failed to apply zfeature %s",
 				  z_erofs_mkfs_features[i].feat);
@@ -1252,7 +1264,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				erofs_err("invalid zfeature bits %s", optarg);
 				return -EINVAL;
 			}
-			err = mkfs_apply_zfeature_bits(i);
+			err = mkfs_apply_zfeature_bits(params, i);
 			if (err)
 				return err;
 			break;
@@ -1748,7 +1760,7 @@ int main(int argc, char **argv)
 	if (err)
 		goto exit;
 
-	if (cfg.c_dedupe) {
+	if (importer_params.dedupe) {
 		if (!cfg.c_compr_opts[0].alg) {
 			erofs_err("Compression is not enabled.  Turn on chunk-based data deduplication instead.");
 			cfg.c_chunkbits = g_sbi.blkszbits;
@@ -1786,7 +1798,8 @@ int main(int argc, char **argv)
 		}
 
 		if (cfg.c_extra_ea_name_prefixes)
-			erofs_xattr_flush_name_prefixes(&g_sbi, mkfs_plain_xattr_pfx);
+			erofs_xattr_flush_name_prefixes(&importer,
+							mkfs_plain_xattr_pfx);
 
 		root = erofs_new_inode(&g_sbi);
 		if (IS_ERR(root)) {

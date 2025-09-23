@@ -159,6 +159,7 @@ static void z_erofs_fini_full_indexes(struct z_erofs_compress_ictx *ctx)
 static void z_erofs_write_full_indexes(struct z_erofs_compress_ictx *ctx,
 				       struct z_erofs_inmem_extent *e)
 {
+	const struct erofs_importer_params *params = ctx->im->params;
 	struct erofs_inode *inode = ctx->inode;
 	struct erofs_sb_info *sbi = inode->sbi;
 	unsigned int clusterofs = ctx->clusterofs;
@@ -179,7 +180,7 @@ static void z_erofs_write_full_indexes(struct z_erofs_compress_ictx *ctx,
 		 * A lcluster cannot have three parts with the middle one which
 		 * is well-compressed for !ztailpacking cases.
 		 */
-		DBG_BUGON(!e->raw && !cfg.c_ztailpacking && !cfg.c_fragments);
+		DBG_BUGON(!e->raw && !params->ztailpacking && !params->fragments);
 		DBG_BUGON(e->partial);
 		type = e->raw ? Z_EROFS_LCLUSTER_TYPE_PLAIN :
 			Z_EROFS_LCLUSTER_TYPE_HEAD1;
@@ -563,6 +564,7 @@ static int __z_erofs_compress_one(struct z_erofs_compress_sctx *ctx,
 	static char g_dstbuf[Z_EROFS_DESTBUF_SZ];
 	char *dstbuf = ctx->destbuf ?: g_dstbuf;
 	struct z_erofs_compress_ictx *ictx = ctx->ictx;
+	const struct erofs_importer_params *params = ictx->im->params;
 	struct erofs_inode *inode = ictx->inode;
 	struct erofs_sb_info *sbi = inode->sbi;
 	unsigned int blksz = erofs_blksiz(sbi);
@@ -571,10 +573,10 @@ static int __z_erofs_compress_one(struct z_erofs_compress_sctx *ctx,
 	unsigned int len = ctx->tail - ctx->head;
 	bool is_packed_inode = erofs_is_packed_inode(inode);
 	bool tsg = (ctx->seg_idx + 1 >= ictx->seg_num), final = !ctx->remaining;
-	bool may_packing = (cfg.c_fragments && tsg && final && !is_packed_inode &&
+	bool may_packing = (params->fragments && tsg && final && !is_packed_inode &&
 			    !erofs_is_metabox_inode(inode));
 	bool data_unaligned = ictx->data_unaligned;
-	bool may_inline = (cfg.c_ztailpacking && !data_unaligned && tsg &&
+	bool may_inline = (params->ztailpacking && !data_unaligned && tsg &&
 			   final && !may_packing);
 	unsigned int compressedsize;
 	int ret;
@@ -633,7 +635,7 @@ retry_aligned:
 			may_packing = false;
 			e->length = min_t(u32, e->length, ctx->pclustersize);
 nocompression:
-			if (cfg.c_dedupe)
+			if (params->dedupe)
 				ret = write_uncompressed_block(ctx, len, dst);
 			else
 				ret = write_uncompressed_extents(ctx, len,
@@ -1250,8 +1252,9 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 			     u64 offset, erofs_off_t pstart)
 {
 	struct z_erofs_compress_ictx *ictx = ctx->ictx;
+	const struct erofs_importer_params *params = ictx->im->params;
 	struct erofs_inode *inode = ictx->inode;
-	bool frag = cfg.c_fragments && !erofs_is_packed_inode(inode) &&
+	bool frag = params->fragments && !erofs_is_packed_inode(inode) &&
 		!erofs_is_metabox_inode(inode) &&
 		ctx->seg_idx >= ictx->seg_num - 1;
 	int fd = ictx->fd;
@@ -1259,7 +1262,7 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 
 	DBG_BUGON(offset != -1 && frag && inode->fragment_size);
 	if (offset != -1 && frag && !inode->fragment_size &&
-	    cfg.c_fragdedupe != FRAGDEDUPE_OFF) {
+	    params->fragdedupe != EROFS_FRAGDEDUPE_OFF) {
 		ret = erofs_fragment_findmatch(inode, fd, ictx->tofh);
 		if (ret < 0)
 			return ret;
@@ -1324,6 +1327,7 @@ int erofs_commit_compressed_file(struct z_erofs_compress_ictx *ictx,
 				 erofs_off_t pstart, erofs_off_t ptotal)
 {
 	struct erofs_inode *inode = ictx->inode;
+	const struct erofs_importer_params *params = ictx->im->params;
 	struct erofs_sb_info *sbi = inode->sbi;
 	unsigned int legacymetasize, bbits = sbi->blkszbits;
 	u8 *compressmeta;
@@ -1374,7 +1378,7 @@ int erofs_commit_compressed_file(struct z_erofs_compress_ictx *ictx,
 
 	if (ptotal)
 		(void)erofs_bh_balloon(bh, ptotal);
-	else if (!cfg.c_fragments && !cfg.c_dedupe)
+	else if (!params->fragments && !params->dedupe)
 		DBG_BUGON(!inode->idata_size);
 
 	erofs_info("compressed %s (%llu bytes) into %llu bytes",
@@ -1537,8 +1541,9 @@ int z_erofs_merge_segment(struct z_erofs_compress_ictx *ictx,
 			  struct z_erofs_compress_sctx *sctx)
 {
 	struct z_erofs_extent_item *ei, *n;
+	const struct erofs_importer_params *params = ictx->im->params;
 	struct erofs_sb_info *sbi = ictx->inode->sbi;
-	bool dedupe_ext = cfg.c_fragments;
+	bool dedupe_ext = params->fragments;
 	erofs_off_t off = 0;
 	int ret = 0, ret2;
 	erofs_off_t dpo;
@@ -1721,9 +1726,10 @@ out:
 	return ret;
 }
 
-static int z_erofs_mt_global_init(void)
+static int z_erofs_mt_global_init(struct erofs_importer *im)
 {
 	static erofs_atomic_bool_t __initonce;
+	struct erofs_importer_params *params = im->params;
 	unsigned int workers = cfg.c_mt_workers;
 	int ret;
 
@@ -1733,7 +1739,8 @@ static int z_erofs_mt_global_init(void)
 	z_erofs_mt_enabled = false;
 	if (workers < 1)
 		return 0;
-	if (workers >= 1 && cfg.c_dedupe) {
+	/* XXX: `dedupe` is actually not a global option here. */
+	if (workers >= 1 && params->dedupe) {
 		erofs_warn("multi-threaded dedupe is NOT implemented for now");
 		cfg.c_mt_workers = 0;
 	} else {
@@ -1771,7 +1778,7 @@ int z_erofs_mt_global_exit(void)
 	return 0;
 }
 #else
-static int z_erofs_mt_global_init(void)
+static int z_erofs_mt_global_init(struct erofs_importer *im)
 {
 	z_erofs_mt_enabled = false;
 	return 0;
@@ -1786,11 +1793,12 @@ int z_erofs_mt_global_exit(void)
 void *erofs_begin_compressed_file(struct erofs_importer *im,
 				  struct erofs_inode *inode, int fd, u64 fpos)
 {
+	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct z_erofs_compress_ictx *ictx;
-	bool frag = cfg.c_fragments && !erofs_is_packed_inode(inode) &&
+	bool frag = params->fragments && !erofs_is_packed_inode(inode) &&
 		!erofs_is_metabox_inode(inode);
-	bool all_fragments = cfg.c_all_fragments && frag;
+	bool all_fragments = params->all_fragments && frag;
 	int ret;
 
 	/* initialize per-file compression setting */
@@ -1835,12 +1843,13 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	ictx->data_unaligned = erofs_sb_has_48bit(sbi) &&
 		cfg.c_max_decompressed_extent_bytes <=
 			z_erofs_get_pclustersize(ictx);
-	if (cfg.c_fragments && !cfg.c_dedupe && !ictx->data_unaligned)
+	if (params->fragments && !params->dedupe && !ictx->data_unaligned)
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 
 	if (frag) {
 		ictx->tofh = z_erofs_fragments_tofh(inode, fd, fpos);
-		if (ictx == &g_ictx && cfg.c_fragdedupe != FRAGDEDUPE_OFF) {
+		if (ictx == &g_ictx &&
+		    params->fragdedupe != EROFS_FRAGDEDUPE_OFF) {
 			/*
 			 * Handle tails in advance to avoid writing duplicated
 			 * parts into the packed inode.
@@ -1849,7 +1858,7 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 			if (ret < 0)
 				goto err_free_ictx;
 
-			if (cfg.c_fragdedupe == FRAGDEDUPE_INODE &&
+			if (params->fragdedupe == EROFS_FRAGDEDUPE_INODE &&
 			    inode->fragment_size < inode->i_size) {
 				erofs_dbg("Discard the sub-inode tail fragment of %s",
 					  inode->i_srcpath);
@@ -1863,7 +1872,7 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	ictx->fragemitted = false;
 	ictx->dedupe = false;
 
-	if (all_fragments && !inode->fragment_size) {
+	if (params->all_fragments && !inode->fragment_size) {
 		ret = erofs_pack_file_from_fd(inode, fd, ictx->tofh);
 		if (ret)
 			goto err_free_idata;
@@ -2148,12 +2157,12 @@ int z_erofs_compress_init(struct erofs_importer *im)
 			return ret;
 	}
 
-	ret = z_erofs_mt_global_init();
+	ret = z_erofs_mt_global_init(im);
 	if (ret)
 		return ret;
 
 #ifdef EROFS_MT_ENABLED
-	if (cfg.c_fragments && cfg.c_mt_workers > 1 && newzmgr) {
+	if (params->fragments && cfg.c_mt_workers > 1 && newzmgr) {
 		for (i = 0; i < ARRAY_SIZE(sbi->zmgr->fslot); ++i) {
 			init_list_head(&sbi->zmgr->fslot[i].pending);
 			pthread_mutex_init(&sbi->zmgr->fslot[i].lock, NULL);

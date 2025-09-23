@@ -70,7 +70,8 @@ static int erofs_compressor_deflate_setlevel(struct erofs_compress *c,
 }
 
 static int erofs_compressor_deflate_setdictsize(struct erofs_compress *c,
-						u32 dict_size)
+						u32 dict_size,
+						u32 pclustersize_max)
 {
 	if (!dict_size)
 		dict_size = erofs_compressor_deflate.default_dictsize;

@@ -874,7 +874,7 @@ static bool erofs_inode_need_48bit(struct erofs_inode *inode)
 static int erofs_prepare_inode_buffer(struct erofs_importer *im,
 				      struct erofs_inode *inode)
 {
-	struct erofs_importer_params *params = im->params;
+	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_bufmgr *bmgr = sbi->bmgr;
 	struct erofs_bufmgr *ibmgr = bmgr;
@@ -942,7 +942,7 @@ noinline:
 		return PTR_ERR(bh);
 	} else if (inode->idata_size) {
 		if (is_inode_layout_compression(inode)) {
-			DBG_BUGON(!cfg.c_ztailpacking);
+			DBG_BUGON(!params->ztailpacking);
 			erofs_dbg("Inline %scompressed data (%u bytes) to %s",
 				  inode->compressed_idata ? "" : "un",
 				  inode->idata_size, inode->i_srcpath);
