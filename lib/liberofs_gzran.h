@@ -18,4 +18,6 @@ int erofs_gzran_builder_export_zinfo(struct erofs_gzran_builder *gb,
 				     struct erofs_vfile *zinfo_vf);
 int erofs_gzran_builder_final(struct erofs_gzran_builder *gb);
 
+struct erofs_vfile *erofs_gzran_zinfo_open(struct erofs_vfile *vin,
+					   void *zinfo_buf, unsigned int len);
 #endif
