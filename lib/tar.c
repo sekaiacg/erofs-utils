@@ -17,6 +17,7 @@
 #endif
 #include "liberofs_base64.h"
 #include "liberofs_cache.h"
+#include "liberofs_gzran.h"
 
 /* This file is a tape/volume header.  Ignore it on extraction.  */
 #define GNUTYPE_VOLHDR 'V'
@@ -65,6 +66,9 @@ void erofs_iostream_close(struct erofs_iostream *ios)
 		free(ios->lzma);
 #endif
 		return;
+	} else if (ios->decoder == EROFS_IOS_DECODER_GZRAN) {
+		erofs_gzran_builder_final(ios->gb);
+		return;
 	}
 	erofs_io_close(&ios->vf);
 }
@@ -105,6 +109,14 @@ int erofs_iostream_open(struct erofs_iostream *ios, int fd, int decoder)
 #else
 		return -EOPNOTSUPP;
 #endif
+	} else if (decoder == EROFS_IOS_DECODER_GZRAN) {
+		ios->vf.fd = fd;
+		ios->feof = false;
+		ios->sz = 0;
+		ios->bufsize = EROFS_GZRAN_WINSIZE * 2;
+		ios->gb = erofs_gzran_builder_init(&ios->vf, 4194304);
+		if (IS_ERR(ios->gb))
+			return PTR_ERR(ios->gb);
 	} else {
 		ios->vf.fd = fd;
 		fsz = lseek(fd, 0, SEEK_END);
@@ -204,6 +216,14 @@ int erofs_iostream_read(struct erofs_iostream *ios, void **buf, u64 bytes)
 #else
 			return -EOPNOTSUPP;
 #endif
+		} else if (ios->decoder == EROFS_IOS_DECODER_GZRAN) {
+			ret = erofs_gzran_builder_read(ios->gb, ios->buffer + rabytes);
+			if (ret < 0)
+				return ret;
+			ios->tail += ret;
+			DBG_BUGON(ios->tail > ios->bufsize);
+			if (!ret)
+				ios->feof = true;
 		} else {
 			ret = erofs_io_read(&ios->vf, ios->buffer + rabytes,
 					    ios->bufsize - rabytes);

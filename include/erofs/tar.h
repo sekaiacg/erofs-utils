@@ -24,12 +24,17 @@ struct erofs_pax_header {
 #define EROFS_IOS_DECODER_NONE		0
 #define EROFS_IOS_DECODER_GZIP		1
 #define EROFS_IOS_DECODER_LIBLZMA	2
+#define EROFS_IOS_DECODER_GZRAN		3
 
 struct erofs_iostream_liblzma;
+struct erofs_gzran_builder;
 
 struct erofs_iostream {
 	union {
-		struct erofs_vfile vf;
+		struct {
+			struct erofs_vfile vf;
+			struct erofs_gzran_builder *gb;
+		};
 		void *handler;
 #ifdef HAVE_LIBLZMA
 		struct erofs_iostream_liblzma *lzma;

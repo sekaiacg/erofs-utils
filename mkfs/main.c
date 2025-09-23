@@ -28,6 +28,7 @@
 #include "erofs/fragments.h"
 #include "erofs/rebuild.h"
 #include "../lib/compressor.h"
+#include "../lib/liberofs_gzran.h"
 #include "../lib/liberofs_metabox.h"
 #include "../lib/liberofs_oci.h"
 #include "../lib/liberofs_private.h"
@@ -71,6 +72,7 @@ static struct option long_options[] = {
 #ifdef HAVE_ZLIB
 	{"gzip", no_argument, NULL, 518},
 	{"ungzip", optional_argument, NULL, 518},
+	{"gzinfo", optional_argument, NULL, 535},
 #endif
 #ifdef HAVE_LIBLZMA
 	{"unlzma", optional_argument, NULL, 519},
@@ -234,6 +236,9 @@ static void usage(int argc, char **argv)
 		" --unxz[=X]            try to filter the tarball stream through xz/lzma/lzip\n"
 		"                       (and optionally dump the raw stream to X together)\n"
 #endif
+#ifdef HAVE_ZLIB
+		" --gzinfo[=X]          generate AWS SOCI-compatible zinfo in order to support random gzip access\n"
+#endif
 		" --vmdk-desc=X         generate a VMDK descriptor file to merge sub-filesystems\n"
 #ifdef EROFS_MT_ENABLED
 		" --workers=#           set the number of worker threads to # (default: %u)\n"
@@ -298,6 +303,7 @@ static bool valid_fixeduuid;
 static unsigned int dsunit;
 static int tarerofs_decoder;
 static FILE *vmdk_dcf;
+static char *mkfs_aws_zinfo_file;
 
 static int erofs_mkfs_feat_set_legacy_compress(struct erofs_importer_params *params,
 					       bool en, const char *val,
@@ -1368,6 +1374,11 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			source_mode = EROFS_MKFS_SOURCE_OCI;
 			break;
 #endif
+		case 535:
+			if (optarg)
+				mkfs_aws_zinfo_file = strdup(optarg);
+			tarerofs_decoder = EROFS_IOS_DECODER_GZRAN;
+			break;
 		case 'V':
 			version();
 			exit(0);
@@ -1943,7 +1954,19 @@ exit:
 	erofs_xattr_cleanup_name_prefixes();
 	erofs_rebuild_cleanup();
 	erofs_diskbuf_exit();
-	if (source_mode == EROFS_MKFS_SOURCE_TAR) {
+	if (!err && source_mode == EROFS_MKFS_SOURCE_TAR) {
+		if (mkfs_aws_zinfo_file) {
+			struct erofs_vfile vf;
+			int fd;
+
+			fd = open(mkfs_aws_zinfo_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+			if (fd < 0) {
+				err = -errno;
+			} else {
+				vf = (struct erofs_vfile){ .fd = fd };
+				err = erofs_gzran_builder_export_zinfo(erofstar.ios.gb, &vf);
+			}
+		}
 		erofs_iostream_close(&erofstar.ios);
 		if (erofstar.ios.dumpfd >= 0)
 			close(erofstar.ios.dumpfd);

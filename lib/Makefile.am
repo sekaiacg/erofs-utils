@@ -31,6 +31,7 @@ noinst_HEADERS = $(top_srcdir)/include/erofs_fs.h \
       $(top_srcdir)/lib/liberofs_compress.h \
       $(top_srcdir)/lib/liberofs_private.h \
       $(top_srcdir)/lib/liberofs_xxhash.h \
+      $(top_srcdir)/lib/liberofs_gzran.h \
       $(top_srcdir)/lib/liberofs_metabox.h \
       $(top_srcdir)/lib/liberofs_nbd.h \
       $(top_srcdir)/lib/liberofs_s3.h
@@ -86,3 +87,4 @@ endif
 liberofs_la_SOURCES += remotes/oci.c
 liberofs_la_CFLAGS += ${libcurl_CFLAGS} ${json_c_CFLAGS}
 liberofs_la_LDFLAGS += ${libcurl_LIBS} ${json_c_LIBS}
+liberofs_la_SOURCES += gzran.c
