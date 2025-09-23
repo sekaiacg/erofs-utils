@@ -81,51 +81,75 @@ static int erofsmount_parse_oci_option(const char *option)
 {
 	struct ocierofs_config *oci_cfg = &nbdsrc.ocicfg;
 	char *p;
+	long idx;
 
-	p = strstr(option, "oci.layer=");
+	if (oci_cfg->layer_index == 0 && !oci_cfg->blob_digest &&
+	    !oci_cfg->platform && !oci_cfg->username && !oci_cfg->password)
+		oci_cfg->layer_index = -1;
+
+	p = strstr(option, "oci.blob=");
 	if (p != NULL) {
-		p += strlen("oci.layer=");
-		{
-			char *endptr;
-			unsigned long v = strtoul(p, &endptr, 10);
+		p += strlen("oci.blob=");
+		free(oci_cfg->blob_digest);
 
-			if (endptr == p || *endptr != '\0')
-				return -EINVAL;
-			oci_cfg->layer_index = (int)v;
+		if (oci_cfg->layer_index >= 0) {
+			erofs_err("invalid options: oci.blob and oci.layer cannot be set together");
+			return -EINVAL;
+		}
+
+		if (!strncmp(p, "sha256:", 7)) {
+			oci_cfg->blob_digest = strdup(p);
+			if (!oci_cfg->blob_digest)
+				return -ENOMEM;
+		} else if (asprintf(&oci_cfg->blob_digest, "sha256:%s", p) < 0) {
+				return -ENOMEM;
 		}
 	} else {
-		p = strstr(option, "oci.platform=");
+		p = strstr(option, "oci.layer=");
 		if (p != NULL) {
-			p += strlen("oci.platform=");
-			free(oci_cfg->platform);
-			oci_cfg->platform = strdup(p);
-			if (!oci_cfg->platform)
-				return -ENOMEM;
+			p += strlen("oci.layer=");
+			if (oci_cfg->blob_digest) {
+				erofs_err("invalid options: oci.layer and oci.blob cannot be set together");
+				return -EINVAL;
+			}
+			idx = strtol(p, NULL, 10);
+			if (idx < 0)
+				return -EINVAL;
+			oci_cfg->layer_index = (int)idx;
 		} else {
-			p = strstr(option, "oci.username=");
+			p = strstr(option, "oci.platform=");
 			if (p != NULL) {
-				p += strlen("oci.username=");
-				free(oci_cfg->username);
-				oci_cfg->username = strdup(p);
-				if (!oci_cfg->username)
+				p += strlen("oci.platform=");
+				free(oci_cfg->platform);
+				oci_cfg->platform = strdup(p);
+				if (!oci_cfg->platform)
 					return -ENOMEM;
 			} else {
-				p = strstr(option, "oci.password=");
+				p = strstr(option, "oci.username=");
 				if (p != NULL) {
-					p += strlen("oci.password=");
-					free(oci_cfg->password);
-					oci_cfg->password = strdup(p);
-					if (!oci_cfg->password)
+					p += strlen("oci.username=");
+					free(oci_cfg->username);
+					oci_cfg->username = strdup(p);
+					if (!oci_cfg->username)
 						return -ENOMEM;
 				} else {
-					return -EINVAL;
+					p = strstr(option, "oci.password=");
+					if (p != NULL) {
+						p += strlen("oci.password=");
+						free(oci_cfg->password);
+						oci_cfg->password = strdup(p);
+						if (!oci_cfg->password)
+							return -ENOMEM;
+					} else {
+						return -EINVAL;
+					}
 				}
 			}
 		}
 	}
 
 	if (oci_cfg->platform || oci_cfg->username || oci_cfg->password ||
-	    oci_cfg->layer_index)
+	    oci_cfg->blob_digest || oci_cfg->layer_index >= 0)
 		nbdsrc.type = EROFSNBD_SOURCE_OCI;
 	return 0;
 }
@@ -214,6 +238,8 @@ static int erofsmount_parse_options(int argc, char **argv)
 	};
 	char *dot;
 	int opt;
+
+	nbdsrc.ocicfg.layer_index = -1;
 
 	while ((opt = getopt_long(argc, argv, "Nfno:st:uv",
 				  long_options, NULL)) != -1) {
@@ -413,13 +439,29 @@ static int erofsmount_write_recovery_oci(FILE *f, struct erofs_nbd_source *sourc
 		if (IS_ERR(b64cred))
 			return PTR_ERR(b64cred);
 	}
-	ret = fprintf(f, "OCI_LAYER %s %s %d %s\n",
-		       source->ocicfg.image_ref ?: "",
-		       source->ocicfg.platform ?: "",
-		       source->ocicfg.layer_index,
-		       b64cred ?: "");
+
+	if (source->ocicfg.blob_digest && *source->ocicfg.blob_digest) {
+		ret = fprintf(f, "OCI_NATIVE_BLOB %s %s %s %s\n",
+			      source->ocicfg.image_ref ?: "",
+			      source->ocicfg.platform ?: "",
+			      source->ocicfg.blob_digest,
+			      b64cred ?: "");
+		free(b64cred);
+		return ret < 0 ? -ENOMEM : 0;
+	}
+
+	if (source->ocicfg.layer_index >= 0) {
+		ret = fprintf(f, "OCI_LAYER %s %s %d %s\n",
+			      source->ocicfg.image_ref ?: "",
+			      source->ocicfg.platform ?: "",
+			      source->ocicfg.layer_index,
+			      b64cred ?: "");
+		free(b64cred);
+		return ret < 0 ? -ENOMEM : 0;
+	}
+
 	free(b64cred);
-	return ret < 0 ? -ENOMEM : 0;
+	return -EINVAL;
 }
 #else
 static int erofsmount_write_recovery_oci(FILE *f, struct erofs_nbd_source *source)
@@ -507,6 +549,8 @@ static int erofsmount_parse_recovery_ocilayer(struct ocierofs_config *oci_cfg,
 	if (endptr == tokens[1] || *endptr != '\0')
 		return -EINVAL;
 	oci_cfg->layer_index = (int)v;
+	free(oci_cfg->blob_digest);
+	oci_cfg->blob_digest = NULL;
 
 	if (token_count > 2) {
 		err = ocierofs_decode_userpass(tokens[2], &oci_cfg->username,
@@ -517,19 +561,75 @@ static int erofsmount_parse_recovery_ocilayer(struct ocierofs_config *oci_cfg,
 	return 0;
 }
 
-static int erofsmount_reattach_ocilayer(struct erofs_vfile *vf, char *source)
+static int erofsmount_parse_recovery_ociblob(struct ocierofs_config *oci_cfg,
+					    char *source)
+{
+	char *tokens[4] = {0};
+	int token_count = 0;
+	char *p = source;
+	int err;
+
+	while (token_count < 4 && (p = strchr(p, ' ')) != NULL) {
+		*p++ = '\0';
+		while (*p == ' ')
+			p++;
+		if (*p == '\0')
+			break;
+		tokens[token_count++] = p;
+	}
+
+	if (token_count < 2)
+		return -EINVAL;
+
+	oci_cfg->image_ref = source;
+	oci_cfg->platform = tokens[0];
+
+	{
+		const char *digest = tokens[1];
+		const char *hex;
+
+		if (!digest || strncmp(digest, "sha256:", 7) != 0)
+			return -EINVAL;
+		hex = digest + 7;
+		if (strlen(hex) != 64)
+			return -EINVAL;
+		free(oci_cfg->blob_digest);
+		oci_cfg->blob_digest = strdup(digest);
+		if (!oci_cfg->blob_digest)
+			return -ENOMEM;
+	}
+	oci_cfg->layer_index = -1;
+
+	if (token_count > 2) {
+		err = ocierofs_decode_userpass(tokens[2], &oci_cfg->username,
+			       &oci_cfg->password);
+		if (err)
+			return err;
+	}
+	return 0;
+}
+
+static int erofsmount_reattach_oci(struct erofs_vfile *vf,
+				   const char *type, char *source)
 {
 	struct ocierofs_config oci_cfg = {};
 	int err;
 
-	err = erofsmount_parse_recovery_ocilayer(&oci_cfg, source);
+	if (!strcmp(type, "OCI_LAYER"))
+		err = erofsmount_parse_recovery_ocilayer(&oci_cfg, source);
+	else if (!strcmp(type, "OCI_NATIVE_BLOB"))
+		err = erofsmount_parse_recovery_ociblob(&oci_cfg, source);
+	else
+		return -EOPNOTSUPP;
+
 	if (err)
 		return err;
 
 	return ocierofs_io_open(vf, &oci_cfg);
 }
 #else
-static int erofsmount_reattach_ocilayer(struct erofs_vfile *vf, char *source)
+static int erofsmount_reattach_oci(struct erofs_vfile *vf,
+				   const char *type, char *source)
 {
 	return -EOPNOTSUPP;
 }
@@ -694,8 +794,8 @@ static int erofsmount_reattach(const char *target)
 			goto err_line;
 		}
 		ctx.vd.fd = err;
-	} else if (!strcmp(line, "OCI_LAYER")) {
-		err = erofsmount_reattach_ocilayer(&ctx.vd, source);
+	} else if (!strcmp(line, "OCI_LAYER") || !strcmp(line, "OCI_NATIVE_BLOB")) {
+		err = erofsmount_reattach_oci(&ctx.vd, line, source);
 		if (err)
 			goto err_line;
 	} else {

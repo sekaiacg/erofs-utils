@@ -21,7 +21,8 @@ struct erofs_importer;
  * @platform: target platform in "os/arch" format (e.g., "linux/amd64")
  * @username: username for authentication (optional)
  * @password: password for authentication (optional)
- * @layer_index: specific layer to extract (-1 for all layers)
+ * @blob_digest: specific blob digest to extract (NULL for all layers)
+ * @layer_index: specific layer index to extract (negative for all layers)
  *
  * Configuration structure for OCI image parameters including registry
  * location, image identification, platform specification, and authentication
@@ -32,6 +33,7 @@ struct ocierofs_config {
 	char *platform;
 	char *username;
 	char *password;
+	char *blob_digest;
 	int layer_index;
 };
 
@@ -51,7 +53,7 @@ struct ocierofs_ctx {
 	char *tag;
 	char *manifest_digest;
 	struct ocierofs_layer_info **layers;
-	int layer_index;
+	char *blob_digest;
 	int layer_count;
 };
 

@@ -898,6 +898,20 @@ static int ocierofs_prepare_auth(struct ocierofs_ctx *ctx,
 	return 0;
 }
 
+static int ocierofs_find_layer_by_digest(struct ocierofs_ctx *ctx, const char *digest)
+{
+	int i;
+
+	for (i = 0; i < ctx->layer_count; i++) {
+		DBG_BUGON(!ctx->layers[i]);
+		DBG_BUGON(!ctx->layers[i]->digest);
+
+		if (!strcmp(ctx->layers[i]->digest, digest))
+			return i;
+	}
+	return -1;
+}
+
 static int ocierofs_prepare_layers(struct ocierofs_ctx *ctx,
 				   const struct ocierofs_config *config)
 {
@@ -925,16 +939,34 @@ static int ocierofs_prepare_layers(struct ocierofs_ctx *ctx,
 		goto out_manifest;
 	}
 
-	if (ctx->layer_index >= ctx->layer_count) {
-		erofs_err("layer index %d exceeds available layers (%d)",
-			  ctx->layer_index, ctx->layer_count);
-		ret = -EINVAL;
-		goto out_layers;
+	if (!ctx->blob_digest && config->layer_index >= 0) {
+		if (config->layer_index >= ctx->layer_count) {
+			erofs_err("layer index %d out of range (0..%d)",
+				  config->layer_index, ctx->layer_count - 1);
+			ret = -EINVAL;
+			goto out_layers;
+		}
+		DBG_BUGON(!ctx->layers[config->layer_index]);
+		DBG_BUGON(!ctx->layers[config->layer_index]->digest);
+		ctx->blob_digest = strdup(ctx->layers[config->layer_index]->digest);
+		if (!ctx->blob_digest) {
+			ret = -ENOMEM;
+			goto out_layers;
+		}
+	}
+
+	if (ctx->blob_digest) {
+		if (ocierofs_find_layer_by_digest(ctx, ctx->blob_digest) < 0) {
+			erofs_err("layer digest %s not found in image layers",
+				  ctx->blob_digest);
+			ret = -ENOENT;
+			goto out_layers;
+		}
 	}
 	return 0;
 
 out_layers:
-	free(ctx->layers);
+	ocierofs_free_layers_info(ctx->layers, ctx->layer_count);
 	ctx->layers = NULL;
 out_manifest:
 	free(ctx->manifest_digest);
@@ -1054,10 +1086,10 @@ static int ocierofs_init(struct ocierofs_ctx *ctx, const struct ocierofs_config 
 	if (ocierofs_curl_setup_common_options(ctx->curl))
 		return -EIO;
 
-	if (config->layer_index >= 0)
-		ctx->layer_index = config->layer_index;
+	if (config->blob_digest)
+		ctx->blob_digest = strdup(config->blob_digest);
 	else
-		ctx->layer_index = -1;
+		ctx->blob_digest = NULL;
 	ctx->registry = strdup("registry-1.docker.io");
 	ctx->tag = strdup("latest");
 	if (config->platform)
@@ -1190,6 +1222,7 @@ static void ocierofs_ctx_cleanup(struct ocierofs_ctx *ctx)
 	free(ctx->tag);
 	free(ctx->platform);
 	free(ctx->manifest_digest);
+	free(ctx->blob_digest);
 }
 
 int ocierofs_build_trees(struct erofs_importer *importer,
@@ -1204,8 +1237,13 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 		return ret;
 	}
 
-	if (ctx.layer_index >= 0) {
-		i = ctx.layer_index;
+	if (ctx.blob_digest) {
+		i = ocierofs_find_layer_by_digest(&ctx, ctx.blob_digest);
+		if (i < 0) {
+			erofs_err("layer digest %s not found", ctx.blob_digest);
+			ret = -ENOENT;
+			goto out;
+		}
 		end = i + 1;
 	} else {
 		i = 0;
@@ -1215,25 +1253,26 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 	while (i < end) {
 		char *trimmed = erofs_trim_for_progressinfo(ctx.layers[i]->digest,
 				sizeof("Extracting layer  ...") - 1);
-		erofs_update_progressinfo("Extracting layer %d: %s ...", i,
-				  trimmed);
+		erofs_update_progressinfo("Extracting layer %s ...", trimmed);
 		free(trimmed);
 		fd = ocierofs_extract_layer(&ctx, ctx.layers[i]->digest,
 					    ctx.auth_header);
 		if (fd < 0) {
-			erofs_err("failed to extract layer %d: %s", i,
-				  erofs_strerror(fd));
+			erofs_err("failed to extract layer %s: %s",
+				  ctx.layers[i]->digest, erofs_strerror(fd));
+			ret = fd;
 			break;
 		}
 		ret = ocierofs_process_tar_stream(importer, fd);
 		close(fd);
 		if (ret) {
-			erofs_err("failed to process tar stream for layer %d: %s", i,
-				  erofs_strerror(ret));
+			erofs_err("failed to process tar stream for layer %s: %s",
+				  ctx.layers[i]->digest, erofs_strerror(ret));
 			break;
 		}
 		i++;
 	}
+out:
 	ocierofs_ctx_cleanup(&ctx);
 	return ret;
 }
@@ -1246,11 +1285,17 @@ static int ocierofs_download_blob_range(struct ocierofs_ctx *ctx, off_t offset, 
 	const char *api_registry;
 	char rangehdr[64];
 	long http_code = 0;
-	int ret;
-	int index = ctx->layer_index;
-	u64 blob_size = ctx->layers[index]->size;
+	int ret, index;
+	const char *digest;
+	u64 blob_size;
 	size_t available;
 	size_t copy_size;
+
+	index = ocierofs_find_layer_by_digest(ctx, ctx->blob_digest);
+	if (index < 0)
+		return -ENOENT;
+	digest = ctx->blob_digest;
+	blob_size = ctx->layers[index]->size;
 
 	if (offset < 0)
 		return -EINVAL;
@@ -1265,7 +1310,7 @@ static int ocierofs_download_blob_range(struct ocierofs_ctx *ctx, off_t offset, 
 
 	api_registry = ocierofs_get_api_registry(ctx->registry);
 	if (asprintf(&req.url, "https://%s/v2/%s/blobs/%s",
-	     api_registry, ctx->repository, ctx->layers[index]->digest) == -1)
+	     api_registry, ctx->repository, digest) == -1)
 		return -ENOMEM;
 
 	if (length)
