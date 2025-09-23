@@ -19,7 +19,6 @@
 #include "erofs/lock.h"
 #include "erofs/diskbuf.h"
 #include "erofs/inode.h"
-#include "erofs/compress.h"
 #include "erofs/xattr.h"
 #include "erofs/exclude.h"
 #include "erofs/block_list.h"
@@ -28,6 +27,7 @@
 #include "erofs/fragments.h"
 #include "erofs/importer.h"
 #include "liberofs_cache.h"
+#include "liberofs_compress.h"
 #include "liberofs_private.h"
 #include "liberofs_metabox.h"
 

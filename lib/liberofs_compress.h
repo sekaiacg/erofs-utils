@@ -2,17 +2,12 @@
 /*
  * Copyright (C) 2019 HUAWEI, Inc.
  *             http://www.huawei.com/
- * Created by Gao Xiang <xiang@kernel.org>
+ * Copyright (C) 2025 Alibaba Cloud
  */
-#ifndef __EROFS_COMPRESS_H
-#define __EROFS_COMPRESS_H
+#ifndef __EROFS_LIB_LIBEROFS_COMPRESS_H
+#define __EROFS_LIB_LIBEROFS_COMPRESS_H
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
-#include "internal.h"
+#include "erofs/internal.h"
 
 #define EROFS_CONFIG_COMPR_MAX_SZ	(4000 * 1024)
 #define Z_EROFS_COMPR_QUEUE_SZ		(EROFS_CONFIG_COMPR_MAX_SZ * 2)
@@ -28,9 +23,5 @@ int z_erofs_compress_exit(struct erofs_sb_info *sbi);
 
 const char *z_erofs_list_supported_algorithms(int i, unsigned int *mask);
 const struct erofs_algorithm *z_erofs_list_available_compressors(int *i);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

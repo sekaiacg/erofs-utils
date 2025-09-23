@@ -19,7 +19,6 @@
 #include "erofs/diskbuf.h"
 #include "erofs/inode.h"
 #include "erofs/tar.h"
-#include "erofs/compress.h"
 #include "erofs/dedupe.h"
 #include "erofs/xattr.h"
 #include "erofs/exclude.h"
@@ -28,12 +27,13 @@
 #include "erofs/blobchunk.h"
 #include "erofs/fragments.h"
 #include "erofs/rebuild.h"
-#include "../lib/liberofs_private.h"
-#include "../lib/liberofs_uuid.h"
-#include "../lib/liberofs_metabox.h"
-#include "../lib/liberofs_s3.h"
-#include "../lib/liberofs_oci.h"
 #include "../lib/compressor.h"
+#include "../lib/liberofs_compress.h"
+#include "../lib/liberofs_metabox.h"
+#include "../lib/liberofs_oci.h"
+#include "../lib/liberofs_private.h"
+#include "../lib/liberofs_s3.h"
+#include "../lib/liberofs_uuid.h"
 
 static struct option long_options[] = {
 	{"version", no_argument, 0, 'V'},
