@@ -32,7 +32,6 @@ void erofs_init_configure(void)
 	cfg.c_inline_xattr_tolerance = 2;
 	cfg.c_unix_timestamp = -1;
 	cfg.c_max_decompressed_extent_bytes = -1;
-	cfg.c_mkfs_pclustersize_metabox = -1;
 	erofs_stdout_tty = isatty(STDOUT_FILENO);
 }
 

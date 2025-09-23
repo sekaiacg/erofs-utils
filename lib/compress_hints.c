@@ -45,17 +45,19 @@ static int erofs_insert_compress_hints(const char *s, unsigned int blks,
 	return ret;
 }
 
-bool z_erofs_apply_compress_hints(struct erofs_inode *inode)
+bool z_erofs_apply_compress_hints(struct erofs_importer *im,
+				  struct erofs_inode *inode)
 {
-	const char *s;
+	const struct erofs_importer_params *params = im->params;
+	unsigned int pclusterblks = params->pclusterblks_def;
+	unsigned int algorithmtype;
 	struct erofs_compress_hints *r;
-	unsigned int pclusterblks, algorithmtype;
+	const char *s;
 
 	if (inode->z_physical_clusterblks)
 		return true;
 
 	s = erofs_fspath(inode->i_srcpath);
-	pclusterblks = cfg.c_mkfs_pclustersize_def >> inode->sbi->blkszbits;
 	algorithmtype = 0;
 
 	list_for_each_entry(r, &compress_hints_head, list) {
@@ -86,11 +88,13 @@ void erofs_cleanup_compress_hints(void)
 	}
 }
 
-int erofs_load_compress_hints(struct erofs_sb_info *sbi)
+int erofs_load_compress_hints(struct erofs_importer *im,
+			      struct erofs_sb_info *sbi)
 {
+	struct erofs_importer_params *params = im->params;
 	char buf[PATH_MAX + 100];
 	FILE *f;
-	unsigned int line, max_pclustersize = 0;
+	unsigned int line, max_pclusterblks = 0;
 	int ret = 0;
 
 	if (!cfg.c_compress_hints_file)
@@ -101,7 +105,7 @@ int erofs_load_compress_hints(struct erofs_sb_info *sbi)
 		return -errno;
 
 	for (line = 1; fgets(buf, sizeof(buf), f); ++line) {
-		unsigned int pclustersize, ccfg;
+		unsigned int pclustersize, pclusterblks, ccfg;
 		char *alg, *pattern;
 
 		if (*buf == '#' || *buf == '\n')
@@ -134,22 +138,21 @@ int erofs_load_compress_hints(struct erofs_sb_info *sbi)
 		}
 
 		if (pclustersize % erofs_blksiz(sbi)) {
-			erofs_warn("invalid physical clustersize %u, "
-				   "use default pclusterblks %u",
-				   pclustersize, cfg.c_mkfs_pclustersize_def);
+			erofs_warn("invalid physical clustersize %u, use default pclustersize (%u blocks)",
+				   pclustersize, params->pclusterblks_max);
 			continue;
 		}
-		erofs_insert_compress_hints(pattern,
-				pclustersize / erofs_blksiz(sbi), ccfg);
+		pclusterblks = pclustersize >> sbi->blkszbits;
+		erofs_insert_compress_hints(pattern, pclusterblks, ccfg);
 
-		if (pclustersize > max_pclustersize)
-			max_pclustersize = pclustersize;
+		if (pclusterblks > max_pclusterblks)
+			max_pclusterblks = pclusterblks;
 	}
 
-	if (cfg.c_mkfs_pclustersize_max < max_pclustersize) {
-		cfg.c_mkfs_pclustersize_max = max_pclustersize;
-		erofs_warn("update max pclustersize to %u",
-			   cfg.c_mkfs_pclustersize_max);
+	if (params->pclusterblks_max < max_pclusterblks) {
+		erofs_warn("update max pclustersize to %u blocks",
+			   max_pclusterblks);
+		params->pclusterblks_max = max_pclusterblks;
 	}
 out:
 	fclose(f);

@@ -115,14 +115,14 @@ static int erofs_compressor_libzstd_setlevel(struct erofs_compress *c,
 }
 
 static int erofs_compressor_libzstd_setdictsize(struct erofs_compress *c,
-						u32 dict_size)
+						u32 dict_size, u32 pclustersize_max)
 {
 	if (!dict_size) {
 		if (erofs_compressor_libzstd.default_dictsize) {
 			dict_size = erofs_compressor_libzstd.default_dictsize;
 		} else {
 			dict_size = min_t(u32, Z_EROFS_ZSTD_MAX_DICT_SIZE,
-					  cfg.c_mkfs_pclustersize_max << 3);
+					  pclustersize_max << 3);
 			dict_size = 1 << ilog2(dict_size);
 		}
 	}

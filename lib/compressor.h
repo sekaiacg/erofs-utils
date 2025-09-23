@@ -21,7 +21,8 @@ struct erofs_compressor {
 	int (*exit)(struct erofs_compress *c);
 	void (*reset)(struct erofs_compress *c);
 	int (*setlevel)(struct erofs_compress *c, int compression_level);
-	int (*setdictsize)(struct erofs_compress *c, u32 dict_size);
+	int (*setdictsize)(struct erofs_compress *c, u32 dict_size,
+			   u32 pclustersize_max);
 
 	int (*compress_destsize)(const struct erofs_compress *c,
 				 const void *src, unsigned int *srcsize,
@@ -68,7 +69,8 @@ int erofs_compress(const struct erofs_compress *c,
 		   void *dst, unsigned int dstcapacity);
 
 int erofs_compressor_init(struct erofs_sb_info *sbi, struct erofs_compress *c,
-			  char *alg_name, int compression_level, u32 dict_size);
+			  char *alg_name, int compression_level, u32 dict_size,
+			  u32 pclustersize_max);
 int erofs_compressor_exit(struct erofs_compress *c);
 void erofs_compressor_reset(struct erofs_compress *c);
 

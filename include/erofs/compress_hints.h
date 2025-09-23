@@ -11,9 +11,9 @@ extern "C"
 {
 #endif
 
-#include "erofs/internal.h"
 #include <sys/types.h>
 #include <regex.h>
+#include "erofs/importer.h"
 
 struct erofs_compress_hints {
 	struct list_head list;
@@ -23,9 +23,11 @@ struct erofs_compress_hints {
 	unsigned char algorithmtype;
 };
 
-bool z_erofs_apply_compress_hints(struct erofs_inode *inode);
+bool z_erofs_apply_compress_hints(struct erofs_importer *im,
+				  struct erofs_inode *inode);
 void erofs_cleanup_compress_hints(void);
-int erofs_load_compress_hints(struct erofs_sb_info *sbi);
+int erofs_load_compress_hints(struct erofs_importer *im,
+			      struct erofs_sb_info *sbi);
 
 #ifdef __cplusplus
 }

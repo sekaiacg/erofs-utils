@@ -35,6 +35,7 @@ struct z_erofs_extent_item {
 };
 
 struct z_erofs_compress_ictx {		/* inode context */
+	struct erofs_importer *im;
 	struct erofs_inode *inode;
 	struct erofs_compress_cfg *ccfg;
 	int fd;
@@ -455,25 +456,26 @@ static int write_uncompressed_extents(struct z_erofs_compress_sctx *ctx,
 	return count;
 }
 
-static unsigned int z_erofs_get_max_pclustersize(struct erofs_inode *inode)
+static unsigned int z_erofs_get_pclustersize(struct z_erofs_compress_ictx *ictx)
 {
-	if (erofs_is_packed_inode(inode)) {
-		return cfg.c_mkfs_pclustersize_packed;
-	} else if (erofs_is_metabox_inode(inode)) {
-		return cfg.c_mkfs_pclustersize_metabox;
-#ifndef NDEBUG
-	} else if (cfg.c_random_pclusterblks) {
-		unsigned int pclusterblks =
-			cfg.c_mkfs_pclustersize_max >> inode->sbi->blkszbits;
+	struct erofs_importer_params *params = ictx->im->params;
+	struct erofs_inode *inode = ictx->inode;
+	unsigned int blkszbits = inode->sbi->blkszbits;
 
-		return (1 + rand() % pclusterblks) << inode->sbi->blkszbits;
+	if (erofs_is_packed_inode(inode))
+		return params->pclusterblks_packed << blkszbits;
+	if (erofs_is_metabox_inode(inode))
+		return params->pclusterblks_metabox << blkszbits;
+#ifndef NDEBUG
+	if (cfg.c_random_pclusterblks)
+		return (1 + rand() % params->pclusterblks_max) << blkszbits;
 #endif
-	} else if (cfg.c_compress_hints_file) {
-		z_erofs_apply_compress_hints(inode);
+	if (cfg.c_compress_hints_file) {
+		z_erofs_apply_compress_hints(ictx->im, inode);
 		DBG_BUGON(!inode->z_physical_clusterblks);
-		return inode->z_physical_clusterblks << inode->sbi->blkszbits;
+		return inode->z_physical_clusterblks << blkszbits;
 	}
-	return cfg.c_mkfs_pclustersize_def;
+	return params->pclusterblks_def << blkszbits;
 }
 
 static int z_erofs_fill_inline_data(struct erofs_inode *inode, void *data,
@@ -539,7 +541,7 @@ static bool z_erofs_fixup_deduped_fragment(struct z_erofs_compress_sctx *ctx)
 	/* try to fix again if it gets larger (should be rare) */
 	if (inode->fragment_size < newsize) {
 		ctx->pclustersize = min_t(erofs_off_t,
-				z_erofs_get_max_pclustersize(inode),
+				z_erofs_get_pclustersize(ictx),
 				roundup(newsize - inode->fragment_size,
 					erofs_blksiz(sbi)));
 		return false;
@@ -1443,27 +1445,6 @@ err_free_priv:
 	return NULL;
 }
 
-int z_erofs_mt_wq_tls_init_compr(struct erofs_sb_info *sbi,
-				 struct erofs_compress_wq_tls *tls,
-				 unsigned int alg_id, char *alg_name,
-				 unsigned int comp_level,
-				 unsigned int dict_size)
-{
-	struct erofs_compress_cfg *lc = &tls->ccfg[alg_id];
-	int ret;
-
-	if (__erofs_likely(lc->enable))
-		return 0;
-
-	ret = erofs_compressor_init(sbi, &lc->handle, alg_name,
-				    comp_level, dict_size);
-	if (ret)
-		return ret;
-	lc->algorithmtype = alg_id;
-	lc->enable = true;
-	return 0;
-}
-
 void *z_erofs_mt_wq_tls_free(struct erofs_workqueue *wq, void *priv)
 {
 	struct erofs_compress_wq_tls *tls = priv;
@@ -1488,15 +1469,23 @@ void z_erofs_mt_workfn(struct erofs_work *work, void *tlsp)
 	struct z_erofs_compress_ictx *ictx = sctx->ictx;
 	struct erofs_inode *inode = ictx->inode;
 	struct erofs_sb_info *sbi = inode->sbi;
-	int ret = 0;
+	struct erofs_compress_cfg *lc = &tls->ccfg[cwork->alg_id];
+	int ret;
 
-	ret = z_erofs_mt_wq_tls_init_compr(sbi, tls, cwork->alg_id,
-					   cwork->alg_name, cwork->comp_level,
-					   cwork->dict_size);
-	if (ret)
-		goto out;
+	if (__erofs_unlikely(!lc->enable)) {
+		unsigned int pclustersize_max =
+			ictx->im->params->pclusterblks_max << sbi->blkszbits;
 
-	sctx->pclustersize = z_erofs_get_max_pclustersize(inode);
+		ret = erofs_compressor_init(sbi, &lc->handle,
+					    cwork->alg_name, cwork->comp_level,
+					    cwork->dict_size, pclustersize_max);
+		if (ret)
+			goto out;
+		lc->algorithmtype = cwork->alg_id;
+		lc->enable = true;
+	}
+
+	sctx->pclustersize = z_erofs_get_pclustersize(ictx);
 	DBG_BUGON(sctx->pclustersize > Z_EROFS_PCLUSTER_MAX_SIZE);
 	sctx->queue = tls->queue;
 	sctx->destbuf = tls->destbuf;
@@ -1794,7 +1783,8 @@ int z_erofs_mt_global_exit(void)
 }
 #endif
 
-void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
+void *erofs_begin_compressed_file(struct erofs_importer *im,
+				  struct erofs_inode *inode, int fd, u64 fpos)
 {
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct z_erofs_compress_ictx *ictx;
@@ -1833,6 +1823,8 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 		if (!ictx)
 			return ERR_PTR(-ENOMEM);
 	}
+	ictx->im = im;
+	ictx->inode = inode;
 	ictx->fd = fd;
 	if (erofs_is_metabox_inode(inode))
 		ictx->ccfg = &sbi->zmgr->ccfg[cfg.c_mkfs_metabox_algid];
@@ -1842,7 +1834,7 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 	inode->z_algorithmtype[1] = 0;
 	ictx->data_unaligned = erofs_sb_has_48bit(sbi) &&
 		cfg.c_max_decompressed_extent_bytes <=
-			z_erofs_get_max_pclustersize(inode);
+			z_erofs_get_pclustersize(ictx);
 	if (cfg.c_fragments && !cfg.c_dedupe && !ictx->data_unaligned)
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 
@@ -1865,7 +1857,6 @@ void *erofs_begin_compressed_file(struct erofs_inode *inode, int fd, u64 fpos)
 			}
 		}
 	}
-	ictx->inode = inode;
 	ictx->fpos = fpos;
 	init_list_head(&ictx->extents);
 	ictx->fix_dedupedfrag = false;
@@ -1929,7 +1920,7 @@ int erofs_write_compressed_file(struct z_erofs_compress_ictx *ictx)
 		.remaining = inode->i_size - inode->fragment_size,
 		.seg_idx = 0,
 		.pivot = &dummy_pivot,
-		.pclustersize = z_erofs_get_max_pclustersize(inode),
+		.pclustersize = z_erofs_get_pclustersize(ictx),
 	};
 	init_list_head(&sctx.extents);
 
@@ -1958,11 +1949,11 @@ out:
 	return ret;
 }
 
-static int z_erofs_build_compr_cfgs(struct erofs_sb_info *sbi,
-				    struct erofs_buffer_head *sb_bh,
+static int z_erofs_build_compr_cfgs(struct erofs_importer *im,
 				    u32 *max_dict_size)
 {
-	struct erofs_buffer_head *bh = sb_bh;
+	struct erofs_sb_info *sbi = im->sbi;
+	struct erofs_buffer_head *bh = sbi->bh_sb;
 	int ret = 0;
 
 	if (sbi->available_compr_algs & (1 << Z_EROFS_COMPRESSION_LZ4)) {
@@ -1974,8 +1965,7 @@ static int z_erofs_build_compr_cfgs(struct erofs_sb_info *sbi,
 			.lz4 = {
 				.max_distance =
 					cpu_to_le16(sbi->lz4.max_distance),
-				.max_pclusterblks =
-					cfg.c_mkfs_pclustersize_max >> sbi->blkszbits,
+				.max_pclusterblks = im->params->pclusterblks_max,
 			}
 		};
 
@@ -2066,7 +2056,9 @@ static int z_erofs_build_compr_cfgs(struct erofs_sb_info *sbi,
 
 int z_erofs_compress_init(struct erofs_importer *im)
 {
+	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
+	unsigned int pclustersize_max = params->pclusterblks_max << sbi->blkszbits;
 	u32 max_dict_size[Z_EROFS_COMPRESSION_MAX] = {};
 	u32 available_compr_algs = 0;
 	bool newzmgr __maybe_unused = false;
@@ -2085,7 +2077,8 @@ int z_erofs_compress_init(struct erofs_importer *im)
 
 		ret = erofs_compressor_init(sbi, c, cfg.c_compr_opts[i].alg,
 					    cfg.c_compr_opts[i].level,
-					    cfg.c_compr_opts[i].dict_size);
+					    cfg.c_compr_opts[i].dict_size,
+					    pclustersize_max);
 		if (ret)
 			return ret;
 
@@ -2110,10 +2103,9 @@ int z_erofs_compress_init(struct erofs_importer *im)
 			return -EOPNOTSUPP;
 		}
 		if ((available_compr_algs & BIT(Z_EROFS_COMPRESSION_LZ4)) &&
-		    (sbi->lz4.max_pclusterblks << sbi->blkszbits) <
-			cfg.c_mkfs_pclustersize_max) {
-			erofs_err("pclustersize %u is too large on incremental builds",
-				  cfg.c_mkfs_pclustersize_max);
+		    sbi->lz4.max_pclusterblks < params->pclusterblks_max) {
+			erofs_err("pcluster size (%u blocks) cannot increase on incremental builds",
+				  params->pclusterblks_max);
 			return -EOPNOTSUPP;
 		}
 	} else {
@@ -2129,28 +2121,29 @@ int z_erofs_compress_init(struct erofs_importer *im)
 	 * if big pcluster is enabled, an extra CBLKCNT lcluster index needs
 	 * to be loaded in order to get those compressed block counts.
 	 */
-	if (cfg.c_mkfs_pclustersize_max > erofs_blksiz(sbi)) {
-		if (cfg.c_mkfs_pclustersize_max > Z_EROFS_PCLUSTER_MAX_SIZE) {
-			erofs_err("unsupported pclustersize %u (too large)",
-				  cfg.c_mkfs_pclustersize_max);
+	if (params->pclusterblks_max) {
+		if (pclustersize_max > Z_EROFS_PCLUSTER_MAX_SIZE) {
+			erofs_err("pcluster size (%u blocks) is too large",
+				  params->pclusterblks_max);
 			return -EINVAL;
 		}
 		erofs_sb_set_big_pcluster(sbi);
 	}
-	if (cfg.c_mkfs_pclustersize_packed > cfg.c_mkfs_pclustersize_max) {
-		erofs_err("invalid pclustersize for the packed file %u",
-			  cfg.c_mkfs_pclustersize_packed);
+
+	if (params->pclusterblks_packed > params->pclusterblks_max) {
+		erofs_err("pcluster size (%u blocks) for packed inode exceeds maximum",
+			  params->pclusterblks_packed);
 		return -EINVAL;
 	}
 
-	if (cfg.c_mkfs_pclustersize_metabox > (s32)cfg.c_mkfs_pclustersize_max) {
-		erofs_err("invalid pclustersize for the metabox file %u",
-			  cfg.c_mkfs_pclustersize_metabox);
+	if (params->pclusterblks_metabox > (s32)params->pclusterblks_max) {
+		erofs_err("pcluster size (%u blocks) for metabox inode exceeds maximum",
+			  params->pclusterblks_metabox, params->pclusterblks_max);
 		return -EINVAL;
 	}
 
 	if (sbi->bh_sb && erofs_sb_has_compr_cfgs(sbi)) {
-		ret = z_erofs_build_compr_cfgs(sbi, sbi->bh_sb, max_dict_size);
+		ret = z_erofs_build_compr_cfgs(im, max_dict_size);
 		if (ret)
 			return ret;
 	}

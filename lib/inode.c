@@ -600,13 +600,14 @@ int erofs_write_file_from_buffer(struct erofs_inode *inode, char *buf)
 }
 
 /* rules to decide whether a file could be compressed or not */
-static bool erofs_file_is_compressible(struct erofs_inode *inode)
+static bool erofs_file_is_compressible(struct erofs_importer *im,
+				       struct erofs_inode *inode)
 {
 	if (erofs_is_metabox_inode(inode) &&
-	    cfg.c_mkfs_pclustersize_metabox < 0)
+	    !im->params->pclusterblks_metabox)
 		return false;
 	if (cfg.c_compress_hints_file)
-		return z_erofs_apply_compress_hints(inode);
+		return z_erofs_apply_compress_hints(im, inode);
 	return true;
 }
 
@@ -1804,9 +1805,9 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 				return -errno;
 
 			if (cfg.c_compr_opts[0].alg &&
-			    erofs_file_is_compressible(inode)) {
-				ctx.ictx = erofs_begin_compressed_file(inode,
-								ctx.fd, 0);
+			    erofs_file_is_compressible(im, inode)) {
+				ctx.ictx = erofs_begin_compressed_file(im,
+							inode, ctx.fd, 0);
 				if (IS_ERR(ctx.ictx))
 					return PTR_ERR(ctx.ictx);
 			}
@@ -1870,8 +1871,8 @@ static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 				return ret;
 
 			if (cfg.c_compr_opts[0].alg &&
-			    erofs_file_is_compressible(inode)) {
-				ctx.ictx = erofs_begin_compressed_file(inode,
+			    erofs_file_is_compressible(im, inode)) {
+				ctx.ictx = erofs_begin_compressed_file(im, inode,
 							ctx.fd, ctx.fpos);
 				if (IS_ERR(ctx.ictx))
 					return PTR_ERR(ctx.ictx);
@@ -2137,8 +2138,8 @@ struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_importer *im,
 	}
 
 	if (cfg.c_compr_opts[0].alg &&
-	    erofs_file_is_compressible(inode)) {
-		ictx = erofs_begin_compressed_file(inode, fd, 0);
+	    erofs_file_is_compressible(im, inode)) {
+		ictx = erofs_begin_compressed_file(im, inode, fd, 0);
 		if (IS_ERR(ictx))
 			return ERR_CAST(ictx);
 

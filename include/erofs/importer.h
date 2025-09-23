@@ -25,6 +25,10 @@ struct erofs_importer_params {
 	u32 uid_offset;
 	u32 gid_offset;
 	u32 fsalignblks;
+	u32 pclusterblks_max;
+	u32 pclusterblks_def;
+	u32 pclusterblks_packed;
+	s32 pclusterblks_metabox;
 	char force_inodeversion;
 	bool ignore_mtime;
 	bool no_datainline;

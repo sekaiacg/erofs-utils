@@ -53,8 +53,8 @@ int erofs_importer_init(struct erofs_importer *im)
 
 	if (cfg.c_fragments || cfg.c_extra_ea_name_prefixes) {
 		subsys = "packedfile";
-		if (!cfg.c_mkfs_pclustersize_packed)
-			cfg.c_mkfs_pclustersize_packed = cfg.c_mkfs_pclustersize_def;
+		if (!params->pclusterblks_packed)
+			params->pclusterblks_packed = params->pclusterblks_def;
 
 		err = erofs_packedfile_init(sbi, cfg.c_fragments);
 		if (err)

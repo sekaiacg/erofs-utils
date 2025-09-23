@@ -97,7 +97,8 @@ int erofs_compress(const struct erofs_compress *c,
 }
 
 int erofs_compressor_init(struct erofs_sb_info *sbi, struct erofs_compress *c,
-			  char *alg_name, int compression_level, u32 dict_size)
+			  char *alg_name, int compression_level,
+			  u32 dict_size, u32 pclustersize_max)
 {
 	int ret, i;
 
@@ -135,7 +136,8 @@ int erofs_compressor_init(struct erofs_sb_info *sbi, struct erofs_compress *c,
 		}
 
 		if (erofs_algs[i].c->setdictsize) {
-			ret = erofs_algs[i].c->setdictsize(c, dict_size);
+			ret = erofs_algs[i].c->setdictsize(c, dict_size,
+							   pclustersize_max);
 			if (ret) {
 				erofs_err("failed to set dict size %u for %s",
 					  dict_size, alg_name);

@@ -1405,8 +1405,8 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				  pclustersize_max);
 			return -EINVAL;
 		}
-		cfg.c_mkfs_pclustersize_max = pclustersize_max;
-		cfg.c_mkfs_pclustersize_def = cfg.c_mkfs_pclustersize_max;
+		params->pclusterblks_max = pclustersize_max >> mkfs_blkszbits;
+		params->pclusterblks_def = params->pclusterblks_max;
 	}
 	if (cfg.c_chunkbits && cfg.c_chunkbits < mkfs_blkszbits) {
 		erofs_err("chunksize %u must be larger than block size",
@@ -1436,7 +1436,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				  pclustersize_packed);
 			return -EINVAL;
 		}
-		cfg.c_mkfs_pclustersize_packed = pclustersize_packed;
+		params->pclusterblks_packed = pclustersize_packed >> mkfs_blkszbits;
 	}
 
 	if (pclustersize_metabox >= 0) {
@@ -1447,7 +1447,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				  pclustersize_metabox);
 			return -EINVAL;
 		}
-		cfg.c_mkfs_pclustersize_metabox = pclustersize_metabox;
+		params->pclusterblks_metabox = pclustersize_metabox >> mkfs_blkszbits;
 		cfg.c_mkfs_metabox_algid = metabox_algorithmid;
 		erofs_sb_set_metabox(&g_sbi);
 	}
@@ -1457,7 +1457,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 	return 0;
 }
 
-static void erofs_mkfs_default_options(void)
+static void erofs_mkfs_default_options(struct erofs_importer_params *params)
 {
 	cfg.c_showprogress = true;
 	cfg.c_legacy_compress = false;
@@ -1467,8 +1467,8 @@ static void erofs_mkfs_default_options(void)
 	cfg.c_mkfs_segment_size = 16ULL * 1024 * 1024;
 #endif
 	mkfs_blkszbits = ilog2(min_t(u32, getpagesize(), EROFS_MAX_BLOCK_SIZE));
-	cfg.c_mkfs_pclustersize_max = 1U << mkfs_blkszbits;
-	cfg.c_mkfs_pclustersize_def = cfg.c_mkfs_pclustersize_max;
+	params->pclusterblks_max = 1U;
+	params->pclusterblks_def = 1U;
 	g_sbi.feature_incompat = EROFS_FEATURE_INCOMPAT_ZERO_PADDING;
 	g_sbi.feature_compat = EROFS_FEATURE_COMPAT_SB_CHKSUM |
 			     EROFS_FEATURE_COMPAT_MTIME;
@@ -1624,8 +1624,8 @@ int main(int argc, char **argv)
 	err = liberofs_global_init();
 	if (err)
 		return 1;
-	erofs_mkfs_default_options();
 	erofs_importer_preset(&importer_params);
+	erofs_mkfs_default_options(&importer_params);
 
 	err = mkfs_parse_options_cfg(&importer_params, argc, argv);
 	erofs_show_progs(argc, argv);
@@ -1734,7 +1734,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	err = erofs_load_compress_hints(&g_sbi);
+	err = erofs_load_compress_hints(&importer, &g_sbi);
 	if (err) {
 		erofs_err("failed to load compress hints %s",
 			  cfg.c_compress_hints_file);
