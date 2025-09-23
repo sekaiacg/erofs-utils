@@ -655,11 +655,12 @@ static int tarerofs_write_file_data(struct erofs_inode *inode,
 		nread = erofs_iostream_read(&tar->ios, &buf, j);
 		if (nread < 0)
 			break;
-		if (write(fd, buf, nread) != nread) {
+		if (pwrite(fd, buf, nread, off) != nread) {
 			nread = -EIO;
 			break;
 		}
 		j -= nread;
+		off += nread;
 	}
 	erofs_diskbuf_commit(inode->i_diskbuf, inode->i_size);
 	inode->datasource = EROFS_INODE_DATA_SOURCE_DISKBUF;

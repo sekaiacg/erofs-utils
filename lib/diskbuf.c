@@ -36,9 +36,6 @@ int erofs_diskbuf_reserve(struct erofs_diskbuf *db, int sid, u64 *off)
 
 	if (strm->tailoffset & (strm->alignsize - 1)) {
 		strm->tailoffset = round_up(strm->tailoffset, strm->alignsize);
-		if (lseek(strm->fd, strm->tailoffset + strm->devpos,
-			  SEEK_SET) != strm->tailoffset + strm->devpos)
-			return -EIO;
 	}
 	db->offset = strm->tailoffset;
 	if (off)
@@ -108,9 +105,6 @@ int erofs_diskbuf_init(unsigned int nstrms)
 			strm->devpos = 1ULL << 40;
 			if (!ftruncate(g_sbi.bdev.fd, strm->devpos << 1)) {
 				strm->fd = dup(g_sbi.bdev.fd);
-				if (lseek(strm->fd, strm->devpos,
-					  SEEK_SET) != strm->devpos)
-					return -EIO;
 				goto setupone;
 			}
 		}
@@ -141,4 +135,5 @@ void erofs_diskbuf_exit(void)
 		close(strm->fd);
 		strm->fd = -1;
 	}
+	free(dbufstrm);
 }
