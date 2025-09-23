@@ -10,6 +10,7 @@
 #include "erofs/print.h"
 #include "erofs/lock.h"
 #include "liberofs_cache.h"
+#include "liberofs_compress.h"
 #include "liberofs_metabox.h"
 
 static EROFS_DEFINE_MUTEX(erofs_importer_global_mutex);
@@ -44,6 +45,11 @@ int erofs_importer_init(struct erofs_importer *im)
 	int err;
 
 	erofs_importer_global_init();
+
+	subsys = "compression";
+	err = z_erofs_compress_init(im);
+	if (err)
+		goto out_err;
 
 	if (cfg.c_fragments || cfg.c_extra_ea_name_prefixes) {
 		subsys = "packedfile";

@@ -28,7 +28,6 @@
 #include "erofs/fragments.h"
 #include "erofs/rebuild.h"
 #include "../lib/compressor.h"
-#include "../lib/liberofs_compress.h"
 #include "../lib/liberofs_metabox.h"
 #include "../lib/liberofs_oci.h"
 #include "../lib/liberofs_private.h"
@@ -1742,13 +1741,6 @@ int main(int argc, char **argv)
 		goto exit;
 	}
 
-	err = z_erofs_compress_init(&g_sbi);
-	if (err) {
-		erofs_err("failed to initialize compressor: %s",
-			  erofs_strerror(err));
-		goto exit;
-	}
-
 	importer_params.source = cfg.c_src_path;
 	importer_params.no_datainline = mkfs_no_datainline;
 	importer_params.dot_omitted = mkfs_dot_omitted;
@@ -1907,7 +1899,6 @@ int main(int argc, char **argv)
 exit:
 	if (root)
 		erofs_iput(root);
-	z_erofs_compress_exit(&g_sbi);
 	z_erofs_dedupe_exit();
 	blklst = erofs_blocklist_close();
 	if (blklst)

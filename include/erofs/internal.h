@@ -488,6 +488,9 @@ int erofs_listxattr(struct erofs_inode *vi, char *buffer, size_t buffer_size);
 int z_erofs_map_blocks_iter(struct erofs_inode *vi,
 			    struct erofs_map_blocks *map, int flags);
 
+const char *z_erofs_list_supported_algorithms(int i, unsigned int *mask);
+const struct erofs_algorithm *z_erofs_list_available_compressors(int *i);
+
 /* io.c */
 int erofs_dev_open(struct erofs_sb_info *sbi, const char *dev, int flags);
 void erofs_dev_close(struct erofs_sb_info *sbi);

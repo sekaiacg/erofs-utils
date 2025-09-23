@@ -11,6 +11,7 @@
 #endif
 #include "erofs/err.h"
 #include "erofs/config.h"
+#include "liberofs_compress.h"
 
 static EROFS_DEFINE_MUTEX(erofs_global_mutex);
 #ifdef HAVE_LIBCURL
@@ -43,6 +44,7 @@ out_unlock:
 void liberofs_global_exit(void)
 {
 	erofs_mutex_lock(&erofs_global_mutex);
+	z_erofs_mt_global_exit();
 #ifdef HAVE_LIBCURL
 	if (erofs_global_curl_initialized) {
 		curl_global_cleanup();

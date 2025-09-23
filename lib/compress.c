@@ -111,7 +111,6 @@ static struct {
 	struct erofs_workqueue wq;
 	struct erofs_compress_work *idle;
 	pthread_mutex_t mutex;
-	bool hasfwq;
 } z_erofs_mt_ctrl;
 
 struct z_erofs_compress_fslot {
@@ -1647,11 +1646,12 @@ int z_erofs_mt_compress(struct z_erofs_compress_ictx *ictx)
 		cur->errcode = 1;	/* mark as "in progress" */
 
 		if (i >= nsegs - 1) {
+			struct z_erofs_mgr *zmgr = inode->sbi->zmgr;
+
 			cur->ctx.remaining = inode->i_size -
 					inode->fragment_size - (u64)i * segsz;
 
-			if (z_erofs_mt_ctrl.hasfwq && ictx->tofh != ~0U) {
-				struct z_erofs_mgr *zmgr = inode->sbi->zmgr;
+			if (zmgr->fslot[0].pending.next && ictx->tofh != ~0U) {
 				struct z_erofs_compress_fslot *fs =
 					&zmgr->fslot[ictx->tofh & 1023];
 
@@ -1732,34 +1732,63 @@ out:
 	return ret;
 }
 
-static int z_erofs_mt_init(void)
+static int z_erofs_mt_global_init(void)
 {
+	static erofs_atomic_bool_t __initonce;
 	unsigned int workers = cfg.c_mt_workers;
 	int ret;
 
+	if (erofs_atomic_test_and_set(&__initonce))
+		return 0;
+
+	z_erofs_mt_enabled = false;
 	if (workers < 1)
 		return 0;
 	if (workers >= 1 && cfg.c_dedupe) {
 		erofs_warn("multi-threaded dedupe is NOT implemented for now");
 		cfg.c_mt_workers = 0;
 	} else {
-		if (cfg.c_fragments && workers > 1)
-			z_erofs_mt_ctrl.hasfwq = true;
-
 		ret = erofs_alloc_workqueue(&z_erofs_mt_ctrl.wq, workers,
 					    workers << 2,
 					    z_erofs_mt_wq_tls_alloc,
 					    z_erofs_mt_wq_tls_free);
-		if (ret)
+		if (ret) {
+			erofs_atomic_set(&__initonce, 0);
 			return ret;
+		}
 		z_erofs_mt_enabled = true;
 	}
 	pthread_mutex_init(&g_ictx.mutex, NULL);
 	pthread_cond_init(&g_ictx.cond, NULL);
 	return 0;
 }
+
+int z_erofs_mt_global_exit(void)
+{
+	struct erofs_compress_work *n;
+	int ret;
+
+	if (z_erofs_mt_enabled) {
+		ret = erofs_destroy_workqueue(&z_erofs_mt_ctrl.wq);
+		if (ret)
+			return ret;
+		while (z_erofs_mt_ctrl.idle) {
+			n = z_erofs_mt_ctrl.idle->next;
+			free(z_erofs_mt_ctrl.idle);
+			z_erofs_mt_ctrl.idle = n;
+		}
+		z_erofs_mt_enabled = false;
+	}
+	return 0;
+}
 #else
-static int z_erofs_mt_init(void)
+static int z_erofs_mt_global_init(void)
+{
+	z_erofs_mt_enabled = false;
+	return 0;
+}
+
+int z_erofs_mt_global_exit(void)
 {
 	return 0;
 }
@@ -2035,17 +2064,19 @@ static int z_erofs_build_compr_cfgs(struct erofs_sb_info *sbi,
 	return ret;
 }
 
-int z_erofs_compress_init(struct erofs_sb_info *sbi)
+int z_erofs_compress_init(struct erofs_importer *im)
 {
-	struct erofs_buffer_head *sb_bh = sbi->bh_sb;
+	struct erofs_sb_info *sbi = im->sbi;
 	u32 max_dict_size[Z_EROFS_COMPRESSION_MAX] = {};
 	u32 available_compr_algs = 0;
+	bool newzmgr __maybe_unused = false;
 	int i, ret, id;
 
 	if (!sbi->zmgr) {
 		sbi->zmgr = calloc(1, sizeof(*sbi->zmgr));
 		if (!sbi->zmgr)
 			return -ENOMEM;
+		newzmgr = true;
 	}
 
 	for (i = 0; cfg.c_compr_opts[i].alg; ++i) {
@@ -2067,19 +2098,10 @@ int z_erofs_compress_init(struct erofs_sb_info *sbi)
 		if (c->dict_size > max_dict_size[id])
 			max_dict_size[id] = c->dict_size;
 	}
-
-	/*
-	 * if primary algorithm is empty (e.g. compression off),
-	 * clear 0PADDING feature for old kernel compatibility.
-	 */
-	if (!available_compr_algs ||
-	    (cfg.c_legacy_compress && available_compr_algs == 1))
-		erofs_sb_clear_lz4_0padding(sbi);
-
 	if (!available_compr_algs)
 		return 0;
 
-	if (!sb_bh) {
+	if (sbi->available_compr_algs) {
 		u32 dalg = available_compr_algs & (~sbi->available_compr_algs);
 
 		if (dalg) {
@@ -2087,8 +2109,8 @@ int z_erofs_compress_init(struct erofs_sb_info *sbi)
 				  dalg);
 			return -EOPNOTSUPP;
 		}
-		if (available_compr_algs & (1 << Z_EROFS_COMPRESSION_LZ4) &&
-		    sbi->lz4.max_pclusterblks << sbi->blkszbits <
+		if ((available_compr_algs & BIT(Z_EROFS_COMPRESSION_LZ4)) &&
+		    (sbi->lz4.max_pclusterblks << sbi->blkszbits) <
 			cfg.c_mkfs_pclustersize_max) {
 			erofs_err("pclustersize %u is too large on incremental builds",
 				  cfg.c_mkfs_pclustersize_max);
@@ -2096,6 +2118,11 @@ int z_erofs_compress_init(struct erofs_sb_info *sbi)
 		}
 	} else {
 		sbi->available_compr_algs = available_compr_algs;
+
+		if (!cfg.c_legacy_compress)
+			erofs_sb_set_lz4_0padding(sbi);
+		if (available_compr_algs & ~(1 << Z_EROFS_COMPRESSION_LZ4))
+			erofs_sb_set_compr_cfgs(sbi);
 	}
 
 	/*
@@ -2122,19 +2149,18 @@ int z_erofs_compress_init(struct erofs_sb_info *sbi)
 		return -EINVAL;
 	}
 
-	if (sb_bh && erofs_sb_has_compr_cfgs(sbi)) {
-		ret = z_erofs_build_compr_cfgs(sbi, sb_bh, max_dict_size);
+	if (sbi->bh_sb && erofs_sb_has_compr_cfgs(sbi)) {
+		ret = z_erofs_build_compr_cfgs(sbi, sbi->bh_sb, max_dict_size);
 		if (ret)
 			return ret;
 	}
 
-	z_erofs_mt_enabled = false;
-	ret = z_erofs_mt_init();
+	ret = z_erofs_mt_global_init();
 	if (ret)
 		return ret;
 
 #ifdef EROFS_MT_ENABLED
-	if (z_erofs_mt_ctrl.hasfwq) {
+	if (cfg.c_fragments && cfg.c_mt_workers > 1 && newzmgr) {
 		for (i = 0; i < ARRAY_SIZE(sbi->zmgr->fslot); ++i) {
 			init_list_head(&sbi->zmgr->fslot[i].pending);
 			pthread_mutex_init(&sbi->zmgr->fslot[i].lock, NULL);
@@ -2157,21 +2183,6 @@ int z_erofs_compress_exit(struct erofs_sb_info *sbi)
 		if (ret)
 			return ret;
 	}
-
-	if (z_erofs_mt_enabled) {
-#ifdef EROFS_MT_ENABLED
-		ret = erofs_destroy_workqueue(&z_erofs_mt_ctrl.wq);
-		if (ret)
-			return ret;
-		while (z_erofs_mt_ctrl.idle) {
-			struct erofs_compress_work *tmp =
-				z_erofs_mt_ctrl.idle->next;
-			free(z_erofs_mt_ctrl.idle);
-			z_erofs_mt_ctrl.idle = tmp;
-		}
-#endif
-	}
-
 	free(sbi->zmgr);
 	return 0;
 }
