@@ -379,6 +379,7 @@ static void erofsdump_show_fileinfo(bool show_extent)
 	char access_mode_str[] = "rwxrwxrwx";
 	char timebuf[128] = {0};
 	unsigned int extent_count = 0;
+	struct tm *tm;
 	struct erofs_map_blocks map = {
 		.buf = __EROFS_BUF_INITIALIZER,
 		.m_la = 0,
@@ -411,8 +412,11 @@ static void erofsdump_show_fileinfo(bool show_extent)
 		path[sizeof(path) - 1] = '\0';
 	}
 
-	strftime(timebuf, sizeof(timebuf),
-		 "%Y-%m-%d %H:%M:%S", localtime((time_t *)&inode.i_mtime));
+	tm = localtime((time_t *)&inode.i_mtime);
+	if (!tm)
+		sprintf(timebuf, "%lld", (s64)inode.i_mtime | 0LL);
+	else
+		strftime(timebuf, sizeof(timebuf), "%Y-%m-%d %H:%M:%S", tm);
 	access_mode = inode.i_mode & 0777;
 	for (i = 8; i >= 0; i--)
 		if (((access_mode >> i) & 1) == 0)
