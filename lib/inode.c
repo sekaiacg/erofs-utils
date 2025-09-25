@@ -1323,6 +1323,7 @@ static struct erofs_inode *erofs_iget_from_local(struct erofs_importer *im,
 		erofs_iput(inode);
 		return ERR_PTR(ret);
 	}
+	inode->datasource = EROFS_INODE_DATA_SOURCE_LOCALPATH;
 	return inode;
 }
 
@@ -1773,58 +1774,48 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im,
 	return erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR, &dir, sizeof(dir));
 }
 
-static int erofs_mkfs_handle_inode(struct erofs_importer *im,
-				   struct erofs_inode *inode)
+static int erofs_mkfs_begin_nondirectory(struct erofs_importer *im,
+					 struct erofs_inode *inode)
 {
-	const char *relpath = erofs_fspath(inode->i_srcpath);
-	char *trimmed;
-	int ret;
+	struct erofs_mkfs_job_ndir_ctx ctx =
+		{ .inode = inode, .fd = -1 };
 
-	trimmed = erofs_trim_for_progressinfo(relpath[0] ? relpath : "/",
-					      sizeof("Processing  ...") - 1);
-	erofs_update_progressinfo("Processing %s ...", trimmed);
-	free(trimmed);
-
-	ret = erofs_scan_file_xattrs(inode);
-	if (ret < 0)
-		return ret;
-
-	ret = erofs_prepare_xattr_ibody(inode, false);
-	if (ret < 0)
-		return ret;
-
-	if (!S_ISDIR(inode->i_mode)) {
-		struct erofs_mkfs_job_ndir_ctx ctx = { .inode = inode, .fd = -1 };
-
-		if (!S_ISLNK(inode->i_mode) && inode->i_size) {
+	if (S_ISREG(inode->i_mode) && inode->i_size) {
+		switch (inode->datasource) {
+		case EROFS_INODE_DATA_SOURCE_DISKBUF:
+			ctx.fd = erofs_diskbuf_getfd(inode->i_diskbuf, &ctx.fpos);
+			if (ctx.fd < 0)
+				return ctx.fd;
+			break;
+		case EROFS_INODE_DATA_SOURCE_LOCALPATH:
 			ctx.fd = open(inode->i_srcpath, O_RDONLY | O_BINARY);
 			if (ctx.fd < 0)
 				return -errno;
-
-			if (cfg.c_compr_opts[0].alg &&
-			    erofs_file_is_compressible(im, inode)) {
-				ctx.ictx = erofs_begin_compressed_file(im,
-							inode, ctx.fd, 0);
-				if (IS_ERR(ctx.ictx))
-					return PTR_ERR(ctx.ictx);
-			}
+			__erofs_fallthrough;
+		default:
+			break;
 		}
-		ret = erofs_mkfs_go(im, EROFS_MKFS_JOB_NDIR, &ctx, sizeof(ctx));
-	} else {
-		ret = erofs_mkfs_handle_directory(im, inode, false, false);
+		if (ctx.fd >= 0 && cfg.c_compr_opts[0].alg &&
+		    erofs_file_is_compressible(im, inode)) {
+			ctx.ictx = erofs_begin_compressed_file(im, inode,
+							ctx.fd, ctx.fpos);
+			if (IS_ERR(ctx.ictx))
+				return PTR_ERR(ctx.ictx);
+		}
 	}
-	erofs_info("file /%s dumped (mode %05o)", relpath, inode->i_mode);
-	return ret;
+	return erofs_mkfs_go(im, EROFS_MKFS_JOB_NDIR, &ctx, sizeof(ctx));
 }
 
-static int erofs_rebuild_handle_inode(struct erofs_importer *im,
-				    struct erofs_inode *inode, bool incremental)
+static int erofs_mkfs_handle_inode(struct erofs_importer *im,
+				   struct erofs_inode *inode,
+				   bool rebuild, bool incremental)
 {
+	const char *relpath = erofs_fspath(inode->i_srcpath);
 	const struct erofs_importer_params *params = im->params;
 	char *trimmed;
 	int ret;
 
-	trimmed = erofs_trim_for_progressinfo(erofs_fspath(inode->i_srcpath),
+	trimmed = erofs_trim_for_progressinfo(*relpath ? relpath : "/",
 					      sizeof("Processing  ...") - 1);
 	erofs_update_progressinfo("Processing %s ...", trimmed);
 	free(trimmed);
@@ -1847,6 +1838,12 @@ static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 			return ret;
 	}
 
+	if (!rebuild) {
+		ret = erofs_scan_file_xattrs(inode);
+		if (ret < 0)
+			return ret;
+	}
+
 	/* strip all unnecessary overlayfs xattrs when ovlfs_strip is enabled */
 	if (params->ovlfs_strip)
 		erofs_clear_opaque_xattr(inode);
@@ -1858,28 +1855,12 @@ static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 		return ret;
 
 	if (!S_ISDIR(inode->i_mode)) {
-		struct erofs_mkfs_job_ndir_ctx ctx =
-			{ .inode = inode, .fd = -1 };
-
-		if (S_ISREG(inode->i_mode) && inode->i_size &&
-		    inode->datasource == EROFS_INODE_DATA_SOURCE_DISKBUF) {
-			ctx.fd = erofs_diskbuf_getfd(inode->i_diskbuf, &ctx.fpos);
-			if (ctx.fd < 0)
-				return ret;
-
-			if (cfg.c_compr_opts[0].alg &&
-			    erofs_file_is_compressible(im, inode)) {
-				ctx.ictx = erofs_begin_compressed_file(im, inode,
-							ctx.fd, ctx.fpos);
-				if (IS_ERR(ctx.ictx))
-					return PTR_ERR(ctx.ictx);
-			}
-		}
-		ret = erofs_mkfs_go(im, EROFS_MKFS_JOB_NDIR, &ctx, sizeof(ctx));
+		ret = erofs_mkfs_begin_nondirectory(im, inode);
 	} else {
-		ret = erofs_mkfs_handle_directory(im, inode, true, incremental);
+		ret = erofs_mkfs_handle_directory(im, inode,
+						  rebuild, incremental);
 	}
-	erofs_info("file %s dumped (mode %05o)", erofs_fspath(inode->i_srcpath),
+	erofs_info("file %s dumped (mode %05o)", *relpath ? relpath : "/",
 		   inode->i_mode);
 	return ret;
 }
@@ -1921,8 +1902,7 @@ static int erofs_mkfs_dump_tree(struct erofs_importer *im, bool rebuild,
 		root->xattr_isize = cfg.c_root_xattr_isize;
 	}
 
-	err = !rebuild ? erofs_mkfs_handle_inode(im, root) :
-			erofs_rebuild_handle_inode(im, root, incremental);
+	err = erofs_mkfs_handle_inode(im, root, rebuild, incremental);
 	if (err)
 		return err;
 
@@ -1952,11 +1932,8 @@ static int erofs_mkfs_dump_tree(struct erofs_importer *im, bool rebuild,
 					  erofs_parent_inode(inode) != dir);
 				erofs_mark_parent_inode(inode, dir);
 
-				if (!rebuild)
-					err = erofs_mkfs_handle_inode(im, inode);
-				else
-					err = erofs_rebuild_handle_inode(im,
-							inode, incremental);
+				err = erofs_mkfs_handle_inode(im, inode,
+							rebuild, incremental);
 				if (err)
 					break;
 				if (S_ISDIR(inode->i_mode)) {
