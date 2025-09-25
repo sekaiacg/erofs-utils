@@ -1608,26 +1608,29 @@ static void erofs_mkfs_flushjobs(struct erofs_sb_info *sbi)
 }
 #endif
 
-static int erofs_mkfs_handle_directory(struct erofs_importer *im, struct erofs_inode *dir)
+static int erofs_mkfs_import_localdir(struct erofs_importer *im, struct erofs_inode *dir,
+				      u64 *nr_subdirs, unsigned int *i_nlink)
 {
+	unsigned int __nlink;
+	u64 __nr_subdirs;
 	DIR *_dir;
-	struct dirent *dp;
-	struct erofs_dentry *d;
-	unsigned int nr_subdirs, i_nlink;
 	int ret;
 
 	_dir = opendir(dir->i_srcpath);
 	if (!_dir) {
+		ret = -errno;
 		erofs_err("failed to opendir at %s: %s",
-			  dir->i_srcpath, erofs_strerror(-errno));
-		return -errno;
+			  dir->i_srcpath, erofs_strerror(ret));
+		return ret;
 	}
 
-	nr_subdirs = 0;
-	i_nlink = 0;
+	__nr_subdirs = *nr_subdirs;
+	__nlink = *i_nlink;
 	while (1) {
-		char buf[PATH_MAX];
 		struct erofs_inode *inode;
+		struct erofs_dentry *d;
+		char buf[PATH_MAX];
+		struct dirent *dp;
 
 		/*
 		 * set errno to 0 before calling readdir() in order to
@@ -1636,16 +1639,14 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im, struct erofs_i
 		errno = 0;
 		dp = readdir(_dir);
 		if (!dp) {
-			if (!errno)
-				break;
 			ret = -errno;
+			if (!ret)
+				break;
 			goto err_closedir;
 		}
 
-		if (is_dot_dotdot(dp->d_name)) {
-			++i_nlink;
+		if (is_dot_dotdot(dp->d_name))
 			continue;
-		}
 
 		/* skip if it's a exclude file */
 		if (erofs_is_exclude_path(dir->i_srcpath, dp->d_name))
@@ -1668,32 +1669,15 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im, struct erofs_i
 		}
 		d->inode = inode;
 		d->type = erofs_mode_to_ftype(inode->i_mode);
-		i_nlink += S_ISDIR(inode->i_mode);
+		__nlink += S_ISDIR(inode->i_mode);
 		erofs_dbg("file %s added (type %u)", buf, d->type);
-		nr_subdirs++;
+		__nr_subdirs++;
 	}
 	closedir(_dir);
 
-	ret = erofs_prepare_dir_file(im, dir, nr_subdirs); /* sort subdirs */
-	if (ret)
-		return ret;
-
-	/*
-	 * if there're too many subdirs as compact form, set nlink=1
-	 * rather than upgrade to use extented form instead if possible.
-	 */
-	if (i_nlink > USHRT_MAX &&
-	    dir->inode_isize == sizeof(struct erofs_inode_compact)) {
-		if (dir->dot_omitted)
-			dir->inode_isize = sizeof(struct erofs_inode_extended);
-		else
-			dir->i_nlink = 1;
-	} else {
-		dir->i_nlink = i_nlink;
-	}
-
-	return erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR, &dir, sizeof(dir));
-
+	*nr_subdirs = __nr_subdirs;
+	*i_nlink = __nlink;
+	return 0;
 err_closedir:
 	closedir(_dir);
 	return ret;
@@ -1728,13 +1712,15 @@ static void erofs_dentry_kill(struct erofs_dentry *d)
 	free(d);
 }
 
-static int erofs_rebuild_handle_directory(struct erofs_importer *im,
-					  struct erofs_inode *dir,
-					  bool incremental)
+static int erofs_mkfs_handle_directory(struct erofs_importer *im,
+				       struct erofs_inode *dir,
+				       bool rebuild,
+				       bool incremental)
 {
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_dentry *d, *n;
-	unsigned int nr_subdirs, i_nlink;
+	unsigned int i_nlink;
+	u64 nr_subdirs;
 	bool delwht = im->params->ovlfs_strip && dir->whiteouts;
 	int ret;
 
@@ -1755,23 +1741,34 @@ static int erofs_rebuild_handle_directory(struct erofs_importer *im,
 		i_nlink += (d->type == EROFS_FT_DIR);
 		++nr_subdirs;
 	}
+
+	if (!rebuild) {
+		ret = erofs_mkfs_import_localdir(im, dir,
+						 &nr_subdirs, &i_nlink);
+		if (ret)
+			return ret;
+	}
+
 	DBG_BUGON(nr_subdirs + 2 < i_nlink);
 	ret = erofs_prepare_dir_file(im, dir, nr_subdirs);
 	if (ret)
 		return ret;
 
-	if (IS_ROOT(dir) && incremental)
+	if (IS_ROOT(dir) && incremental && !erofs_sb_has_48bit(sbi))
 		dir->datalayout = EROFS_INODE_FLAT_PLAIN;
 
+	dir->i_nlink = i_nlink;
 	/*
 	 * if there're too many subdirs as compact form, set nlink=1
-	 * rather than upgrade to use extented form instead.
+	 * rather than upgrade to use extented form instead if possible.
 	 */
 	if (i_nlink > USHRT_MAX &&
-	    dir->inode_isize == sizeof(struct erofs_inode_compact))
-		dir->i_nlink = 1;
-	else
-		dir->i_nlink = i_nlink;
+	    dir->inode_isize == sizeof(struct erofs_inode_compact)) {
+		if (dir->dot_omitted)
+			dir->inode_isize = sizeof(struct erofs_inode_extended);
+		else
+			dir->i_nlink = 1;
+	}
 
 	return erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR, &dir, sizeof(dir));
 }
@@ -1814,7 +1811,7 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 		}
 		ret = erofs_mkfs_go(im, EROFS_MKFS_JOB_NDIR, &ctx, sizeof(ctx));
 	} else {
-		ret = erofs_mkfs_handle_directory(im, inode);
+		ret = erofs_mkfs_handle_directory(im, inode, false, false);
 	}
 	erofs_info("file /%s dumped (mode %05o)", relpath, inode->i_mode);
 	return ret;
@@ -1880,7 +1877,7 @@ static int erofs_rebuild_handle_inode(struct erofs_importer *im,
 		}
 		ret = erofs_mkfs_go(im, EROFS_MKFS_JOB_NDIR, &ctx, sizeof(ctx));
 	} else {
-		ret = erofs_rebuild_handle_directory(im, inode, incremental);
+		ret = erofs_mkfs_handle_directory(im, inode, true, incremental);
 	}
 	erofs_info("file %s dumped (mode %05o)", erofs_fspath(inode->i_srcpath),
 		   inode->i_mode);
