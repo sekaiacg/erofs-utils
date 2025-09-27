@@ -484,6 +484,11 @@ static int erofs_rebuild_basedir_dirent_iter(struct erofs_dir_context *ctx)
 		d->validnid = true;
 		if (!mergedir->whiteouts && erofs_dentry_is_wht(dir->sbi, d))
 			mergedir->whiteouts = true;
+	} else if (__erofs_unlikely(d->validnid)) {
+		/* The base image appears to be corrupted */
+		DBG_BUGON(1);
+		ret = -EFSCORRUPTED;
+		goto out;
 	} else {
 		struct erofs_inode *inode = d->inode;
 
