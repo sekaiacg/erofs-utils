@@ -2130,7 +2130,7 @@ int z_erofs_compress_init(struct erofs_importer *im)
 	 * if big pcluster is enabled, an extra CBLKCNT lcluster index needs
 	 * to be loaded in order to get those compressed block counts.
 	 */
-	if (params->pclusterblks_max) {
+	if (params->pclusterblks_max > 1) {
 		if (pclustersize_max > Z_EROFS_PCLUSTER_MAX_SIZE) {
 			erofs_err("pcluster size (%u blocks) is too large",
 				  params->pclusterblks_max);
