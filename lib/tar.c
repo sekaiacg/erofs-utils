@@ -694,7 +694,7 @@ int tarerofs_parse_tar(struct erofs_importer *im, struct erofs_tarfile *tar)
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_inode *root = im->root;
 	bool whout, opq, e = false;
-	char path[PATH_MAX];
+	char _path[PATH_MAX + 1], *path = _path + 1;
 	struct stat st;
 	mode_t mode;
 	erofs_off_t tar_offset, dataoff;
@@ -702,8 +702,8 @@ int tarerofs_parse_tar(struct erofs_importer *im, struct erofs_tarfile *tar)
 	struct tar_header *th;
 	struct erofs_dentry *d;
 	struct erofs_inode *inode;
-	unsigned int j, csum, cksum;
-	int ckksum, ret, rem;
+	unsigned int csum, cksum;
+	int ckksum, ret, rem, j;
 
 	root->dev = tar->dev;
 	if (eh.path)
@@ -817,6 +817,7 @@ out_eot:
 			path[0] = '.';
 			path[1] = '\0';
 		} else {
+			*_path = '\0';
 			while (path[j - 1] == '/')
 				path[--j] = '\0';
 		}
