@@ -414,7 +414,7 @@ erofs_nid_t erofs_lookupnid(struct erofs_inode *inode)
 	if (__erofs_unlikely(IS_ROOT(inode))) {
 		if (inode->in_metabox)
 			DBG_BUGON(!erofs_sb_has_48bit(sbi));
-		else if (inode->nid > 0xffff)
+		else if (!erofs_sb_has_48bit(sbi) && inode->nid > 0xffff)
 			return sbi->root_nid;
 	}
 	return inode->nid;
