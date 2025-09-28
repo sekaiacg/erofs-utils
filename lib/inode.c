@@ -1294,6 +1294,7 @@ struct erofs_inode *erofs_new_inode(struct erofs_sb_info *sbi)
 static struct erofs_inode *erofs_iget_from_local(struct erofs_importer *im,
 						 const char *path)
 {
+	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_inode *inode;
 	struct stat st;
@@ -1308,7 +1309,7 @@ static struct erofs_inode *erofs_iget_from_local(struct erofs_importer *im,
 	 * hard-link, just return it. Also don't lookup for directories
 	 * since hard-link directory isn't allowed.
 	 */
-	if (!S_ISDIR(st.st_mode) && !im->params->hard_dereference) {
+	if (!S_ISDIR(st.st_mode) && !params->hard_dereference) {
 		inode = erofs_iget(st.st_dev, st.st_ino);
 		if (inode)
 			return inode;
@@ -1669,6 +1670,8 @@ static int erofs_mkfs_import_localdir(struct erofs_importer *im, struct erofs_in
 			ret = PTR_ERR(inode);
 			goto err_closedir;
 		}
+		if (!dir->whiteouts && erofs_inode_is_whiteout(inode))
+			dir->whiteouts = true;
 		d->inode = inode;
 		d->type = erofs_mode_to_ftype(inode->i_mode);
 		__nlink += S_ISDIR(inode->i_mode);
@@ -1712,16 +1715,15 @@ static void erofs_dentry_kill(struct erofs_dentry *d)
 	free(d);
 }
 
-static int erofs_mkfs_handle_directory(struct erofs_importer *im,
-				       struct erofs_inode *dir,
-				       bool rebuild,
-				       bool incremental)
+static int erofs_prepare_dir_inode(struct erofs_importer *im,
+				   struct erofs_inode *dir,
+				   bool rebuild,
+				   bool incremental)
 {
 	struct erofs_sb_info *sbi = im->sbi;
 	struct erofs_dentry *d, *n;
 	unsigned int i_nlink;
 	u64 nr_subdirs;
-	bool delwht = im->params->ovlfs_strip && dir->whiteouts;
 	int ret;
 
 	nr_subdirs = 0;
@@ -1730,11 +1732,6 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im,
 	list_for_each_entry_safe(d, n, &dir->i_subdirs, d_child) {
 		if (is_dot_dotdot(d->name)) {
 			DBG_BUGON(1);
-			erofs_dentry_kill(d);
-			continue;
-		}
-		if (delwht && erofs_dentry_is_wht(sbi, d)) {
-			erofs_dbg("remove whiteout %s", d->inode->i_srcpath);
 			erofs_dentry_kill(d);
 			continue;
 		}
@@ -1749,6 +1746,22 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im,
 			return ret;
 	}
 
+	if (incremental && dir->dev == sbi->dev && !dir->opaque) {
+		ret = erofs_rebuild_load_basedir(dir, &nr_subdirs, &i_nlink);
+		if (ret)
+			return ret;
+	}
+	if (im->params->ovlfs_strip && dir->whiteouts) {
+		list_for_each_entry_safe(d, n, &dir->i_subdirs, d_child) {
+			if (erofs_dentry_is_wht(sbi, d)) {
+				erofs_dbg("remove whiteout %s",
+					  d->inode->i_srcpath);
+				erofs_dentry_kill(d);
+				--nr_subdirs;
+				continue;
+			}
+		}
+	}
 	DBG_BUGON(nr_subdirs + 2 < i_nlink);
 	ret = erofs_prepare_dir_file(im, dir, nr_subdirs);
 	if (ret)
@@ -1769,8 +1782,7 @@ static int erofs_mkfs_handle_directory(struct erofs_importer *im,
 		else
 			dir->i_nlink = 1;
 	}
-
-	return erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR, &dir, sizeof(dir));
+	return 0;
 }
 
 static int erofs_mkfs_begin_nondirectory(struct erofs_importer *im,
@@ -1830,10 +1842,9 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 		inode->inode_isize = sizeof(struct erofs_inode_compact);
 	}
 
-	if (incremental && S_ISDIR(inode->i_mode) &&
-	    inode->dev == inode->sbi->dev && !inode->opaque) {
-		ret = erofs_rebuild_load_basedir(inode);
-		if (ret)
+	if (S_ISDIR(inode->i_mode)) {
+		ret = erofs_prepare_dir_inode(im, inode, rebuild, incremental);
+		if (ret < 0)
 			return ret;
 	}
 
@@ -1856,8 +1867,8 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 	if (!S_ISDIR(inode->i_mode)) {
 		ret = erofs_mkfs_begin_nondirectory(im, inode);
 	} else {
-		ret = erofs_mkfs_handle_directory(im, inode,
-						  rebuild, incremental);
+		ret = erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR, &inode,
+				    sizeof(inode));
 	}
 	erofs_info("file %s dumped (mode %05o)", *relpath ? relpath : "/",
 		   inode->i_mode);
@@ -2071,6 +2082,11 @@ fail:
 int erofs_importer_load_tree(struct erofs_importer *im, bool rebuild,
 			     bool incremental)
 {
+	if (__erofs_unlikely(incremental && erofs_sb_has_metabox(im->sbi))) {
+		erofs_err("Metadata-compressed filesystems don't implement incremental builds for now");
+		return -EOPNOTSUPP;
+	}
+
 	return erofs_mkfs_build_tree(&((struct erofs_mkfs_buildtree_ctx) {
 		.im = im,
 		.rebuild = rebuild,

@@ -274,15 +274,18 @@ static int erofs_rebuild_update_inode(struct erofs_sb_info *dst_sb,
 	return err;
 }
 
-/*
- * @mergedir: parent directory in the merged tree
- * @ctx.dir:  parent directory when itering erofs_iterate_dir()
- * @datamode: indicate how to import inode data
- */
 struct erofs_rebuild_dir_context {
+	/* @ctx.dir:  parent directory when itering erofs_iterate_dir() */
 	struct erofs_dir_context ctx;
-	struct erofs_inode *mergedir;
-	enum erofs_rebuild_datamode datamode;
+	struct erofs_inode *mergedir;	/* parent directory in the merged tree */
+	union {
+		/* indicate how to import inode data */
+		enum erofs_rebuild_datamode datamode;
+		struct {
+			u64 *nr_subdirs;
+			unsigned int *i_nlink;
+		};
+	};
 };
 
 static int erofs_rebuild_dirent_iter(struct erofs_dir_context *ctx)
@@ -458,8 +461,8 @@ int erofs_rebuild_load_tree(struct erofs_inode *root, struct erofs_sb_info *sbi,
 static int erofs_rebuild_basedir_dirent_iter(struct erofs_dir_context *ctx)
 {
 	struct erofs_rebuild_dir_context *rctx = (void *)ctx;
-	struct erofs_inode *dir = ctx->dir;
 	struct erofs_inode *mergedir = rctx->mergedir;
+	struct erofs_inode *dir = ctx->dir;
 	struct erofs_dentry *d;
 	char *dname;
 	bool dumb;
@@ -484,6 +487,8 @@ static int erofs_rebuild_basedir_dirent_iter(struct erofs_dir_context *ctx)
 		d->validnid = true;
 		if (!mergedir->whiteouts && erofs_dentry_is_wht(dir->sbi, d))
 			mergedir->whiteouts = true;
+		*rctx->i_nlink += (ctx->de_ftype == EROFS_FT_DIR);
+		++*rctx->nr_subdirs;
 	} else if (__erofs_unlikely(d->validnid)) {
 		/* The base image appears to be corrupted */
 		DBG_BUGON(1);
@@ -508,7 +513,8 @@ out:
 	return ret;
 }
 
-int erofs_rebuild_load_basedir(struct erofs_inode *dir)
+int erofs_rebuild_load_basedir(struct erofs_inode *dir, u64 *nr_subdirs,
+			       unsigned int *i_nlink)
 {
 	struct erofs_inode fakeinode = {
 		.sbi = dir->sbi,
@@ -540,6 +546,8 @@ int erofs_rebuild_load_basedir(struct erofs_inode *dir)
 		.ctx.dir = &fakeinode,
 		.ctx.cb = erofs_rebuild_basedir_dirent_iter,
 		.mergedir = dir,
+		.nr_subdirs = nr_subdirs,
+		.i_nlink = i_nlink,
 	};
 	return erofs_iterate_dir(&ctx.ctx, false);
 }

@@ -1835,7 +1835,6 @@ int main(int argc, char **argv)
 			err = PTR_ERR(root);
 			goto exit;
 		}
-		incremental_mode = false;
 	} else {
 		root = erofs_rebuild_make_root(&g_sbi);
 		if (IS_ERR(root)) {
