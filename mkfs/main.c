@@ -26,12 +26,12 @@
 #include "erofs/compress_hints.h"
 #include "erofs/blobchunk.h"
 #include "erofs/fragments.h"
-#include "erofs/rebuild.h"
 #include "../lib/compressor.h"
 #include "../lib/liberofs_gzran.h"
 #include "../lib/liberofs_metabox.h"
 #include "../lib/liberofs_oci.h"
 #include "../lib/liberofs_private.h"
+#include "../lib/liberofs_rebuild.h"
 #include "../lib/liberofs_s3.h"
 #include "../lib/liberofs_uuid.h"
 

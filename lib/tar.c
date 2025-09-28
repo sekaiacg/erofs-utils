@@ -10,7 +10,6 @@
 #include "erofs/tar.h"
 #include "erofs/xattr.h"
 #include "erofs/blobchunk.h"
-#include "erofs/rebuild.h"
 #include "erofs/importer.h"
 #if defined(HAVE_ZLIB)
 #include <zlib.h>
@@ -18,6 +17,7 @@
 #include "liberofs_base64.h"
 #include "liberofs_cache.h"
 #include "liberofs_gzran.h"
+#include "liberofs_rebuild.h"
 
 /* This file is a tape/volume header.  Ignore it on extraction.  */
 #define GNUTYPE_VOLHDR 'V'

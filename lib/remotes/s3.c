@@ -16,8 +16,8 @@
 #include "erofs/inode.h"
 #include "erofs/blobchunk.h"
 #include "erofs/diskbuf.h"
-#include "erofs/rebuild.h"
 #include "erofs/importer.h"
+#include "liberofs_rebuild.h"
 #include "liberofs_s3.h"
 
 #define S3EROFS_PATH_MAX		1024

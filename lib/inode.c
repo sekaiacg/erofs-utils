@@ -30,6 +30,7 @@
 #include "liberofs_compress.h"
 #include "liberofs_private.h"
 #include "liberofs_metabox.h"
+#include "liberofs_rebuild.h"
 
 static inline bool erofs_is_special_identifier(const char *path)
 {
@@ -1683,8 +1684,6 @@ err_closedir:
 	closedir(_dir);
 	return ret;
 }
-
-int erofs_rebuild_load_basedir(struct erofs_inode *dir);
 
 bool erofs_dentry_is_wht(struct erofs_sb_info *sbi, struct erofs_dentry *d)
 {

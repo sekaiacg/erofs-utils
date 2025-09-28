@@ -10,11 +10,11 @@
 #endif
 #include "erofs/print.h"
 #include "erofs/inode.h"
-#include "erofs/rebuild.h"
 #include "erofs/dir.h"
 #include "erofs/xattr.h"
 #include "erofs/blobchunk.h"
 #include "erofs/internal.h"
+#include "liberofs_rebuild.h"
 #include "liberofs_uuid.h"
 
 #ifdef HAVE_LINUX_AUFS_TYPE_H
