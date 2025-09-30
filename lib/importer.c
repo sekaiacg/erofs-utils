@@ -9,6 +9,7 @@
 #include "erofs/inode.h"
 #include "erofs/print.h"
 #include "erofs/lock.h"
+#include "erofs/xattr.h"
 #include "liberofs_cache.h"
 #include "liberofs_compress.h"
 #include "liberofs_metabox.h"
@@ -45,6 +46,9 @@ int erofs_importer_init(struct erofs_importer *im)
 	int err;
 
 	erofs_importer_global_init();
+
+	subsys = "xattr";
+	erofs_xattr_init(sbi);
 
 	subsys = "compression";
 	err = z_erofs_compress_init(im);
