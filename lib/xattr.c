@@ -124,20 +124,28 @@ struct erofs_inode_xattr_node {
 	struct erofs_xattritem *item;
 };
 
-static struct erofs_xattrmgr {
+struct erofs_xattrmgr {
 	struct list_head hash[1 << 14];
 	struct erofs_xattritem *shared_xattrs;
 	unsigned int sharedxattr_count;
-} g_xattrmgr;
+};
 
-void erofs_xattr_init(struct erofs_sb_info *sbi)
+int erofs_xattr_init(struct erofs_sb_info *sbi)
 {
+	struct erofs_xattrmgr *xamgr = sbi->xamgr;
 	unsigned int i;
 
-	if (g_xattrmgr.hash[0].next)
-		return;
-	for (i = 0; i < ARRAY_SIZE(g_xattrmgr.hash); ++i)
-		init_list_head(&g_xattrmgr.hash[i]);
+	if (xamgr)
+		return 0;
+
+	xamgr = malloc(sizeof(struct erofs_xattrmgr));
+	if (!xamgr)
+		return -ENOMEM;
+
+	for (i = 0; i < ARRAY_SIZE(xamgr->hash); ++i)
+		init_list_head(&xamgr->hash[i]);
+	sbi->xamgr = xamgr;
+	return 0;
 }
 
 static struct erofs_xattr_prefix {
@@ -210,8 +218,10 @@ static unsigned int put_xattritem(struct erofs_xattritem *item)
 	return 0;
 }
 
-static struct erofs_xattritem *get_xattritem(char *kvbuf, unsigned int len[2])
+static struct erofs_xattritem *get_xattritem(struct erofs_sb_info *sbi,
+					     char *kvbuf, unsigned int len[2])
 {
+	struct erofs_xattrmgr *xamgr = sbi->xamgr;
 	struct erofs_xattritem *item;
 	struct ea_type_node *tnode;
 	struct list_head *head;
@@ -219,8 +229,8 @@ static struct erofs_xattritem *get_xattritem(char *kvbuf, unsigned int len[2])
 
 	hash[0] = BKDRHash(kvbuf, len[0]);
 	hash[1] = BKDRHash(kvbuf + EROFS_XATTR_KSIZE(len), len[1]);
-	hkey = (hash[0] ^ hash[1]) & (ARRAY_SIZE(g_xattrmgr.hash) - 1);
-	head = g_xattrmgr.hash + hkey;
+	hkey = (hash[0] ^ hash[1]) & (ARRAY_SIZE(xamgr->hash) - 1);
+	head = xamgr->hash + hkey;
 	list_for_each_entry(item, head, node) {
 		if (item->len[0] == len[0] && item->len[1] == len[1] &&
 		    item->hash[0] == hash[0] && item->hash[1] == hash[1] &&
@@ -261,7 +271,8 @@ static struct erofs_xattritem *get_xattritem(char *kvbuf, unsigned int len[2])
 	return item;
 }
 
-static struct erofs_xattritem *parse_one_xattr(const char *path, const char *key,
+static struct erofs_xattritem *parse_one_xattr(struct erofs_sb_info *sbi,
+					       const char *path, const char *key,
 					       unsigned int keylen)
 {
 	ssize_t ret;
@@ -301,7 +312,7 @@ static struct erofs_xattritem *parse_one_xattr(const char *path, const char *key
 		}
 	}
 
-	item = get_xattritem(kvbuf, len);
+	item = get_xattritem(sbi, kvbuf, len);
 	if (!IS_ERR(item))
 		return item;
 	ret = PTR_ERR(item);
@@ -310,7 +321,8 @@ out:
 	return ERR_PTR(ret);
 }
 
-static struct erofs_xattritem *erofs_get_selabel_xattr(const char *srcpath,
+static struct erofs_xattritem *erofs_get_selabel_xattr(struct erofs_sb_info *sbi,
+						       const char *srcpath,
 						       mode_t mode)
 {
 #ifdef HAVE_LIBSELINUX
@@ -353,7 +365,7 @@ static struct erofs_xattritem *erofs_get_selabel_xattr(const char *srcpath,
 		sprintf(kvbuf, "%s", XATTR_NAME_SECURITY_SELINUX);
 		memcpy(kvbuf + EROFS_XATTR_KSIZE(len), secontext, len[1]);
 		freecon(secontext);
-		item = get_xattritem(kvbuf, len);
+		item = get_xattritem(sbi, kvbuf, len);
 		if (IS_ERR(item))
 			free(kvbuf);
 		return item;
@@ -374,15 +386,18 @@ static int inode_xattr_add(struct list_head *hlist, struct erofs_xattritem *item
 	return 0;
 }
 
-static int erofs_xattr_add(struct list_head *ixattrs, struct erofs_xattritem *item)
+static int erofs_xattr_add(struct erofs_sb_info *sbi, struct list_head *ixattrs,
+			   struct erofs_xattritem *item)
 {
+	struct erofs_xattrmgr *xamgr = sbi->xamgr;
+
 	if (ixattrs)
 		return inode_xattr_add(ixattrs, item);
 
 	if (item->count == cfg.c_inline_xattr_tolerance + 1) {
-		item->next_shared_xattr = g_xattrmgr.shared_xattrs;
-		g_xattrmgr.shared_xattrs = item;
-		++g_xattrmgr.sharedxattr_count;
+		item->next_shared_xattr = xamgr->shared_xattrs;
+		xamgr->shared_xattrs = item;
+		++xamgr->sharedxattr_count;
 	}
 	return 0;
 }
@@ -397,8 +412,8 @@ static bool erofs_is_skipped_xattr(const char *key)
 	return false;
 }
 
-static int read_xattrs_from_file(const char *path, mode_t mode,
-				 struct list_head *ixattrs)
+static int read_xattrs_from_file(struct erofs_sb_info *sbi, const char *path,
+				 mode_t mode, struct list_head *ixattrs)
 {
 	ssize_t kllen = erofs_sys_llistxattr(path, NULL, 0);
 	char *keylst, *key, *klend;
@@ -441,7 +456,7 @@ static int read_xattrs_from_file(const char *path, mode_t mode,
 		if (erofs_is_skipped_xattr(key))
 			continue;
 
-		item = parse_one_xattr(path, key, keylen);
+		item = parse_one_xattr(sbi, path, key, keylen);
 		/* skip inaccessible xattrs */
 		if (item == ERR_PTR(-ENODATA) || !item) {
 			erofs_warn("skipped inaccessible xattr %s in %s",
@@ -453,7 +468,7 @@ static int read_xattrs_from_file(const char *path, mode_t mode,
 			goto err;
 		}
 
-		ret = erofs_xattr_add(ixattrs, item);
+		ret = erofs_xattr_add(sbi, ixattrs, item);
 		if (ret < 0)
 			goto err;
 	}
@@ -461,11 +476,11 @@ static int read_xattrs_from_file(const char *path, mode_t mode,
 
 out:
 	/* if some selabel is avilable, need to add right now */
-	item = erofs_get_selabel_xattr(path, mode);
+	item = erofs_get_selabel_xattr(sbi, path, mode);
 	if (IS_ERR(item))
 		return PTR_ERR(item);
 	if (item)
-		ret = erofs_xattr_add(ixattrs, item);
+		ret = erofs_xattr_add(sbi, ixattrs, item);
 	return ret;
 
 err:
@@ -476,6 +491,7 @@ err:
 int erofs_setxattr(struct erofs_inode *inode, char *key,
 		   const void *value, size_t size)
 {
+	struct erofs_sb_info *sbi = inode->sbi;
 	char *kvbuf;
 	unsigned int len[2];
 	struct erofs_xattritem *item;
@@ -490,14 +506,14 @@ int erofs_setxattr(struct erofs_inode *inode, char *key,
 	memcpy(kvbuf, key, EROFS_XATTR_KSIZE(len));
 	memcpy(kvbuf + EROFS_XATTR_KSIZE(len), value, size);
 
-	item = get_xattritem(kvbuf, len);
+	item = get_xattritem(sbi, kvbuf, len);
 	if (IS_ERR(item)) {
 		free(kvbuf);
 		return PTR_ERR(item);
 	}
 	DBG_BUGON(!item);
 
-	return erofs_xattr_add(&inode->i_xattrs, item);
+	return erofs_xattr_add(sbi, &inode->i_xattrs, item);
 }
 
 static void erofs_removexattr(struct erofs_inode *inode, const char *key)
@@ -531,6 +547,7 @@ int erofs_set_origin_xattr(struct erofs_inode *inode)
 #ifdef WITH_ANDROID
 static int erofs_droid_xattr_set_caps(struct erofs_inode *inode)
 {
+	struct erofs_sb_info *sbi = inode->sbi;
 	const u64 capabilities = inode->capabilities;
 	char *kvbuf;
 	unsigned int len[2];
@@ -555,14 +572,14 @@ static int erofs_droid_xattr_set_caps(struct erofs_inode *inode)
 	caps.data[1].inheritable = 0;
 	memcpy(kvbuf + EROFS_XATTR_KSIZE(len), &caps, len[1]);
 
-	item = get_xattritem(kvbuf, len);
+	item = get_xattritem(sbi, kvbuf, len);
 	if (IS_ERR(item)) {
 		free(kvbuf);
 		return PTR_ERR(item);
 	}
 	DBG_BUGON(!item);
 
-	return erofs_xattr_add(&inode->i_xattrs, item);
+	return erofs_xattr_add(sbi, &inode->i_xattrs, item);
 }
 #else
 static int erofs_droid_xattr_set_caps(struct erofs_inode *inode)
@@ -580,7 +597,8 @@ int erofs_scan_file_xattrs(struct erofs_inode *inode)
 	if (cfg.c_inline_xattr_tolerance < 0)
 		return 0;
 
-	ret = read_xattrs_from_file(inode->i_srcpath, inode->i_mode, ixattrs);
+	ret = read_xattrs_from_file(inode->sbi, inode->i_srcpath,
+				    inode->i_mode, ixattrs);
 	if (ret < 0)
 		return ret;
 
@@ -705,7 +723,8 @@ out:
 	return ret;
 }
 
-static int erofs_count_all_xattrs_from_path(const char *path)
+static int erofs_count_all_xattrs_from_path(struct erofs_sb_info *sbi,
+					    const char *path)
 {
 	int ret;
 	DIR *_dir;
@@ -732,8 +751,7 @@ static int erofs_count_all_xattrs_from_path(const char *path)
 		if (!dp)
 			break;
 
-		if (is_dot_dotdot(dp->d_name) ||
-		    !strncmp(dp->d_name, "lost+found", strlen("lost+found")))
+		if (is_dot_dotdot(dp->d_name))
 			continue;
 
 		ret = snprintf(buf, PATH_MAX, "%s/%s", path, dp->d_name);
@@ -750,14 +768,14 @@ static int erofs_count_all_xattrs_from_path(const char *path)
 			goto fail;
 		}
 
-		ret = read_xattrs_from_file(buf, st.st_mode, NULL);
+		ret = read_xattrs_from_file(sbi, buf, st.st_mode, NULL);
 		if (ret)
 			goto fail;
 
 		if (!S_ISDIR(st.st_mode))
 			continue;
 
-		ret = erofs_count_all_xattrs_from_path(buf);
+		ret = erofs_count_all_xattrs_from_path(sbi, buf);
 		if (ret)
 			goto fail;
 	}
@@ -770,13 +788,13 @@ fail:
 	return ret;
 }
 
-static void erofs_cleanxattrs(bool sharedxattrs)
+static void erofs_cleanxattrs(struct erofs_xattrmgr *xamgr, bool sharedxattrs)
 {
 	struct erofs_xattritem *item, *n;
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(g_xattrmgr.hash); ++i) {
-		list_for_each_entry_safe(item, n, g_xattrmgr.hash + i, node) {
+	for (i = 0; i < ARRAY_SIZE(xamgr->hash); ++i) {
+		list_for_each_entry_safe(item, n, xamgr->hash + i, node) {
 			if (sharedxattrs && item->shared_xattr_id >= 0)
 				continue;
 			list_del(&item->node);
@@ -787,7 +805,7 @@ static void erofs_cleanxattrs(bool sharedxattrs)
 
 	if (sharedxattrs)
 		return;
-	g_xattrmgr.sharedxattr_count = 0;
+	xamgr->sharedxattr_count = 0;
 }
 
 static int comp_shared_xattritem(const void *a, const void *b)
@@ -921,6 +939,7 @@ static void erofs_write_xattr_entry(char *buf, struct erofs_xattritem *item)
 
 int erofs_build_shared_xattrs_from_path(struct erofs_sb_info *sbi, const char *path)
 {
+	struct erofs_xattrmgr *xamgr = sbi->xamgr;
 	struct erofs_xattritem *item, *n, **sorted_n;
 	unsigned int sharedxattr_count, p, i;
 	struct erofs_buffer_head *bh;
@@ -934,15 +953,15 @@ int erofs_build_shared_xattrs_from_path(struct erofs_sb_info *sbi, const char *p
 	    cfg.c_inline_xattr_tolerance == INT_MAX)
 		return 0;
 
-	if (g_xattrmgr.sharedxattr_count) {
+	if (xamgr->sharedxattr_count) {
 		DBG_BUGON(1);
 		return -EINVAL;
 	}
 
-	ret = erofs_count_all_xattrs_from_path(path);
+	ret = erofs_count_all_xattrs_from_path(sbi, path);
 	if (ret)
 		return ret;
-	sharedxattr_count = g_xattrmgr.sharedxattr_count;
+	sharedxattr_count = xamgr->sharedxattr_count;
 	if (!sharedxattr_count)
 		goto out;
 
@@ -951,10 +970,10 @@ int erofs_build_shared_xattrs_from_path(struct erofs_sb_info *sbi, const char *p
 		return -ENOMEM;
 
 	i = 0;
-	while (g_xattrmgr.shared_xattrs) {
-		item = g_xattrmgr.shared_xattrs;
+	while (xamgr->shared_xattrs) {
+		item = xamgr->shared_xattrs;
 		sorted_n[i++] = item;
-		g_xattrmgr.shared_xattrs = item->next_shared_xattr;
+		xamgr->shared_xattrs = item->next_shared_xattr;
 		shared_xattrs_size = erofs_next_xattr_align(shared_xattrs_size,
 							    item);
 	}
@@ -989,14 +1008,14 @@ int erofs_build_shared_xattrs_from_path(struct erofs_sb_info *sbi, const char *p
 		item->shared_xattr_id = (off + p) / sizeof(__le32);
 		p = erofs_next_xattr_align(p, item);
 	}
-	g_xattrmgr.shared_xattrs = sorted_n[0];
+	xamgr->shared_xattrs = sorted_n[0];
 	free(sorted_n);
 	bh->op = &erofs_drop_directly_bhops;
 	ret = erofs_dev_write(sbi, buf, erofs_btell(bh, false), shared_xattrs_size);
 	free(buf);
 	erofs_bdrop(bh, false);
 out:
-	erofs_cleanxattrs(true);
+	erofs_cleanxattrs(xamgr, true);
 	return ret;
 }
 
@@ -1725,4 +1744,16 @@ out:
 	if (ret)
 		erofs_xattr_prefixes_cleanup(sbi);
 	return ret;
+}
+
+void erofs_xattr_exit(struct erofs_sb_info *sbi)
+{
+	struct erofs_xattrmgr *xamgr = sbi->xamgr;
+
+	erofs_xattr_prefixes_cleanup(sbi);
+	if (!xamgr)
+		return;
+	erofs_cleanxattrs(xamgr, false);
+	sbi->xamgr = NULL;
+	free(xamgr);
 }

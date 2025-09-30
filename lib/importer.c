@@ -48,7 +48,9 @@ int erofs_importer_init(struct erofs_importer *im)
 	erofs_importer_global_init();
 
 	subsys = "xattr";
-	erofs_xattr_init(sbi);
+	err = erofs_xattr_init(sbi);
+	if (err)
+		goto out_err;
 
 	subsys = "compression";
 	err = z_erofs_compress_init(im);

@@ -171,12 +171,12 @@ void erofs_put_super(struct erofs_sb_info *sbi)
 		free(sbi->devs);
 		sbi->devs = NULL;
 	}
-	erofs_xattr_prefixes_cleanup(sbi);
 	if (sbi->bmgr) {
 		erofs_buffer_exit(sbi->bmgr);
 		sbi->bmgr = NULL;
 	}
 	z_erofs_compress_exit(sbi);
+	erofs_xattr_exit(sbi);
 	sbi->sb_valid = false;
 }
 
