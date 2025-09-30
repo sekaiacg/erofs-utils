@@ -1144,6 +1144,7 @@ static void *z_erofs_write_extents(struct z_erofs_compress_ictx *ctx)
 
 static void *z_erofs_write_indexes(struct z_erofs_compress_ictx *ctx)
 {
+	const struct erofs_importer_params *params = ctx->im->params;
 	struct erofs_inode *inode = ctx->inode;
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct z_erofs_extent_item *ei, *n;
@@ -1165,7 +1166,7 @@ static void *z_erofs_write_indexes(struct z_erofs_compress_ictx *ctx)
 	 */
 	if (inode->fragment_size && inode->fragmentoff >> 32) {
 		inode->datalayout = EROFS_INODE_COMPRESSED_FULL;
-	} else if (!cfg.c_legacy_compress && !ctx->dedupe &&
+	} else if (!params->no_zcompact && !ctx->dedupe &&
 		   inode->z_lclusterbits <= 14) {
 		if (inode->z_lclusterbits <= 12)
 			inode->z_advise |= Z_EROFS_ADVISE_COMPACTED_2B;
@@ -2120,7 +2121,7 @@ int z_erofs_compress_init(struct erofs_importer *im)
 	} else {
 		sbi->available_compr_algs = available_compr_algs;
 
-		if (!cfg.c_legacy_compress)
+		if (!params->no_lz4_0padding)
 			erofs_sb_set_lz4_0padding(sbi);
 		if (available_compr_algs & ~(1 << Z_EROFS_COMPRESSION_LZ4))
 			erofs_sb_set_compr_cfgs(sbi);

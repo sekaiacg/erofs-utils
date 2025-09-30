@@ -41,6 +41,8 @@ struct erofs_importer_params {
 	bool hard_dereference;
 	bool ovlfs_strip;
 	bool dot_omitted;
+	bool no_zcompact;
+	bool no_lz4_0padding;
 	bool ztailpacking;
 	bool dedupe;
 	bool fragments;

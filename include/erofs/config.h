@@ -39,7 +39,6 @@ struct erofs_configure {
 	const char *c_version;
 	int c_dbg_lvl;
 	bool c_dry_run;
-	bool c_legacy_compress;
 	char c_timeinherit;
 	char c_chunkbits;
 	bool c_showprogress;

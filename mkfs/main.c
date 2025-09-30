@@ -312,7 +312,8 @@ static int erofs_mkfs_feat_set_legacy_compress(struct erofs_importer_params *par
 	if (vallen)
 		return -EINVAL;
 	/* disable compacted indexes and 0padding */
-	cfg.c_legacy_compress = en;
+	params->no_zcompact = true;
+	params->no_lz4_0padding = true;
 	return 0;
 }
 
@@ -1501,7 +1502,6 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 static void erofs_mkfs_default_options(struct erofs_importer_params *params)
 {
 	cfg.c_showprogress = true;
-	cfg.c_legacy_compress = false;
 	cfg.c_xattr_name_filter = true;
 #ifdef EROFS_MT_ENABLED
 	cfg.c_mt_workers = erofs_get_available_processors();
