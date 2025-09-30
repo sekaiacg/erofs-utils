@@ -12,7 +12,6 @@ noinst_HEADERS = $(top_srcdir)/include/erofs_fs.h \
       $(top_srcdir)/include/erofs/exclude.h \
       $(top_srcdir)/include/erofs/flex-array.h \
       $(top_srcdir)/include/erofs/hashmap.h \
-      $(top_srcdir)/include/erofs/hashtable.h \
       $(top_srcdir)/include/erofs/inode.h \
       $(top_srcdir)/include/erofs/internal.h \
       $(top_srcdir)/include/erofs/io.h \
