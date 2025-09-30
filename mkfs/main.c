@@ -264,6 +264,13 @@ static void version(void)
 	print_available_compressors(stdout, ", ");
 }
 
+static struct erofsmkfs_cfg {
+	/* < 0, xattr disabled and >= INT_MAX, always use inline xattrs */
+	long inlinexattr_tolerance;
+} mkfscfg = {
+	.inlinexattr_tolerance = 2,
+};
+
 static unsigned int pclustersize_packed, pclustersize_max;
 static int pclustersize_metabox = -1;
 static struct erofs_tarfile erofstar = {
@@ -1011,10 +1018,11 @@ static int mkfs_parse_sources(int argc, char *argv[], int optind)
 static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				  int argc, char *argv[])
 {
-	char *endptr;
-	int opt, i, err;
-	bool quiet = false;
 	bool has_timestamp = false;
+	bool quiet = false;
+	char *endptr;
+	int opt, err;
+	long i;
 
 	while ((opt = getopt_long(argc, argv, "C:E:L:T:U:b:d:m:x:z:Vh",
 				  long_options, NULL)) != -1) {
@@ -1049,7 +1057,7 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 				erofs_err("invalid xattr tolerance %s", optarg);
 				return -EINVAL;
 			}
-			cfg.c_inline_xattr_tolerance = i;
+			mkfscfg.inlinexattr_tolerance = i;
 			break;
 
 		case 'E':
@@ -1782,6 +1790,8 @@ int main(int argc, char **argv)
 		goto exit;
 	}
 
+	if (mkfscfg.inlinexattr_tolerance < 0)
+		importer_params.no_xattrs = true;
 	importer_params.source = cfg.c_src_path;
 	importer_params.no_datainline = mkfs_no_datainline;
 	importer_params.dot_omitted = mkfs_dot_omitted;
@@ -1819,9 +1829,10 @@ int main(int argc, char **argv)
 	}
 
 	if (source_mode == EROFS_MKFS_SOURCE_LOCALDIR) {
-		err = erofs_build_shared_xattrs_from_path(&g_sbi, cfg.c_src_path);
+		err = erofs_load_shared_xattrs_from_path(&g_sbi, cfg.c_src_path,
+						mkfscfg.inlinexattr_tolerance);
 		if (err) {
-			erofs_err("failed to build shared xattrs: %s",
+			erofs_err("failed to load shared xattrs: %s",
 				  erofs_strerror(err));
 			goto exit;
 		}

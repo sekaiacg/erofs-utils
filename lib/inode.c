@@ -1848,7 +1848,7 @@ static int erofs_mkfs_handle_inode(struct erofs_importer *im,
 			return ret;
 	}
 
-	if (!rebuild) {
+	if (!rebuild && !params->no_xattrs) {
 		ret = erofs_scan_file_xattrs(inode);
 		if (ret < 0)
 			return ret;
