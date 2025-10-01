@@ -725,6 +725,11 @@ restart:
 	tar_offset = tar->offset;
 	ret = erofs_iostream_read(&tar->ios, (void **)&th, sizeof(*th));
 	if (ret != sizeof(*th)) {
+		if (tar->ios.feof) {
+			erofs_warn("unexpected end of file @ %llu (may be non-standard tar without end of archive zeros)", tar_offset);
+			ret = 1;
+			goto out;
+		}
 		if (tar->headeronly_mode || tar->ddtaridx_mode) {
 			ret = 1;
 			goto out;
