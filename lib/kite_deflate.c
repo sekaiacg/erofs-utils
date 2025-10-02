@@ -1111,7 +1111,7 @@ nomatch:
 static bool kite_deflate_slow(struct kite_deflate *s)
 {
 	struct kite_matchfinder *mf = s->mf;
-	bool flush = false;
+	bool flush = false, eos = false;
 
 	kite_deflate_startblock(s);
 	while (1) {
@@ -1163,20 +1163,20 @@ static bool kite_deflate_slow(struct kite_deflate *s)
 			s->prev_longest = matches;
 		}
 
-		s->lastblock |= (s->pos_in >= s->inlen);
-		if (s->pos_in >= s->inlen) {
+		eos = (s->pos_in >= s->inlen);
+		if (eos || s->symbols >= s->max_symbols) {
+			s->lastblock |= eos;
 			flush = true;
-			break;
-		}
-		if (s->symbols >= s->max_symbols) {
-			kite_deflate_endblock(s);
 			break;
 		}
 	}
 
-	if (flush && s->prev_valid) {
-		(void)kite_deflate_tally(s, mf->matches + s->prev_longest);
-		s->prev_valid = false;
+	if (flush) {
+		if (eos && s->prev_valid) {
+			if (!kite_deflate_tally(s, mf->matches + s->prev_longest))
+				s->prev_valid = false;
+		}
+		kite_deflate_endblock(s);
 	}
 	return kite_deflate_commitblock(s);
 }
