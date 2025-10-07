@@ -83,10 +83,6 @@ static int erofsmount_parse_oci_option(const char *option)
 	char *p;
 	long idx;
 
-	if (oci_cfg->layer_index == 0 && !oci_cfg->blob_digest &&
-	    !oci_cfg->platform && !oci_cfg->username && !oci_cfg->password)
-		oci_cfg->layer_index = -1;
-
 	p = strstr(option, "oci.blob=");
 	if (p != NULL) {
 		p += strlen("oci.blob=");
@@ -147,10 +143,6 @@ static int erofsmount_parse_oci_option(const char *option)
 			}
 		}
 	}
-
-	if (oci_cfg->platform || oci_cfg->username || oci_cfg->password ||
-	    oci_cfg->blob_digest || oci_cfg->layer_index >= 0)
-		nbdsrc.type = EROFSNBD_SOURCE_OCI;
 	return 0;
 }
 #else
@@ -191,6 +183,11 @@ static long erofsmount_parse_flagopts(char *s, long flags, char **more)
 			*comma = '\0';
 
 		if (strncmp(s, "oci", 3) == 0) {
+			/* Initialize ocicfg here iff != EROFSNBD_SOURCE_OCI */
+			if (nbdsrc.type != EROFSNBD_SOURCE_OCI) {
+				nbdsrc.type = EROFSNBD_SOURCE_OCI;
+				nbdsrc.ocicfg.layer_index = -1;
+			}
 			err = erofsmount_parse_oci_option(s);
 			if (err < 0)
 				return err;
