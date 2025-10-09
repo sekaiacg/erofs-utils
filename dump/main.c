@@ -26,6 +26,7 @@ struct erofsdump_cfg {
 	bool show_statistics;
 	bool show_subdirectories;
 	bool show_file_content;
+	bool show_blkid_udev;
 	erofs_nid_t nid;
 	const char *inode_path;
 };
@@ -81,6 +82,7 @@ static struct option long_options[] = {
 	{"ls", no_argument, NULL, 5},
 	{"offset", required_argument, NULL, 6},
 	{"cat", no_argument, NULL, 7},
+	{"blkid-udev", no_argument, NULL, 512},
 	{0, 0, 0, 0},
 };
 
@@ -125,6 +127,7 @@ static void usage(int argc, char **argv)
 		" -S              show statistic information of the image\n"
 		" -e              show extent info (INODE required)\n"
 		" -s              show information about superblock\n"
+		" --blkid-udev    print block device attributes for easy import into the udev environment\n"
 		" --device=X      specify an extra device to be used together\n"
 		" --ls            show directory contents (INODE required)\n"
 		" --cat           show file contents (INODE required)\n"
@@ -197,6 +200,9 @@ static int erofsdump_parse_options_cfg(int argc, char **argv)
 			break;
 		case 7:
 			dumpcfg.show_file_content = true;
+			break;
+		case 512:
+			dumpcfg.show_blkid_udev = true;
 			break;
 		default:
 			return -EINVAL;
@@ -765,6 +771,9 @@ int main(int argc, char **argv)
 		goto exit;
 	}
 
+	if (dumpcfg.show_blkid_udev)
+		cfg.c_dbg_lvl = -1;
+
 	err = erofs_dev_open(&g_sbi, cfg.c_img_path, O_RDONLY | O_TRUNC);
 	if (err) {
 		erofs_err("failed to open image file");
@@ -775,6 +784,15 @@ int main(int argc, char **argv)
 	if (err) {
 		erofs_err("failed to read superblock");
 		goto exit_dev_close;
+	}
+
+	if (dumpcfg.show_blkid_udev) {
+		char uuid_str[37];
+
+		erofs_uuid_unparse_lower(g_sbi.uuid, uuid_str);
+		printf("ID_FS_UUID=%s\nID_FS_UUID_ENC=%s\nID_FS_TYPE=erofs\nID_FS_USAGE=filesystem\n",
+		       uuid_str, uuid_str);
+		goto exit_put_super;
 	}
 
 	if (dumpcfg.show_file_content) {
