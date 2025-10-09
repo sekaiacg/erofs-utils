@@ -27,6 +27,7 @@
 #include "liberofs_base64.h"
 #include "liberofs_oci.h"
 #include "liberofs_private.h"
+#include "liberofs_gzran.h"
 
 #ifdef OCIEROFS_ENABLED
 
@@ -840,14 +841,33 @@ out:
 	return ret;
 }
 
-static int ocierofs_process_tar_stream(struct erofs_importer *importer, int fd)
+static int ocierofs_process_tar_stream(struct erofs_importer *importer, int fd,
+				       const struct ocierofs_config *config,
+				       u64 *tar_offset_out)
 {
 	struct erofs_tarfile tarfile = {};
-	int ret;
+	int ret, decoder, zinfo_fd;
+	struct erofs_vfile vf;
 
 	init_list_head(&tarfile.global.xattrs);
 
-	ret = erofs_iostream_open(&tarfile.ios, fd, EROFS_IOS_DECODER_GZIP);
+	/*
+	 * Choose decoder based on config:
+	 * - tarindex + zinfo -> tar.gzip (GZRAN decoder)
+	 * - tarindex only -> tar (no decoder, raw)
+	 * - neither -> default gzip decoder
+	 */
+	if (config && config->tarindex_path) {
+		tarfile.index_mode = true;
+		if (config->zinfo_path)
+			decoder = EROFS_IOS_DECODER_GZRAN;
+		else
+			decoder = EROFS_IOS_DECODER_NONE;
+	} else {
+		decoder = EROFS_IOS_DECODER_GZIP;
+	}
+
+	ret = erofs_iostream_open(&tarfile.ios, fd, decoder);
 	if (ret) {
 		erofs_err("failed to initialize tar stream: %s",
 			  erofs_strerror(ret));
@@ -858,6 +878,25 @@ static int ocierofs_process_tar_stream(struct erofs_importer *importer, int fd)
 		ret = tarerofs_parse_tar(importer, &tarfile);
 		/* Continue parsing until end of archive */
 	} while (!ret);
+
+	if (decoder == EROFS_IOS_DECODER_GZRAN) {
+		zinfo_fd = open(config->zinfo_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+		if (zinfo_fd < 0) {
+			ret = -errno;
+		} else {
+			vf = (struct erofs_vfile){ .fd = zinfo_fd };
+			ret = erofs_gzran_builder_export_zinfo(tarfile.ios.gb, &vf);
+			close(zinfo_fd);
+			if (ret < 0) {
+				erofs_err("failed to export zinfo: %s",
+					  erofs_strerror(ret));
+			}
+		}
+	}
+
+	if (tar_offset_out)
+		*tar_offset_out = tarfile.offset;
+
 	erofs_iostream_close(&tarfile.ios);
 
 	if (ret < 0 && ret != -ENODATA) {
@@ -1230,6 +1269,7 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 {
 	struct ocierofs_ctx ctx = {};
 	int ret, i, end, fd;
+	u64 tar_offset = 0;
 
 	ret = ocierofs_init(&ctx, config);
 	if (ret) {
@@ -1250,6 +1290,12 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 		end = ctx.layer_count;
 	}
 
+	if (config->tarindex_path && (end - i) != 1) {
+		erofs_err("tarindex mode requires exactly one layer (use blob= or layer= option)");
+		ret = -EINVAL;
+		goto out;
+	}
+
 	while (i < end) {
 		char *trimmed = erofs_trim_for_progressinfo(ctx.layers[i]->digest,
 				sizeof("Extracting layer  ...") - 1);
@@ -1263,7 +1309,7 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 			ret = fd;
 			break;
 		}
-		ret = ocierofs_process_tar_stream(importer, fd);
+		ret = ocierofs_process_tar_stream(importer, fd, config, &tar_offset);
 		close(fd);
 		if (ret) {
 			erofs_err("failed to process tar stream for layer %s: %s",
@@ -1273,6 +1319,9 @@ int ocierofs_build_trees(struct erofs_importer *importer,
 		i++;
 	}
 out:
+	if (config->tarindex_path && importer->sbi)
+		importer->sbi->devs[0].blocks = BLK_ROUND_UP(importer->sbi, tar_offset);
+
 	ocierofs_ctx_cleanup(&ctx);
 	return ret;
 }

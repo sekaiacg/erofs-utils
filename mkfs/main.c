@@ -213,7 +213,8 @@ static void usage(int argc, char **argv)
 		"   [,sig=<2,4>]        S3 API signature version (default: 2)\n"
 #endif
 #ifdef OCIEROFS_ENABLED
-		" --oci[=platform=X]    X=platform (default: linux/amd64)\n"
+		" --oci=[f|i]           generate a full (f) or index-only (i) image from OCI remote source\n"
+		"   [,=platform=X]      X=platform (default: linux/amd64)\n"
 		"   [,layer=#]          #=layer index to extract (0-based; omit to extract all layers)\n"
 		"   [,blob=Y]           Y=blob digest to extract (omit to extract all layers)\n"
 		"   [,username=Z]       Z=username for authentication (optional)\n"
@@ -285,8 +286,8 @@ static struct erofs_s3 s3cfg;
 
 #ifdef OCIEROFS_ENABLED
 static struct ocierofs_config ocicfg;
-static char *mkfs_oci_options;
 #endif
+static bool mkfs_oci_tarindex_mode;
 
 enum {
 	EROFS_MKFS_DATA_IMPORT_DEFAULT,
@@ -727,7 +728,9 @@ static int mkfs_parse_s3_cfg(char *cfg_str)
  * @options_str: comma-separated options string
  *
  * Parse OCI options string containing comma-separated key=value pairs.
- * Supported options include platform, blob, layer, username, and password.
+ *
+ * Supported options include f|i, platform, blob|layer, username, password,
+ * and zinfo.
  *
  * Return: 0 on success, negative errno on failure
  */
@@ -740,10 +743,21 @@ static int mkfs_parse_oci_options(struct ocierofs_config *oci_cfg, char *options
 		return 0;
 
 	opt = options_str;
+	q = strchr(opt, ',');
+	if (q)
+		*q = '\0';
+	if (!strcmp(opt, "i") || !strcmp(opt, "f")) {
+		mkfs_oci_tarindex_mode = (*opt == 'i');
+		opt = q ? q + 1 : NULL;
+	} else if (q) {
+		*q = ',';
+	}
+
 	while (opt) {
 		q = strchr(opt, ',');
 		if (q)
 			*q = '\0';
+
 
 		p = strstr(opt, "platform=");
 		if (p) {
@@ -790,19 +804,19 @@ static int mkfs_parse_oci_options(struct ocierofs_config *oci_cfg, char *options
 						oci_cfg->username = strdup(p);
 						if (!oci_cfg->username)
 							return -ENOMEM;
+					} else {
+						p = strstr(opt, "password=");
+						if (p) {
+							p += strlen("password=");
+							free(oci_cfg->password);
+							oci_cfg->password = strdup(p);
+							if (!oci_cfg->password)
+								return -ENOMEM;
+						} else {
+							erofs_err("mkfs: invalid --oci value %s", opt);
+							return -EINVAL;
+						}
 					}
-
-					p = strstr(opt, "password=");
-					if (p) {
-						p += strlen("password=");
-						free(oci_cfg->password);
-						oci_cfg->password = strdup(p);
-						if (!oci_cfg->password)
-							return -ENOMEM;
-					}
-
-					erofs_err("mkfs: invalid --oci value %s", opt);
-					return -EINVAL;
 				}
 			}
 		}
@@ -1378,10 +1392,13 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			break;
 #endif
 #ifdef OCIEROFS_ENABLED
-		case 534:
-			mkfs_oci_options = optarg;
+		case 534: {
 			source_mode = EROFS_MKFS_SOURCE_OCI;
+			err = mkfs_parse_oci_options(&ocicfg, optarg);
+			if (err)
+				return err;
 			break;
+		}
 #endif
 		case 535:
 			if (optarg)
@@ -1757,6 +1774,9 @@ int main(int argc, char **argv)
 			goto exit;
 		}
 		mkfs_blkszbits = src->blkszbits;
+	} else if (mkfs_oci_tarindex_mode) {
+		mkfs_blkszbits = 9;
+		tar_index_512b = true;
 	}
 
 	if (!incremental_mode)
@@ -1883,13 +1903,11 @@ int main(int argc, char **argv)
 #endif
 #ifdef OCIEROFS_ENABLED
 		} else if (source_mode == EROFS_MKFS_SOURCE_OCI) {
-			ocicfg.blob_digest = NULL;
-			ocicfg.layer_index = -1;
-
-			err = mkfs_parse_oci_options(&ocicfg, mkfs_oci_options);
-			if (err)
-				goto exit;
 			ocicfg.image_ref = cfg.c_src_path;
+			if (mkfs_oci_tarindex_mode)
+				ocicfg.tarindex_path = strdup(cfg.c_src_path);
+			if (!ocicfg.zinfo_path)
+				ocicfg.zinfo_path = mkfs_aws_zinfo_file;
 
 			if (incremental_mode ||
 			    dataimport_mode == EROFS_MKFS_DATA_IMPORT_RVSP ||
@@ -1914,10 +1932,12 @@ int main(int argc, char **argv)
 		if (!g_sbi.extra_devices) {
 			DBG_BUGON(1);
 		} else {
-			if (cfg.c_src_path)
-				g_sbi.devs[0].src_path = strdup(cfg.c_src_path);
-			g_sbi.devs[0].blocks =
-				BLK_ROUND_UP(&g_sbi, erofstar.offset);
+			if (source_mode != EROFS_MKFS_SOURCE_OCI) {
+				if (cfg.c_src_path)
+					g_sbi.devs[0].src_path = strdup(cfg.c_src_path);
+				g_sbi.devs[0].blocks =
+					BLK_ROUND_UP(&g_sbi, erofstar.offset);
+			}
 		}
 	}
 
