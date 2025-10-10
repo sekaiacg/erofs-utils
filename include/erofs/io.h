@@ -35,6 +35,7 @@ struct erofs_vfops {
 	int (*fallocate)(struct erofs_vfile *vf, u64 offset, size_t len, bool pad);
 	int (*ftruncate)(struct erofs_vfile *vf, u64 length);
 	ssize_t (*read)(struct erofs_vfile *vf, void *buf, size_t len);
+	ssize_t (*write)(struct erofs_vfile *vf, void *buf, size_t len);
 	off_t (*lseek)(struct erofs_vfile *vf, u64 offset, int whence);
 	int (*fstat)(struct erofs_vfile *vf, struct stat *buf);
 	ssize_t (*sendfile)(struct erofs_vfile *vout, struct erofs_vfile *vin,

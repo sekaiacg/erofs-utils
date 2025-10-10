@@ -558,6 +558,13 @@ ssize_t erofs_io_read(struct erofs_vfile *vf, void *buf, size_t bytes)
         return i;
 }
 
+ssize_t erofs_io_write(struct erofs_vfile *vf, void *buf, size_t len)
+{
+	if (vf->ops)
+		return vf->ops->write(vf, buf, len);
+	return __erofs_io_write(vf->fd, buf, len);
+}
+
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
 #endif
@@ -573,7 +580,7 @@ off_t erofs_io_lseek(struct erofs_vfile *vf, u64 offset, int whence)
 ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 			  off_t *pos, size_t count)
 {
-	ssize_t written;
+	ssize_t read, written;
 
 	if (vin->ops || vout->ops) {
 		if (vin->ops)
@@ -597,16 +604,24 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 	while (count) {
 		char buf[EROFS_MAX_BLOCK_SIZE];
 
-		written = min_t(u64, count, sizeof(buf));
+		read = min_t(u64, count, sizeof(buf));
 		if (pos)
-			written = erofs_io_pread(vin, buf, written, *pos);
+			read = erofs_io_pread(vin, buf, read, *pos);
 		else
-			written = erofs_io_read(vin, buf, written);
-		if (written <= 0)
+			read = erofs_io_read(vin, buf, read);
+		if (read <= 0) {
+			written = read;
 			break;
-		count -= written;
+		}
+		count -= read;
 		if (pos)
-			*pos += written;
+			*pos += read;
+		do {
+			written = erofs_io_write(vout, buf, read);
+			if (written < 0)
+				break;
+			read -= written;
+		} while (read);
 	}
 	return written < 0 ? written : count;
 }
