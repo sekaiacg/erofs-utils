@@ -1458,48 +1458,6 @@ static ssize_t ocierofs_io_read(struct erofs_vfile *vf, void *buf, size_t len)
 	return ret;
 }
 
-static ssize_t ocierofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
-				    off_t *pos, size_t count)
-{
-	struct ocierofs_iostream *oci_iostream = *(struct ocierofs_iostream **)vin->payload;
-	static char buf[OCIEROFS_IO_CHUNK_SIZE];
-	ssize_t total_written = 0;
-	ssize_t ret = 0;
-
-	while (count > 0) {
-		size_t to_read = min_t(size_t, count, OCIEROFS_IO_CHUNK_SIZE);
-		u64 read_offset = pos ? *pos : oci_iostream->offset;
-
-		ret = ocierofs_io_pread(vin, buf, to_read, read_offset);
-		if (ret <= 0) {
-			if (ret < 0 && total_written == 0)
-				return ret;
-			break;
-		}
-		ssize_t written = __erofs_io_write(vout->fd, buf, ret);
-
-		if (written < 0) {
-			erofs_err("OCI I/O sendfile: failed to write to output: %s",
-				  strerror(errno));
-			ret = -errno;
-			break;
-		}
-
-		if (written != ret) {
-			erofs_err("OCI I/O sendfile: partial write: %zd != %zd", written, ret);
-			ret = written;
-		}
-
-		total_written += ret;
-		count -= ret;
-		if (pos)
-			*pos += ret;
-		else
-			oci_iostream->offset += ret;
-	}
-	return count;
-}
-
 static void ocierofs_io_close(struct erofs_vfile *vfile)
 {
 	struct ocierofs_iostream *oci_iostream = *(struct ocierofs_iostream **)vfile->payload;
@@ -1513,7 +1471,6 @@ static void ocierofs_io_close(struct erofs_vfile *vfile)
 static struct erofs_vfops ocierofs_io_vfops = {
 	.pread = ocierofs_io_pread,
 	.read = ocierofs_io_read,
-	.sendfile = ocierofs_io_sendfile,
 	.close = ocierofs_io_close,
 };
 

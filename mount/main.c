@@ -409,45 +409,8 @@ static void erofsmount_tarindex_close(struct erofs_vfile *vf)
 	free(tp);
 }
 
-static ssize_t erofsmount_tarindex_sendfile(struct erofs_vfile *vout,
-					    struct erofs_vfile *vin,
-					    off_t *pos, size_t count)
-{
-	static char buf[32768];
-	ssize_t total_written = 0, ret = 0, written;
-	size_t to_read;
-	u64 read_offset;
-
-	while (count > 0) {
-		to_read = min_t(size_t, count, sizeof(buf));
-		read_offset = pos ? *pos : 0;
-
-		ret = erofsmount_tarindex_pread(vin, buf, to_read, read_offset);
-		if (ret <= 0) {
-			if (ret < 0 && total_written == 0)
-				return ret;
-			break;
-		}
-
-		written = __erofs_io_write(vout->fd, buf, ret);
-		if (written < 0) {
-			ret = -errno;
-			break;
-		}
-		if (written != ret)
-			ret = written;
-
-		total_written += ret;
-		count -= ret;
-		if (pos)
-			*pos += ret;
-	}
-	return count;
-}
-
 static struct erofs_vfops tarindex_vfile_ops = {
 	.pread = erofsmount_tarindex_pread,
-	.sendfile = erofsmount_tarindex_sendfile,
 	.close = erofsmount_tarindex_close,
 };
 

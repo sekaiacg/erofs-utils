@@ -583,12 +583,14 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 	ssize_t read, written;
 
 	if (vin->ops || vout->ops) {
-		if (vin->ops)
+		if (vin->ops && vin->ops->sendfile)
 			return vin->ops->sendfile(vout, vin, pos, count);
-		return vout->ops->sendfile(vout, vin, pos, count);
+		if (vout->ops && vout->ops->sendfile)
+			return vout->ops->sendfile(vout, vin, pos, count);
+		written = 0;
 	}
 #if defined(HAVE_SYS_SENDFILE_H) && defined(HAVE_SENDFILE)
-	do {
+	else do {
 		written = sendfile(vout->fd, vin->fd, pos, count);
 		if (written <= 0) {
 			if (written < 0) {
@@ -602,7 +604,7 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 	} while (written);
 #endif
 	while (count) {
-		char buf[EROFS_MAX_BLOCK_SIZE];
+		char buf[max(EROFS_MAX_BLOCK_SIZE, 32768)];
 
 		read = min_t(u64, count, sizeof(buf));
 		if (pos)
