@@ -596,11 +596,13 @@ static void *erofsmount_nbd_loopfn(void *arg)
 
 		erofs_nbd_send_reply_header(ctx->sk.fd, rq.cookie, 0);
 		pos = rq.from;
-		rem = erofs_io_sendfile(&ctx->sk, &ctx->vd, &pos, rq.len);
-		if (rem < 0) {
-			err = -errno;
-			break;
-		}
+		do {
+			rem = erofs_io_sendfile(&ctx->sk, &ctx->vd, &pos, rq.len);
+			if (rem == -EINTR) {
+				err = rem;
+				goto out;
+			}
+		} while (rem < 0);
 		err = __erofs_0write(ctx->sk.fd, rem);
 		if (err) {
 			if (err > 0)
@@ -608,6 +610,7 @@ static void *erofsmount_nbd_loopfn(void *arg)
 			break;
 		}
 	}
+out:
 	erofs_io_close(&ctx->vd);
 	erofs_io_close(&ctx->sk);
 	return (void *)(uintptr_t)err;
