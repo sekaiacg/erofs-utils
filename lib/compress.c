@@ -1873,7 +1873,7 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	ictx->fragemitted = false;
 	ictx->dedupe = false;
 
-	if (params->all_fragments && !inode->fragment_size) {
+	if (all_fragments && !inode->fragment_size) {
 		ret = erofs_pack_file_from_fd(inode, fd, ictx->tofh);
 		if (ret)
 			goto err_free_idata;
