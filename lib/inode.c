@@ -377,16 +377,6 @@ static void fill_dirblock(char *buf, unsigned int size, unsigned int q,
 	memset(buf + q, 0, size - q);
 }
 
-static int write_dirblock(struct erofs_sb_info *sbi,
-			  unsigned int q, struct erofs_dentry *head,
-			  struct erofs_dentry *end, erofs_blk_t blkaddr)
-{
-	char buf[EROFS_MAX_BLOCK_SIZE];
-
-	fill_dirblock(buf, erofs_blksiz(sbi), q, head, end);
-	return erofs_blk_write(sbi, buf, blkaddr, 1);
-}
-
 erofs_nid_t erofs_lookupnid(struct erofs_inode *inode)
 {
 	struct erofs_buffer_head *const bh = inode->bh;
@@ -515,64 +505,85 @@ static int erofs_rebuild_inode_fix_pnid(struct erofs_inode *parent,
 	return -EFSCORRUPTED;
 }
 
-static int erofs_write_dir_file(struct erofs_inode *dir)
+struct erofs_dirwriter_vf {
+	struct erofs_vfile vf;
+	struct erofs_inode *dir;
+	struct list_head *head;
+	erofs_off_t offset;
+	char dirdata[];
+};
+
+static ssize_t erofs_dirwriter_vfread(struct erofs_vfile *vf,
+				      void *buf, size_t len)
 {
-	struct erofs_dentry *head = list_first_entry(&dir->i_subdirs,
-						     struct erofs_dentry,
-						     d_child);
-	struct erofs_sb_info *sbi = dir->sbi;
-	struct erofs_dentry *d;
-	int ret;
-	unsigned int q, used, blkno;
+	struct erofs_dirwriter_vf *dwv = (struct erofs_dirwriter_vf *)vf;
+	struct erofs_inode *dir = dwv->dir;
+	unsigned int bsz = erofs_blksiz(dir->sbi);
+	size_t processed = 0;
 
-	q = used = blkno = 0;
+	if (len > dir->i_size - dwv->offset)
+		len = dir->i_size - dwv->offset;
+	while (processed < len) {
+		unsigned int off, dblen, count;
 
-	/* allocate dir main data */
-	ret = erofs_allocate_inode_bh_data(dir, erofs_blknr(sbi, dir->i_size));
-	if (ret)
-		return ret;
+		off = dwv->offset & (bsz - 1);
+		dblen = min_t(u64, dir->i_size - dwv->offset + off, bsz);
+		/* generate a directory block to `dwv->dirdata` */
+		if (!off) {
+			struct erofs_dentry *head, *d;
+			unsigned int q, used, len;
+			int err;
 
-	list_for_each_entry(d, &dir->i_subdirs, d_child) {
-		unsigned int len = d->namelen + sizeof(struct erofs_dirent);
-
-		/* XXX: a bit hacky, but to avoid another traversal */
-		if (d->flags & EROFS_DENTRY_FLAG_FIXUP_PNID) {
-			ret = erofs_rebuild_inode_fix_pnid(dir, d->nid);
-			if (ret)
-				return ret;
-		}
-
-		erofs_d_invalidate(d);
-		if (used + len > erofs_blksiz(sbi)) {
-			ret = write_dirblock(sbi, q, head, d,
-					     dir->u.i_blkaddr + blkno);
-			if (ret)
-				return ret;
-
-			head = d;
+			d = head = list_entry(dwv->head,
+					      struct erofs_dentry, d_child);
 			q = used = 0;
-			++blkno;
+			do {
+				/* XXX: a bit hacky, but avoids another traversal */
+				if (d->flags & EROFS_DENTRY_FLAG_FIXUP_PNID) {
+					err = erofs_rebuild_inode_fix_pnid(dir, d->nid);
+					if (err)
+						return err;
+				}
+				len = d->namelen + sizeof(struct erofs_dirent);
+				erofs_d_invalidate(d);
+				if ((used += len) > bsz)
+					break;
+				d = list_next_entry(d, d_child);
+				q += sizeof(struct erofs_dirent);
+			} while (&d->d_child != &dir->i_subdirs);
+			fill_dirblock(dwv->dirdata, dblen, q, head, d);
+			dwv->head = &d->d_child;
 		}
-		used += len;
-		q += sizeof(struct erofs_dirent);
+		count = min_t(size_t, dblen - off, len - processed);
+		memcpy(buf + processed, dwv->dirdata + off, count);
+		processed += count;
+		dwv->offset += count;
 	}
+	return processed;
+}
 
-	DBG_BUGON(used > erofs_blksiz(sbi));
-	if (used == erofs_blksiz(sbi)) {
-		DBG_BUGON(dir->i_size % erofs_blksiz(sbi));
-		DBG_BUGON(dir->idata_size);
-		return write_dirblock(sbi, q, head, d, dir->u.i_blkaddr + blkno);
-	}
-	DBG_BUGON(used != dir->i_size % erofs_blksiz(sbi));
-	if (used) {
-		/* fill tail-end dir block */
-		dir->idata = malloc(used);
-		if (!dir->idata)
-			return -ENOMEM;
-		DBG_BUGON(used != dir->idata_size);
-		fill_dirblock(dir->idata, dir->idata_size, q, head, d);
-	}
-	return 0;
+void erofs_dirwriter_vfclose(struct erofs_vfile *vf)
+{
+	free((void *)vf);
+}
+
+static struct erofs_vfops erofs_dirwriter_vfops = {
+	.read = erofs_dirwriter_vfread,
+	.close = erofs_dirwriter_vfclose,
+};
+
+static struct erofs_vfile *erofs_dirwriter_open(struct erofs_inode *dir)
+{
+	struct erofs_dirwriter_vf *dwv;
+
+	dwv = malloc(sizeof(*dwv) + erofs_blksiz(dir->sbi));
+	if (!dwv)
+		return ERR_PTR(-ENOMEM);
+	dwv->vf.ops = &erofs_dirwriter_vfops;
+	dwv->dir = dir;
+	dwv->head = dir->i_subdirs.next;
+	dwv->offset = 0;
+	return (struct erofs_vfile *)dwv;
 }
 
 int erofs_write_file_from_buffer(struct erofs_inode *inode, char *buf)
@@ -684,6 +695,22 @@ int erofs_write_unencoded_file(struct erofs_inode *inode, int fd, u64 fpos)
 	return erofs_write_unencoded_data(inode,
 			&(struct erofs_vfile){ .fd = fd }, fpos,
 			inode->datasource == EROFS_INODE_DATA_SOURCE_DISKBUF);
+}
+
+static int erofs_write_dir_file(struct erofs_inode *dir)
+{
+	unsigned int bsz = erofs_blksiz(dir->sbi);
+	struct erofs_vfile *vf;
+	int err;
+
+	DBG_BUGON(dir->idata_size != (dir->i_size & (bsz - 1)));
+	vf = erofs_dirwriter_open(dir);
+	if (IS_ERR(vf))
+		return PTR_ERR(vf);
+
+	err = erofs_write_unencoded_data(dir, vf, 0, true);
+	erofs_io_close(vf);
+	return err;
 }
 
 int erofs_iflush(struct erofs_inode *inode)
