@@ -2,7 +2,6 @@
 /*
  * Copyright (C) 2025 Alibaba Cloud
  */
-#include "erofs/fragments.h"
 #include "erofs/importer.h"
 #include "erofs/config.h"
 #include "erofs/dedupe.h"
@@ -12,6 +11,7 @@
 #include "erofs/xattr.h"
 #include "liberofs_cache.h"
 #include "liberofs_compress.h"
+#include "liberofs_fragments.h"
 #include "liberofs_metabox.h"
 
 static EROFS_DEFINE_MUTEX(erofs_importer_global_mutex);

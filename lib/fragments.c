@@ -16,11 +16,11 @@
 #include "erofs/inode.h"
 #include "erofs/print.h"
 #include "erofs/internal.h"
-#include "erofs/fragments.h"
 #include "erofs/bitops.h"
 #include "erofs/lock.h"
 #include "erofs/importer.h"
 #include "liberofs_compress.h"
+#include "liberofs_fragments.h"
 #include "liberofs_private.h"
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>

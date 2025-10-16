@@ -8,7 +8,7 @@
 #include "erofs/internal.h"
 #include "erofs/trace.h"
 #include "erofs/decompress.h"
-#include "erofs/fragments.h"
+#include "liberofs_fragments.h"
 
 void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
 {

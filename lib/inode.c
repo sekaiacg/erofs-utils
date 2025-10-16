@@ -24,12 +24,12 @@
 #include "erofs/block_list.h"
 #include "erofs/compress_hints.h"
 #include "erofs/blobchunk.h"
-#include "erofs/fragments.h"
 #include "erofs/importer.h"
 #include "liberofs_cache.h"
 #include "liberofs_compress.h"
-#include "liberofs_private.h"
+#include "liberofs_fragments.h"
 #include "liberofs_metabox.h"
+#include "liberofs_private.h"
 #include "liberofs_rebuild.h"
 
 static inline bool erofs_is_special_identifier(const char *path)

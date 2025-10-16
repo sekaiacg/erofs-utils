@@ -19,12 +19,12 @@
 #include "compressor.h"
 #include "erofs/block_list.h"
 #include "erofs/compress_hints.h"
-#include "erofs/fragments.h"
 #ifdef EROFS_MT_ENABLED
 #include "erofs/workqueue.h"
 #endif
 #include "liberofs_cache.h"
 #include "liberofs_compress.h"
+#include "liberofs_fragments.h"
 #include "liberofs_metabox.h"
 
 #define Z_EROFS_DESTBUF_SZ	(Z_EROFS_PCLUSTER_MAX_SIZE + EROFS_MAX_BLOCK_SIZE * 2)

@@ -25,7 +25,6 @@
 #include "erofs/block_list.h"
 #include "erofs/compress_hints.h"
 #include "erofs/blobchunk.h"
-#include "erofs/fragments.h"
 #include "../lib/compressor.h"
 #include "../lib/liberofs_gzran.h"
 #include "../lib/liberofs_metabox.h"

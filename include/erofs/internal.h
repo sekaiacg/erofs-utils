@@ -535,6 +535,20 @@ static inline int erofs_blk_read(struct erofs_sb_info *sbi, int device_id,
 /* vmdk.c */
 int erofs_dump_vmdk_desc(FILE *f, struct erofs_sb_info *sbi);
 
+extern const char *erofs_frags_packedname;
+#define EROFS_PACKED_INODE	erofs_frags_packedname
+
+static inline bool erofs_is_packed_inode(struct erofs_inode *inode)
+{
+	return inode->i_srcpath == EROFS_PACKED_INODE;
+}
+
+int erofs_packedfile_init(struct erofs_sb_info *sbi, bool fragments_mkfs);
+void erofs_packedfile_exit(struct erofs_sb_info *sbi);
+
+int erofs_packedfile_read(struct erofs_sb_info *sbi,
+			  void *buf, erofs_off_t len, erofs_off_t pos);
+
 /* XXX: will find a better way later */
 erofs_blk_t erofs_total_metablocks(struct erofs_bufmgr *bmgr);
 

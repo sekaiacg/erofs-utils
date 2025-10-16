@@ -12,7 +12,6 @@
 #include "erofs/print.h"
 #include "erofs/dir.h"
 #include "erofs/inode.h"
-#include "erofs/fragments.h"
 
 #include <float.h>
 #include <fuse.h>

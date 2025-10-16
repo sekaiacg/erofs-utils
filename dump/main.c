@@ -13,7 +13,6 @@
 #include "erofs/print.h"
 #include "erofs/inode.h"
 #include "erofs/dir.h"
-#include "erofs/fragments.h"
 #include "../lib/liberofs_compress.h"
 #include "../lib/liberofs_private.h"
 #include "../lib/liberofs_uuid.h"
