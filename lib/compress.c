@@ -35,6 +35,7 @@ struct z_erofs_extent_item {
 };
 
 struct z_erofs_compress_ictx {		/* inode context */
+	struct erofs_vfile _vf, *vf;
 	struct erofs_importer *im;
 	struct erofs_inode *inode;
 	struct erofs_compress_cfg *ccfg;
@@ -1258,14 +1259,14 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 	bool frag = params->fragments && !erofs_is_packed_inode(inode) &&
 		!erofs_is_metabox_inode(inode) &&
 		ctx->seg_idx >= ictx->seg_num - 1;
-	struct erofs_vfile vf = { .fd = ictx->fd };
+	struct erofs_vfile *vf = ictx->vf;
 	int ret;
 
 	DBG_BUGON(offset != -1 && frag && inode->fragment_size);
 	if (offset != -1 && frag && !inode->fragment_size &&
 	    params->fragdedupe != EROFS_FRAGDEDUPE_OFF) {
-		ret = erofs_fragment_findmatch(inode,
-					       &vf, ictx->fpos, ictx->tofh);
+		ret = erofs_fragment_findmatch(inode, vf, ictx->fpos,
+					       ictx->tofh);
 		if (ret < 0)
 			return ret;
 		if (inode->fragment_size > ctx->remaining)
@@ -1281,8 +1282,8 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 		int ret;
 
 		ret = (offset == -1 ?
-			erofs_io_read(&vf, ctx->queue + ctx->tail, rx) :
-			erofs_io_pread(&vf, ctx->queue + ctx->tail, rx,
+			erofs_io_read(vf, ctx->queue + ctx->tail, rx) :
+			erofs_io_pread(vf, ctx->queue + ctx->tail, rx,
 				       ictx->fpos + offset));
 		if (ret != rx)
 			return -errno;
@@ -1792,8 +1793,8 @@ int z_erofs_mt_global_exit(void)
 }
 #endif
 
-void *erofs_begin_compressed_file(struct erofs_importer *im,
-				  struct erofs_inode *inode, int fd, u64 fpos)
+void *erofs_prepare_compressed_file(struct erofs_importer *im,
+				    struct erofs_inode *inode)
 {
 	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = inode->sbi;
@@ -1801,7 +1802,6 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	bool frag = params->fragments && !erofs_is_packed_inode(inode) &&
 		!erofs_is_metabox_inode(inode);
 	bool all_fragments = params->all_fragments && frag;
-	int ret;
 
 	/* initialize per-file compression setting */
 	inode->z_advise = 0;
@@ -1835,7 +1835,6 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	}
 	ictx->im = im;
 	ictx->inode = inode;
-	ictx->fd = fd;
 	if (erofs_is_metabox_inode(inode))
 		ictx->ccfg = &sbi->zmgr->ccfg[cfg.c_mkfs_metabox_algid];
 	else
@@ -1848,10 +1847,33 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	if (params->fragments && !params->dedupe && !ictx->data_unaligned)
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 
-	if (frag) {
-		struct erofs_vfile vf = { .fd = fd };
+	init_list_head(&ictx->extents);
+	ictx->fix_dedupedfrag = false;
+	ictx->fragemitted = false;
+	ictx->dedupe = false;
+	return ictx;
+}
 
-		ictx->tofh = z_erofs_fragments_tofh(inode, &vf, fpos);
+void erofs_bind_compressed_file_with_fd(struct z_erofs_compress_ictx *ictx,
+					int fd, u64 fpos)
+{
+	ictx->_vf = (struct erofs_vfile){ .fd = fd };
+	ictx->vf = &ictx->_vf;
+	ictx->fpos = fpos;
+}
+
+int erofs_begin_compressed_file(struct z_erofs_compress_ictx *ictx)
+{
+	const struct erofs_importer_params *params = ictx->im->params;
+	struct erofs_inode *inode = ictx->inode;
+	bool frag = params->fragments && !erofs_is_packed_inode(inode) &&
+		!erofs_is_metabox_inode(inode);
+	bool all_fragments = params->all_fragments && frag;
+	int ret;
+
+	if (frag) {
+		ictx->tofh = z_erofs_fragments_tofh(inode,
+						    ictx->vf, ictx->fpos);
 		if (ictx == &g_ictx &&
 		    params->fragdedupe != EROFS_FRAGDEDUPE_OFF) {
 			/*
@@ -1859,9 +1881,9 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 			 * parts into the packed inode.
 			 */
 			ret = erofs_fragment_findmatch(inode,
-						       &vf, fpos, ictx->tofh);
+					ictx->vf, ictx->fpos, ictx->tofh);
 			if (ret < 0)
-				goto err_free_ictx;
+				goto err_out;
 
 			if (params->fragdedupe == EROFS_FRAGDEDUPE_INODE &&
 			    inode->fragment_size < inode->i_size) {
@@ -1871,36 +1893,30 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 			}
 		}
 	}
-	ictx->fpos = fpos;
-	init_list_head(&ictx->extents);
-	ictx->fix_dedupedfrag = false;
-	ictx->fragemitted = false;
-	ictx->dedupe = false;
 
 	if (all_fragments && !inode->fragment_size) {
-		ret = erofs_pack_file_from_fd(inode,
-			&((struct erofs_vfile){ .fd = fd }), fpos, ictx->tofh);
+		ret = erofs_pack_file_from_fd(inode, ictx->vf, ictx->fpos,
+					      ictx->tofh);
 		if (ret)
-			goto err_free_idata;
+			goto err_out;
 	}
+
 #ifdef EROFS_MT_ENABLED
 	if (ictx != &g_ictx) {
 		ret = z_erofs_mt_compress(ictx);
 		if (ret)
-			goto err_free_idata;
+			goto err_out;
 	}
 #endif
-	return ictx;
-
-err_free_idata:
+	return 0;
+err_out:
 	if (inode->idata) {
 		free(inode->idata);
 		inode->idata = NULL;
 	}
-err_free_ictx:
 	if (ictx != &g_ictx)
 		free(ictx);
-	return ERR_PTR(ret);
+	return ret;
 }
 
 int erofs_write_compressed_file(struct z_erofs_compress_ictx *ictx)

@@ -1790,6 +1790,7 @@ static int erofs_mkfs_begin_nondirectory(struct erofs_importer *im,
 {
 	struct erofs_mkfs_job_ndir_ctx ctx =
 		{ .inode = inode, .fd = -1 };
+	int ret;
 
 	if (S_ISREG(inode->i_mode) && inode->i_size) {
 		switch (inode->datasource) {
@@ -1808,10 +1809,14 @@ static int erofs_mkfs_begin_nondirectory(struct erofs_importer *im,
 		}
 		if (ctx.fd >= 0 && cfg.c_compr_opts[0].alg &&
 		    erofs_file_is_compressible(im, inode)) {
-			ctx.ictx = erofs_begin_compressed_file(im, inode,
-							ctx.fd, ctx.fpos);
+			ctx.ictx = erofs_prepare_compressed_file(im, inode);
 			if (IS_ERR(ctx.ictx))
 				return PTR_ERR(ctx.ictx);
+			erofs_bind_compressed_file_with_fd(ctx.ictx,
+							   ctx.fd, ctx.fpos);
+			ret = erofs_begin_compressed_file(ctx.ictx);
+			if (ret)
+				return ret;
 		}
 	}
 	return erofs_mkfs_go(im, EROFS_MKFS_JOB_NDIR, &ctx, sizeof(ctx));
@@ -2129,11 +2134,14 @@ struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_importer *im,
 
 	if (cfg.c_compr_opts[0].alg &&
 	    erofs_file_is_compressible(im, inode)) {
-		ictx = erofs_begin_compressed_file(im, inode, fd, 0);
+		ictx = erofs_prepare_compressed_file(im, inode);
 		if (IS_ERR(ictx))
 			return ERR_CAST(ictx);
 
-		DBG_BUGON(!ictx);
+		erofs_bind_compressed_file_with_fd(ictx, fd, 0);
+		ret = erofs_begin_compressed_file(ictx);
+		if (ret)
+			return ERR_PTR(ret);
 		ret = erofs_write_compressed_file(ictx);
 		if (!ret)
 			goto out;

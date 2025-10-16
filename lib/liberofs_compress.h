@@ -15,8 +15,11 @@
 struct z_erofs_compress_ictx;
 
 void z_erofs_drop_inline_pcluster(struct erofs_inode *inode);
-void *erofs_begin_compressed_file(struct erofs_importer *im,
-				  struct erofs_inode *inode, int fd, u64 fpos);
+void *erofs_prepare_compressed_file(struct erofs_importer *im,
+				    struct erofs_inode *inode);
+void erofs_bind_compressed_file_with_fd(struct z_erofs_compress_ictx *ictx,
+					int fd, u64 fpos);
+int erofs_begin_compressed_file(struct z_erofs_compress_ictx *ictx);
 int erofs_write_compressed_file(struct z_erofs_compress_ictx *ictx);
 
 int z_erofs_compress_init(struct erofs_importer *im);
