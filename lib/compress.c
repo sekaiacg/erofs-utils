@@ -1258,13 +1258,14 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 	bool frag = params->fragments && !erofs_is_packed_inode(inode) &&
 		!erofs_is_metabox_inode(inode) &&
 		ctx->seg_idx >= ictx->seg_num - 1;
-	int fd = ictx->fd;
+	struct erofs_vfile vf = { .fd = ictx->fd };
 	int ret;
 
 	DBG_BUGON(offset != -1 && frag && inode->fragment_size);
 	if (offset != -1 && frag && !inode->fragment_size &&
 	    params->fragdedupe != EROFS_FRAGDEDUPE_OFF) {
-		ret = erofs_fragment_findmatch(inode, fd, ictx->tofh);
+		ret = erofs_fragment_findmatch(inode,
+					       &vf, ictx->fpos, ictx->tofh);
 		if (ret < 0)
 			return ret;
 		if (inode->fragment_size > ctx->remaining)
@@ -1280,9 +1281,9 @@ int z_erofs_compress_segment(struct z_erofs_compress_sctx *ctx,
 		int ret;
 
 		ret = (offset == -1 ?
-			read(fd, ctx->queue + ctx->tail, rx) :
-			pread(fd, ctx->queue + ctx->tail, rx,
-			      ictx->fpos + offset));
+			erofs_io_read(&vf, ctx->queue + ctx->tail, rx) :
+			erofs_io_pread(&vf, ctx->queue + ctx->tail, rx,
+				       ictx->fpos + offset));
 		if (ret != rx)
 			return -errno;
 
@@ -1848,14 +1849,17 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 
 	if (frag) {
-		ictx->tofh = z_erofs_fragments_tofh(inode, fd, fpos);
+		struct erofs_vfile vf = { .fd = fd };
+
+		ictx->tofh = z_erofs_fragments_tofh(inode, &vf, fpos);
 		if (ictx == &g_ictx &&
 		    params->fragdedupe != EROFS_FRAGDEDUPE_OFF) {
 			/*
 			 * Handle tails in advance to avoid writing duplicated
 			 * parts into the packed inode.
 			 */
-			ret = erofs_fragment_findmatch(inode, fd, ictx->tofh);
+			ret = erofs_fragment_findmatch(inode,
+						       &vf, fpos, ictx->tofh);
 			if (ret < 0)
 				goto err_free_ictx;
 
@@ -1874,7 +1878,8 @@ void *erofs_begin_compressed_file(struct erofs_importer *im,
 	ictx->dedupe = false;
 
 	if (all_fragments && !inode->fragment_size) {
-		ret = erofs_pack_file_from_fd(inode, fd, ictx->tofh);
+		ret = erofs_pack_file_from_fd(inode,
+			&((struct erofs_vfile){ .fd = fd }), fpos, ictx->tofh);
 		if (ret)
 			goto err_free_idata;
 	}

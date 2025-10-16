@@ -53,7 +53,8 @@ struct erofs_packed_inode {
 
 const char *erofs_frags_packedname = "packed_file";
 
-u32 z_erofs_fragments_tofh(struct erofs_inode *inode, int fd, erofs_off_t fpos)
+u32 z_erofs_fragments_tofh(struct erofs_inode *inode,
+			   struct erofs_vfile *vf, erofs_off_t fpos)
 {
 	u8 data_to_hash[EROFS_TOF_HASHLEN];
 	u32 hash;
@@ -62,10 +63,10 @@ u32 z_erofs_fragments_tofh(struct erofs_inode *inode, int fd, erofs_off_t fpos)
 	if (inode->i_size <= EROFS_TOF_HASHLEN)
 		return ~0U;
 
-	ret = pread(fd, data_to_hash, EROFS_TOF_HASHLEN,
-		    fpos + inode->i_size - EROFS_TOF_HASHLEN);
+	ret = erofs_io_pread(vf, data_to_hash, EROFS_TOF_HASHLEN,
+			     fpos + inode->i_size - EROFS_TOF_HASHLEN);
 	if (ret < 0)
-		return -errno;
+		return ret;
 	if (ret != EROFS_TOF_HASHLEN) {
 		DBG_BUGON(1);
 		return -EIO;
@@ -76,7 +77,9 @@ u32 z_erofs_fragments_tofh(struct erofs_inode *inode, int fd, erofs_off_t fpos)
 
 static erofs_off_t erofs_fragment_longmatch(struct erofs_inode *inode,
 					    struct erofs_fragmentitem *fi,
-					    erofs_off_t matched, int fd)
+					    erofs_off_t matched,
+					    struct erofs_vfile *vf,
+					    erofs_off_t fpos)
 {
 	struct erofs_packed_inode *epi = inode->sbi->packedinode;
 	erofs_off_t total = min_t(erofs_off_t, fi->length, inode->i_size);
@@ -99,7 +102,8 @@ static erofs_off_t erofs_fragment_longmatch(struct erofs_inode *inode,
 			return matched;
 		}
 		sz = min_t(u64, total - matched, sizeof(buf[0]));
-		if (pread(fd, buf[0], sz, inode->i_size - matched - sz) != sz)
+		if (erofs_io_pread(vf, buf[0], sz,
+				   fpos + inode->i_size - matched - sz) != sz)
 			break;
 
 		if (!inmem) {
@@ -116,7 +120,8 @@ static erofs_off_t erofs_fragment_longmatch(struct erofs_inode *inode,
 	return matched;
 }
 
-int erofs_fragment_findmatch(struct erofs_inode *inode, int fd, u32 tofh)
+int erofs_fragment_findmatch(struct erofs_inode *inode,
+			     struct erofs_vfile *vf, erofs_off_t fpos, u32 tofh)
 {
 	struct erofs_packed_inode *epi = inode->sbi->packedinode;
 	struct erofs_fragmentitem *cur, *fi = NULL;
@@ -136,7 +141,7 @@ int erofs_fragment_findmatch(struct erofs_inode *inode, int fd, u32 tofh)
 	if (!data)
 		return -ENOMEM;
 
-	ret = pread(fd, data, s1, inode->i_size - s1);
+	ret = erofs_io_pread(vf, data, s1, fpos + inode->i_size - s1);
 	if (ret != s1) {
 		free(data);
 		return -errno;
@@ -167,7 +172,7 @@ int erofs_fragment_findmatch(struct erofs_inode *inode, int fd, u32 tofh)
 		i += EROFS_TOF_HASHLEN;
 		if (i >= s1) {		/* full short match */
 			DBG_BUGON(i > s1);
-			i = erofs_fragment_longmatch(inode, cur, s1, fd);
+			i = erofs_fragment_longmatch(inode, cur, s1, vf, fpos);
 		}
 
 		if (i <= deduped)
@@ -229,7 +234,8 @@ int erofs_fragment_pack(struct erofs_inode *inode, void *data,
 	return 0;
 }
 
-int erofs_pack_file_from_fd(struct erofs_inode *inode, int fd, u32 tofh)
+int erofs_pack_file_from_fd(struct erofs_inode *inode,
+			    struct erofs_vfile *vf, erofs_off_t fpos, u32 tofh)
 {
 	struct erofs_packed_inode *epi = inode->sbi->packedinode;
 	s64 offset, rc, sz;
@@ -243,33 +249,27 @@ int erofs_pack_file_from_fd(struct erofs_inode *inode, int fd, u32 tofh)
 	if (offset < 0)
 		return -errno;
 
-	memblock = mmap(NULL, inode->i_size, PROT_READ, MAP_SHARED, fd, 0);
+	if (vf->ops)
+		memblock = NULL;
+	else
+		memblock = mmap(NULL, inode->i_size, PROT_READ,
+				MAP_SHARED, vf->fd, fpos);
 	if (memblock == MAP_FAILED || !memblock) {
 		erofs_off_t remaining = inode->i_size;
-		struct erofs_vfile vin = { .fd = fd };
+		struct erofs_vfile vout = { .fd = epi->fd };
+		off_t pos = fpos;
 
-#if defined(HAVE_SYS_SENDFILE_H) && defined(HAVE_SENDFILE)
 		do {
 			sz = min_t(u64, remaining, UINT_MAX);
-			rc = sendfile(epi->fd, fd, NULL, sz);
+			rc = erofs_io_sendfile(&vout, vf, &pos, sz);
 			if (rc <= 0)
 				break;
 			remaining -= rc;
 		} while (remaining);
-#endif
-		while (remaining) {
-			char buf[32768];
 
-			sz = min_t(u64, remaining, sizeof(buf));
-			rc = erofs_io_read(&vin, buf, sz);
-			if (rc < 0)
-				goto out;
-			if (rc > 0) {
-				rc = write(epi->fd, buf, rc);
-				if (rc < 0)
-					goto out;
-			}
-			remaining -= rc;
+		if (remaining && rc >= 0) {
+			rc = -EIO;
+			goto out;
 		}
 
 		sz = min_t(u64, inode->i_size, EROFS_FRAGMENT_INMEM_SZ_MAX);
@@ -286,12 +286,6 @@ int erofs_pack_file_from_fd(struct erofs_inode *inode, int fd, u32 tofh)
 				DBG_BUGON(1);
 				rc = -EIO;
 			}
-			goto out;
-		}
-
-		rc = lseek(fd, 0, SEEK_SET);
-		if (rc < 0) {
-			rc = -errno;
 			goto out;
 		}
 	} else {
