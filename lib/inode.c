@@ -187,7 +187,7 @@ struct erofs_dentry *erofs_d_alloc(struct erofs_inode *parent,
 	d->inode = NULL;
 	d->namelen = namelen;
 	d->type = EROFS_FT_UNKNOWN;
-	d->validnid = false;
+	d->flags = 0;
 	list_add_tail(&d->d_child, &parent->i_subdirs);
 	return d;
 }
@@ -425,10 +425,10 @@ static void erofs_d_invalidate(struct erofs_dentry *d)
 {
 	struct erofs_inode *const inode = d->inode;
 
-	if (d->validnid)
+	if (d->flags & EROFS_DENTRY_FLAG_VALIDNID)
 		return;
 	d->nid = erofs_lookupnid(inode);
-	d->validnid = true;
+	d->flags |= EROFS_DENTRY_FLAG_VALIDNID;
 	erofs_iput(inode);
 }
 
@@ -536,7 +536,7 @@ static int erofs_write_dir_file(struct erofs_inode *dir)
 		unsigned int len = d->namelen + sizeof(struct erofs_dirent);
 
 		/* XXX: a bit hacky, but to avoid another traversal */
-		if (d->validnid && d->type == EROFS_FT_DIR) {
+		if (d->flags & EROFS_DENTRY_FLAG_FIXUP_PNID) {
 			ret = erofs_rebuild_inode_fix_pnid(dir, d->nid);
 			if (ret)
 				return ret;
@@ -1690,7 +1690,7 @@ err_closedir:
 
 bool erofs_dentry_is_wht(struct erofs_sb_info *sbi, struct erofs_dentry *d)
 {
-	if (!d->validnid)
+	if (!(d->flags & EROFS_DENTRY_FLAG_VALIDNID))
 		return erofs_inode_is_whiteout(d->inode);
 	if (d->type == EROFS_FT_CHRDEV) {
 		struct erofs_inode ei = { .sbi = sbi, .nid = d->nid };
@@ -1933,7 +1933,8 @@ static int erofs_mkfs_dump_tree(struct erofs_importer *im, bool rebuild,
 		list_for_each_entry(d, &dir->i_subdirs, d_child) {
 			struct erofs_inode *inode = d->inode;
 
-			if (is_dot_dotdot(d->name) || d->validnid)
+			if (is_dot_dotdot(d->name) ||
+			    (d->flags & EROFS_DENTRY_FLAG_VALIDNID))
 				continue;
 
 			if (!erofs_inode_visited(inode)) {

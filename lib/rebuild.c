@@ -484,12 +484,14 @@ static int erofs_rebuild_basedir_dirent_iter(struct erofs_dir_context *ctx)
 	if (d->type == EROFS_FT_UNKNOWN) {
 		d->nid = ctx->de_nid;
 		d->type = ctx->de_ftype;
-		d->validnid = true;
+		d->flags |= EROFS_DENTRY_FLAG_VALIDNID;
+		if (d->type == EROFS_FT_DIR)
+			d->flags |= EROFS_DENTRY_FLAG_FIXUP_PNID;
 		if (!mergedir->whiteouts && erofs_dentry_is_wht(dir->sbi, d))
 			mergedir->whiteouts = true;
 		*rctx->i_nlink += (ctx->de_ftype == EROFS_FT_DIR);
 		++*rctx->nr_subdirs;
-	} else if (__erofs_unlikely(d->validnid)) {
+	} else if (__erofs_unlikely(d->flags & EROFS_DENTRY_FLAG_VALIDNID)) {
 		/* The base image appears to be corrupted */
 		DBG_BUGON(1);
 		ret = -EFSCORRUPTED;

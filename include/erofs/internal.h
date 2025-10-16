@@ -338,15 +338,17 @@ static inline struct erofs_inode *erofs_parent_inode(struct erofs_inode *inode)
 #define IS_ROOT(x)	((x) == erofs_parent_inode(x))
 
 #define EROFS_DENTRY_NAME_ALIGNMENT	4
+
+#define EROFS_DENTRY_FLAG_VALIDNID	0x01
+#define EROFS_DENTRY_FLAG_FIXUP_PNID	0x02
 struct erofs_dentry {
 	struct list_head d_child;	/* child of parent list */
 	union {
 		struct erofs_inode *inode;
 		erofs_nid_t nid;
 	};
-	u8 namelen;
-	u8 type;
-	bool validnid;
+	u8 namelen, type;
+	u8 flags;
 	char name[];
 };
 
