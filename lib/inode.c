@@ -612,33 +612,31 @@ static bool erofs_file_is_compressible(struct erofs_importer *im,
 	return true;
 }
 
-static int write_uncompressed_file_from_fd(struct erofs_inode *inode, int fd,
-					   erofs_off_t fpos)
+static int erofs_write_unencoded_data(struct erofs_inode *inode,
+				      struct erofs_vfile *vf, erofs_off_t fpos,
+				      bool noseek)
 {
 	struct erofs_sb_info *sbi = inode->sbi;
 	erofs_blk_t nblocks, i;
 	unsigned int len;
 	int ret;
-	bool noseek = inode->datasource == EROFS_INODE_DATA_SOURCE_DISKBUF;
 
 	if (!noseek && erofs_sb_has_48bit(sbi)) {
-		if (lseek(fd, fpos, SEEK_DATA) < 0 && errno == ENXIO) {
+		if (erofs_io_lseek(vf, fpos, SEEK_DATA) < 0 && errno == ENXIO) {
 			ret = erofs_allocate_inode_bh_data(inode, 0);
 			if (ret)
 				return ret;
 			inode->datalayout = EROFS_INODE_FLAT_PLAIN;
 			return 0;
 		}
-		ret = lseek(fd, fpos, SEEK_SET);
+		ret = erofs_io_lseek(vf, fpos, SEEK_SET);
 		if (ret < 0)
 			return ret;
 		else if (ret != fpos)
 			return -EIO;
 	}
 
-	inode->datalayout = EROFS_INODE_FLAT_INLINE;
 	nblocks = inode->i_size >> sbi->blkszbits;
-
 	ret = erofs_allocate_inode_bh_data(inode, nblocks);
 	if (ret)
 		return ret;
@@ -648,8 +646,7 @@ static int write_uncompressed_file_from_fd(struct erofs_inode *inode, int fd,
 			    erofs_pos(sbi, nblocks - i));
 		ret = erofs_io_xcopy(&sbi->bdev,
 				     erofs_pos(sbi, inode->u.i_blkaddr + i),
-				     &((struct erofs_vfile){ .fd = fd }), len,
-				     noseek);
+				     vf, len, noseek);
 		if (ret)
 			return ret;
 	}
@@ -661,7 +658,7 @@ static int write_uncompressed_file_from_fd(struct erofs_inode *inode, int fd,
 		if (!inode->idata)
 			return -ENOMEM;
 
-		ret = read(fd, inode->idata, inode->idata_size);
+		ret = erofs_io_read(vf, inode->idata, inode->idata_size);
 		if (ret < inode->idata_size) {
 			free(inode->idata);
 			inode->idata = NULL;
@@ -682,8 +679,11 @@ int erofs_write_unencoded_file(struct erofs_inode *inode, int fd, u64 fpos)
 		return erofs_blob_write_chunked_file(inode, fd, fpos);
 	}
 
+	inode->datalayout = EROFS_INODE_FLAT_INLINE;
 	/* fallback to all data uncompressed */
-	return write_uncompressed_file_from_fd(inode, fd, fpos);
+	return erofs_write_unencoded_data(inode,
+			&(struct erofs_vfile){ .fd = fd }, fpos,
+			inode->datasource == EROFS_INODE_DATA_SOURCE_DISKBUF);
 }
 
 int erofs_iflush(struct erofs_inode *inode)
@@ -2152,7 +2152,11 @@ struct erofs_inode *erofs_mkfs_build_special_from_fd(struct erofs_importer *im,
 		if (ret < 0)
 			return ERR_PTR(-errno);
 	}
-	ret = write_uncompressed_file_from_fd(inode, fd, 0);
+
+	inode->datalayout = EROFS_INODE_FLAT_INLINE;
+	ret = erofs_write_unencoded_data(inode,
+			&(struct erofs_vfile){ .fd = fd }, 0,
+			inode->datasource == EROFS_INODE_DATA_SOURCE_DISKBUF);
 	if (ret)
 		return ERR_PTR(ret);
 out:
