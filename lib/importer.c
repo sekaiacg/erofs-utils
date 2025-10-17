@@ -57,12 +57,14 @@ int erofs_importer_init(struct erofs_importer *im)
 	if (err)
 		goto out_err;
 
-	if (params->fragments || cfg.c_extra_ea_name_prefixes) {
+	if (params->fragments || cfg.c_extra_ea_name_prefixes ||
+	    params->compress_dir) {
 		subsys = "packedfile";
 		if (!params->pclusterblks_packed)
 			params->pclusterblks_packed = params->pclusterblks_def;
 
-		err = erofs_packedfile_init(sbi, params->fragments);
+		err = erofs_packedfile_init(sbi, params->fragments ||
+						params->compress_dir);
 		if (err)
 			goto out_err;
 	}
@@ -90,7 +92,6 @@ out_err:
 
 int erofs_importer_flush_all(struct erofs_importer *im)
 {
-	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
 	unsigned int fsalignblks;
 	int err;
@@ -102,13 +103,9 @@ int erofs_importer_flush_all(struct erofs_importer *im)
 			return err;
 	}
 
-	if ((params->fragments || cfg.c_extra_ea_name_prefixes) &&
-	    erofs_sb_has_fragments(sbi)) {
-		erofs_update_progressinfo("Handling packed data ...");
-		err = erofs_flush_packed_inode(im);
-		if (err)
-			return err;
-	}
+	err = erofs_flush_packed_inode(im);
+	if (err)
+		return err;
 
 	fsalignblks = im->params->fsalignblks ?
 		roundup_pow_of_two(im->params->fsalignblks) : 1;

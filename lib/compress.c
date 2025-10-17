@@ -1341,7 +1341,7 @@ int erofs_commit_compressed_file(struct z_erofs_compress_ictx *ictx,
 		if (ret)
 			goto err_free_idata;
 		inode->z_advise |= Z_EROFS_ADVISE_FRAGMENT_PCLUSTER;
-		erofs_sb_set_fragments(inode->sbi);
+		erofs_sb_set_fragments(sbi);
 	}
 
 	/* fall back to no compression mode */
@@ -1978,6 +1978,49 @@ out:
 	pthread_mutex_unlock(&ictx->mutex);
 #endif
 	return ret;
+}
+
+int erofs_begin_compress_dir(struct erofs_importer *im,
+			     struct erofs_inode *inode)
+
+{
+	if (!im->params->compress_dir ||
+	    inode->i_size < Z_EROFS_LEGACY_MAP_HEADER_SIZE)
+		return -ENOSPC;
+
+	inode->z_advise |= Z_EROFS_ADVISE_FRAGMENT_PCLUSTER;
+	erofs_sb_set_fragments(inode->sbi);
+	inode->datalayout = EROFS_INODE_COMPRESSED_FULL;
+	inode->extent_isize = Z_EROFS_LEGACY_MAP_HEADER_SIZE;
+	inode->compressmeta = NULL;
+	return 0;
+}
+
+int erofs_write_compress_dir(struct erofs_inode *inode, struct erofs_vfile *vf)
+{
+	void *compressmeta;
+	int err;
+
+	if (inode->datalayout != EROFS_INODE_COMPRESSED_FULL ||
+	    inode->extent_isize < Z_EROFS_LEGACY_MAP_HEADER_SIZE) {
+		DBG_BUGON(1);
+		return -EINVAL;
+	}
+
+	err = erofs_pack_file_from_fd(inode, vf, 0, ~0U);
+	if (err || !inode->fragment_size)
+		return err;
+	err = erofs_fragment_commit(inode, ~0);
+	if (err)
+		return err;
+
+	compressmeta = calloc(1, Z_EROFS_LEGACY_MAP_HEADER_SIZE);
+	if (!compressmeta)
+		return -ENOMEM;
+	*(__le64 *)compressmeta =
+		cpu_to_le64(inode->fragmentoff | 1ULL << 63);
+	inode->compressmeta = compressmeta;
+	return 0;
 }
 
 static int z_erofs_build_compr_cfgs(struct erofs_importer *im,

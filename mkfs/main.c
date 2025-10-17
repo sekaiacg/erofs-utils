@@ -100,6 +100,7 @@ static struct option long_options[] = {
 #ifdef OCIEROFS_ENABLED
 	{"oci", optional_argument, NULL, 534},
 #endif
+	{"zD", optional_argument, NULL, 536},
 	{0, 0, 0, 0},
 };
 
@@ -174,6 +175,7 @@ static void usage(int argc, char **argv)
 		"    --all-time         the timestamp is also applied to all files (default)\n"
 		"    --mkfs-time        the timestamp is applied as build time only\n"
 		" -UX                   use a given filesystem UUID\n"
+		" --zD[=<0|1>]          specify directory compression: 0=disable [default], 1=enable\n"
 		" --all-root            make all files owned by root\n"
 #ifdef EROFS_MT_ENABLED
 		" --async-queue-limit=# specify the maximum number of entries in the multi-threaded job queue\n"
@@ -1403,6 +1405,12 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			if (optarg)
 				mkfs_aws_zinfo_file = strdup(optarg);
 			tarerofs_decoder = EROFS_IOS_DECODER_GZRAN;
+			break;
+		case 536:
+			if (!optarg || strcmp(optarg, "1"))
+				params->compress_dir = true;
+			else
+				params->compress_dir = false;
 			break;
 		case 'V':
 			version();

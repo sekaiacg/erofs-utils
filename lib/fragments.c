@@ -257,11 +257,13 @@ int erofs_pack_file_from_fd(struct erofs_inode *inode,
 	if (memblock == MAP_FAILED || !memblock) {
 		erofs_off_t remaining = inode->i_size;
 		struct erofs_vfile vout = { .fd = epi->fd };
+		bool noseek = vf->ops && !vf->ops->pread;
 		off_t pos = fpos;
 
 		do {
 			sz = min_t(u64, remaining, UINT_MAX);
-			rc = erofs_io_sendfile(&vout, vf, &pos, sz);
+			rc = erofs_io_sendfile(&vout, vf,
+					       noseek ? NULL : &pos, sz);
 			if (rc <= 0)
 				break;
 			remaining -= rc;
@@ -372,10 +374,12 @@ int erofs_flush_packed_inode(struct erofs_importer *im)
 	struct erofs_inode *inode;
 
 	if (!epi || !erofs_sb_has_fragments(sbi))
-		return -EINVAL;
+		return 0;
 
 	if (lseek(epi->fd, 0, SEEK_CUR) <= 0)
 		return 0;
+
+	erofs_update_progressinfo("Processing packed data ...");
 	inode = erofs_mkfs_build_special_from_fd(im, epi->fd,
 						 EROFS_PACKED_INODE);
 	sbi->packed_nid = erofs_lookupnid(inode);

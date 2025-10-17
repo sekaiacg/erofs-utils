@@ -344,12 +344,7 @@ static int erofs_prepare_dir_file(struct erofs_importer *im,
 		return -EFAULT;
 	}
 	dir->i_size = d_size;
-
-	/* no compression for all dirs */
-	dir->datalayout = EROFS_INODE_FLAT_INLINE;
-
-	/* it will be used in erofs_prepare_inode_buffer */
-	dir->idata_size = d_size % erofs_blksiz(sbi);
+	dir->datalayout = EROFS_INODE_DATALAYOUT_MAX;
 	return 0;
 }
 
@@ -703,12 +698,16 @@ static int erofs_write_dir_file(struct erofs_inode *dir)
 	struct erofs_vfile *vf;
 	int err;
 
-	DBG_BUGON(dir->idata_size != (dir->i_size & (bsz - 1)));
 	vf = erofs_dirwriter_open(dir);
 	if (IS_ERR(vf))
 		return PTR_ERR(vf);
 
-	err = erofs_write_unencoded_data(dir, vf, 0, true);
+	if (erofs_inode_is_data_compressed(dir->datalayout)) {
+		err = erofs_write_compress_dir(dir, vf);
+	} else {
+		DBG_BUGON(dir->idata_size != (dir->i_size & (bsz - 1)));
+		err = erofs_write_unencoded_data(dir, vf, 0, true);
+	}
 	erofs_io_close(vf);
 	return err;
 }
@@ -1510,6 +1509,22 @@ static int erofs_mkfs_jobfn(struct erofs_importer *im,
 		return erofs_mkfs_handle_nondirectory(im, &item->u.ndir);
 
 	if (item->type == EROFS_MKFS_JOB_DIR) {
+		unsigned int bsz = erofs_blksiz(inode->sbi);
+
+		if (inode->datalayout == EROFS_INODE_DATALAYOUT_MAX) {
+			inode->datalayout = EROFS_INODE_FLAT_INLINE;
+
+			ret = erofs_begin_compress_dir(im, inode);
+			if (ret && ret != -ENOSPC)
+				return ret;
+		} else {
+			DBG_BUGON(inode->datalayout != EROFS_INODE_FLAT_PLAIN);
+		}
+
+		/* it will be used in erofs_prepare_inode_buffer */
+		if (inode->datalayout == EROFS_INODE_FLAT_INLINE)
+			inode->idata_size = inode->i_size & (bsz - 1);
+
 		ret = erofs_prepare_inode_buffer(im, inode);
 		if (ret)
 			return ret;

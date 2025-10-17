@@ -22,6 +22,10 @@ void erofs_bind_compressed_file_with_fd(struct z_erofs_compress_ictx *ictx,
 int erofs_begin_compressed_file(struct z_erofs_compress_ictx *ictx);
 int erofs_write_compressed_file(struct z_erofs_compress_ictx *ictx);
 
+int erofs_begin_compress_dir(struct erofs_importer *im,
+			     struct erofs_inode *inode);
+int erofs_write_compress_dir(struct erofs_inode *inode, struct erofs_vfile *vf);
+
 int z_erofs_compress_init(struct erofs_importer *im);
 int z_erofs_compress_exit(struct erofs_sb_info *sbi);
 

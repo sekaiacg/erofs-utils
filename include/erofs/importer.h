@@ -48,6 +48,7 @@ struct erofs_importer_params {
 	bool dedupe;
 	bool fragments;
 	bool all_fragments;
+	bool compress_dir;
 	char fragdedupe;
 };
 
