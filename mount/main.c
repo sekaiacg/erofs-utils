@@ -577,7 +577,7 @@ static void *erofsmount_nbd_loopfn(void *arg)
 
 	while (1) {
 		struct erofs_nbd_request rq;
-		ssize_t rem;
+		ssize_t written;
 		off_t pos;
 
 		err = erofs_nbd_get_request(ctx->sk.fd, &rq);
@@ -597,13 +597,13 @@ static void *erofsmount_nbd_loopfn(void *arg)
 		erofs_nbd_send_reply_header(ctx->sk.fd, rq.cookie, 0);
 		pos = rq.from;
 		do {
-			rem = erofs_io_sendfile(&ctx->sk, &ctx->vd, &pos, rq.len);
-			if (rem == -EINTR) {
-				err = rem;
+			written = erofs_io_sendfile(&ctx->sk, &ctx->vd, &pos, rq.len);
+			if (written == -EINTR) {
+				err = written;
 				goto out;
 			}
-		} while (rem < 0);
-		err = __erofs_0write(ctx->sk.fd, rem);
+		} while (written < 0);
+		err = __erofs_0write(ctx->sk.fd, rq.len - written);
 		if (err) {
 			if (err > 0)
 				err = -EIO;

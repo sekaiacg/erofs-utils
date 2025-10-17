@@ -581,6 +581,7 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 			  off_t *pos, size_t count)
 {
 	ssize_t read, written;
+	size_t rem = count;
 
 	if (vin->ops || vout->ops) {
 		if (vin->ops && vin->ops->sendfile)
@@ -600,13 +601,13 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 			}
 			break;
 		}
-		count -= written;
+		rem -= written;
 	} while (written);
 #endif
-	while (count) {
+	while (rem) {
 		char buf[max(EROFS_MAX_BLOCK_SIZE, 32768)];
 
-		read = min_t(u64, count, sizeof(buf));
+		read = min_t(u64, rem, sizeof(buf));
 		if (pos)
 			read = erofs_io_pread(vin, buf, read, *pos);
 		else
@@ -615,17 +616,17 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 			written = read;
 			break;
 		}
-		count -= read;
+		rem -= read;
 		if (pos)
 			*pos += read;
 		do {
 			written = erofs_io_write(vout, buf, read);
 			if (written < 0)
-				break;
+				return written;
 			read -= written;
 		} while (read);
 	}
-	return written < 0 ? written : count;
+	return written < 0 ? written : count - rem;
 }
 
 int erofs_io_xcopy(struct erofs_vfile *vout, off_t pos,
