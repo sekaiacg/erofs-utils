@@ -1,0 +1,21 @@
+diff --git a/libselinux/src/label_support.c b/libselinux/src/label_support.c
+index 54fd49a5..b0c4aa1b 100644
+--- a/libselinux/src/label_support.c
++++ b/libselinux/src/label_support.c
+@@ -34,11 +34,11 @@ static inline int read_spec_entry(char **entry, char **ptr, int *len, const char
+ 	*len = 0;
+ 
+ 	while (!isspace(**ptr) && **ptr != '\0') {
+-		if (!isascii(**ptr)) {
+-			errno = EINVAL;
+-			*errbuf = "Non-ASCII characters found";
+-			return -1;
+-		}
++		// if (!isascii(**ptr)) {
++		// 	errno = EINVAL;
++		// 	*errbuf = "Non-ASCII characters found";
++		// 	return -1;
++		// }
+ 		(*ptr)++;
+ 		(*len)++;
+ 	}
