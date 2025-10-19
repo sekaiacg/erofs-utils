@@ -11,11 +11,11 @@ on:
       version:
         description: 'Version'
         required: false
-        default: 'v1.8.1-24081000'
+        default: 'v1.8.10-25101900'
 
 jobs:
   release:
-    needs: [ Build-on-Ubuntu, Build-on-macOS ]
+    needs: [ Build-android, Build-on-linux, Build-cygwin, Build-on-macOS ]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,102 +42,36 @@ jobs:
           body: This release is built by github-action.
           artifacts: "*.zip"
 
-  Build-on-Ubuntu:
-    runs-on: ubuntu-24.04
+  Build-android:
+    runs-on: ubuntu-latest
     env:
       TZ: UTC-8
       CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
       CCACHE_NOHASHDIR: "true"
       CCACHE_HARDLINK: "true"
       CCACHE_BASEDIR: "${{ github.workspace }}"
-      AARCH64_TOOLS_PATH: "/opt/aarch64"
-      LOONGARCH64_TOOLS_PATH: "/opt/loongarch64"
-      cygwin_prebuilt_packages: "deb [trusted=yes] https://github.com/affggh/deb-cygwin-debian/releases/download/snapshot-deb ./"
 
     steps:
+      - name: Update system and install dependencies
+        run: |
+          sudo apt update && sudo apt install llvm
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Update system and install dependencies
-        run: |
-          sudo apt update -y
-          sudo apt install llvm ninja-build -y
-
-      - name: Install NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
-        with:
-          ndk-version: r28b
-          local-cache: false
-
-      - name: Download and install clang+llvm
-        run: |
-          wget https://github.com/llvm/llvm-project/releases/download/llvmorg-17.0.6/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
-          tar -xf clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C /opt
-          echo "CUSTOM_CLANG_PATH=/opt/clang+llvm-17.0.6-x86_64-linux-gnu-ubuntu-22.04" >> $GITHUB_ENV
-
-      - name: Setup cygwin cross toolchains
-        run: |
-          echo "${{ env.cygwin_prebuilt_packages }}" > sources.list
-          sudo cp -af sources.list /etc/apt/sources.list.d/deb-cygwin.list
-          rm -f sources.list
-          sudo apt-get update && sudo apt-get install cygwin cygwin-gcc cygwin-libiconv cygwin-xclang cygwin-libc++
-
-      - name: Set up cache aarch64 tools
-        id: cache-aarch64-tools
-        uses: actions/cache@v4
-        with:
-          path:  ${{ env.AARCH64_TOOLS_PATH }}
-          key: ${{ runner.os }}-aarch64_tools_231221
-
-      - name: Download and install aarch64 tools
-        if: steps.cache-aarch64-tools.outputs.cache-hit != 'true'
-        run: |
-          wget https://github.com/sekaiacg/erofs-utils/releases/download/v1.7.1-231221/gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz
-          mkdir ${AARCH64_TOOLS_PATH}
-          tar -xf gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu.tar.xz -C ${AARCH64_TOOLS_PATH}
-
-      - name: Set up aarch64 tools
-        run: |
-          echo "AARCH64_GCC_PATH=${AARCH64_TOOLS_PATH}/gcc-linaro-14.0.0-2023.06-x86_64_aarch64-linux-gnu" >> $GITHUB_ENV
-
-      - name: Set up cache loongarch64 tools
-        id: cache-loongarch64-tools
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.LOONGARCH64_TOOLS_PATH }}
-          key: ${{ runner.os }}-loongarch64_tools_230927
-
-      - name: Download and install loongarch64 tools
-        if: steps.cache-loongarch64-tools.outputs.cache-hit != 'true'
-        run: |
-          wget https://github.com/loongson/build-tools/releases/download/2023.08.08/CLFS-loongarch64-8.1-x86_64-cross-tools-gcc-glibc.tar.xz
-          mkdir ${LOONGARCH64_TOOLS_PATH}
-          tar -xf CLFS-loongarch64-8.1-x86_64-cross-tools-gcc-glibc.tar.xz -C ${LOONGARCH64_TOOLS_PATH}
-
-      - name: Set up loongarch64 tools
-        run: |
-          echo "LD_LIBRARY_PATH=${LOONGARCH64_TOOLS_PATH}/cross-tools/target/usr/lib64:${LOONGARCH64_TOOLS_PATH}/cross-tools/loongarch64-unknown-linux-gnu/lib64:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "PATH=$GITHUB_WORKSPACE:${LOONGARCH64_TOOLS_PATH}/cross-tools/bin:$PATH" >> $GITHUB_ENV
-          echo "LOONGARCH64_GCC_PATH=${LOONGARCH64_TOOLS_PATH}/cross-tools" >> $GITHUB_ENV
-
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ runner.os }}
-          restore-keys: ${{ runner.os }}
+          key: "Android_${{ runner.os }}"
+          restore-keys: "Android_${{ runner.os }}"
 
       - name: Build erofs-utils
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
         run: |
           chmod a+x build.sh
-          ./build.sh
-          chmod a+x build_cygwin.sh
-          ./build_cygwin.sh
+          ./build.sh Android
 
       - name: Prepare artifact
         if: success()
@@ -154,21 +88,6 @@ jobs:
 
           echo "androidX86Dir=target/Android_x86" >> $GITHUB_OUTPUT
           androidX86Name=`ls -d target/Android_x86/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "androidX86Name=$androidX86Name" >> $GITHUB_OUTPUT
-
-          echo "linuxX86x64Dir=target/Linux_x86_64" >> $GITHUB_OUTPUT
-          linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
-
-          echo "wslX86x64Dir=target/WSL_x86_64" >> $GITHUB_OUTPUT
-          wslX86x64Name=`ls -d target/WSL_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "wslX86x64Name=$wslX86x64Name" >> $GITHUB_OUTPUT
-
-          echo "linuxAarch64Dir=target/Linux_aarch64" >> $GITHUB_OUTPUT
-          linuxAarch64Name=`ls -d target/Linux_aarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxAarch64Name=$linuxAarch64Name" >> $GITHUB_OUTPUT
-
-          echo "linuxLoongarch64Dir=target/Linux_loongarch64" >> $GITHUB_OUTPUT
-          linuxLoongarch64Name=`ls -d target/Linux_loongarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxLoongarch64Name=$linuxLoongarch64Name" >> $GITHUB_OUTPUT
-
-          echo "cygwinX86x64Dir=target/Cygwin_x86_64" >> $GITHUB_OUTPUT
-          cygwinX86x64Name=`ls -d target/Cygwin_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "cygwinX86x64Name=$cygwinX86x64Name" >> $GITHUB_OUTPUT
 
       - name: Upload erofs-utils Android_arm64-v8a
         if: success()
@@ -198,6 +117,67 @@ jobs:
           name: ${{ steps.Artifact.outputs.androidX86Name }}
           path: '${{ steps.Artifact.outputs.androidX86Dir }}/${{ steps.Artifact.outputs.androidX86Name }}/*'
 
+  Build-on-linux:
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC-8
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+      CCACHE_BASEDIR: "${{ github.workspace }}"
+      CUSTOM_CLANG_PATH: "/opt/clang"
+      GCC_AARCH64_TOOLS_PATH: "/opt/gcc"
+      GCC_LOONGARCH64_TOOLS_PATH: "/opt/loongarch64"
+
+    steps:
+      - name: Setup clang+llvm
+        run: |
+          apt list --installed | grep -E "^clang-[0-9]" | cut -d"/" -f1 | xargs -i sudo apt remove --autoremove {}
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/$(lsb_release -sc)/ llvm-toolchain-$(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/apt.llvm.org.list
+          sudo apt update && sudo apt install clang llvm lld
+
+      - name: Setup gcc-aarch64 tools
+        run: |
+          sudo apt update && sudo apt install cpp-14-aarch64-linux-gnu gcc-14-aarch64-linux-gnu g++-14-aarch64-linux-gnu
+
+      - name: Setup gcc-loongarch64 tools
+        run: |
+          sudo apt update && sudo apt install cpp-14-loongarch64-linux-gnu gcc-14-loongarch64-linux-gnu g++-14-loongarch64-linux-gnu
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}
+          restore-keys: ${{ runner.os }}
+
+      - name: Build erofs-utils
+        run: |
+          chmod a+x build.sh
+          ./build.sh Linux
+
+      - name: Prepare artifact
+        if: success()
+        id: Artifact
+        run: |
+          echo "linuxX86x64Dir=target/Linux_x86_64" >> $GITHUB_OUTPUT
+          linuxX86x64Name=`ls -d target/Linux_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxX86x64Name=$linuxX86x64Name" >> $GITHUB_OUTPUT
+
+          echo "wslX86x64Dir=target/WSL_x86_64" >> $GITHUB_OUTPUT
+          wslX86x64Name=`ls -d target/WSL_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "wslX86x64Name=$wslX86x64Name" >> $GITHUB_OUTPUT
+
+          echo "linuxAarch64Dir=target/Linux_aarch64" >> $GITHUB_OUTPUT
+          linuxAarch64Name=`ls -d target/Linux_aarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxAarch64Name=$linuxAarch64Name" >> $GITHUB_OUTPUT
+
+          echo "linuxLoongarch64Dir=target/Linux_loongarch64" >> $GITHUB_OUTPUT
+          linuxLoongarch64Name=`ls -d target/Linux_loongarch64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "linuxLoongarch64Name=$linuxLoongarch64Name" >> $GITHUB_OUTPUT
+
       - name: Upload erofs-utils Linux_x86_64
         if: success()
         uses: actions/upload-artifact@v4
@@ -226,6 +206,46 @@ jobs:
           name: ${{ steps.Artifact.outputs.linuxLoongarch64Name }}
           path: '${{ steps.Artifact.outputs.linuxLoongarch64Dir }}/${{ steps.Artifact.outputs.linuxLoongarch64Name }}/*'
 
+  Build-cygwin:
+    runs-on: ubuntu-latest
+    env:
+      TZ: UTC-8
+      CCACHE_COMPILERCHECK: "%compiler% -dumpmachine; %compiler% -dumpversion"
+      CCACHE_NOHASHDIR: "true"
+      CCACHE_HARDLINK: "true"
+      CCACHE_BASEDIR: "${{ github.workspace }}"
+      cygwin_prebuilt_packages: "deb [trusted=yes] https://github.com/affggh/deb-cygwin-debian/releases/download/snapshot-deb ./"
+
+    steps:
+      - name: Setup cygwin cross toolchains
+        run: |
+          echo "${{ env.cygwin_prebuilt_packages }}" | sudo tee /etc/apt/sources.list.d/deb-cygwin.list
+          sudo apt update && sudo apt install cygwin cygwin-gcc cygwin-libiconv cygwin-xclang cygwin-libc++
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          fetch-depth: 0
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: "Cygwin_${{ runner.os }}"
+          restore-keys: "Cygwin_${{ runner.os }}"
+
+      - name: Build erofs-utils
+        run: |
+          chmod a+x build_cygwin.sh
+          ./build_cygwin.sh
+
+      - name: Prepare artifact
+        if: success()
+        id: Artifact
+        run: |
+          echo "cygwinX86x64Dir=target/Cygwin_x86_64" >> $GITHUB_OUTPUT
+          cygwinX86x64Name=`ls -d target/Cygwin_x86_64/erofs-utils-v*/ | awk -F '(/|.zip)' '{print $3}'` && echo "cygwinX86x64Name=$cygwinX86x64Name" >> $GITHUB_OUTPUT
+
       - name: Upload erofs-utils Cygwin_x86_64
         if: success()
         uses: actions/upload-artifact@v4
@@ -242,14 +262,14 @@ jobs:
       CCACHE_BASEDIR: "${{ github.workspace }}"
 
     steps:
+      - name: Install dependencies
+        run: brew install ccache
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           fetch-depth: 0
-
-      - name: Install dependencies
-        run: brew install ccache ninja
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2

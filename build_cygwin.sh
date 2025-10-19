@@ -6,71 +6,73 @@ EXT=".exe"
 
 cmake_build()
 {
-	local TARGET=$1
-	local METHOD=$2
-	local ABI=$3
+    local TARGET=$1
+    local METHOD=$2
+    local ABI=$3
 
-	if [[ $METHOD == "Ninja" ]]; then
-		local BUILD_METHOD="-G Ninja"
-		echo ${CMAKE_CMD}
-		local MAKE_CMD="ninja -C $OUT"
-	elif [[ $METHOD == "make" ]]; then
-		local MAKE_CMD="make -C $OUT -j$(nproc --all)"
-	fi;
+    local MAKE_CMD=""
+    local BUILD_METHOD=
+    if [[ $METHOD == "Ninja" ]]; then
+        BUILD_METHOD="-G Ninja"
+        MAKE_CMD="ninja -C $OUT"
+    elif [[ $METHOD == "make" ]]; then
+        MAKE_CMD="make -C $OUT -j$(nproc --all)"
+    fi
 
-	if [[ $TARGET == "Cygwin" ]]; then
-		cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
-			-DCMAKE_SYSTEM_NAME="CYGWIN" \
-			-DCMAKE_BUILD_TYPE="Release" \
-			-DCMAKE_C_COMPILER_LAUNCHER="ccache" \
-			-DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
-			-DCMAKE_C_COMPILER="x86_64-pc-cygwin-clang" \
-			-DCMAKE_CXX_COMPILER="x86_64-pc-cygwin-clang++" \
-			-DCMAKE_C_FLAGS="" \
-			-DCMAKE_CXX_FLAGS="" \
-			-DENABLE_FULL_LTO="OFF" \
-			-DMAX_BLOCK_SIZE="4096"
-	fi
+    if [[ $TARGET == "Cygwin" ]]; then
+        cmake -S ${BUILD_DIR} -B ${OUT} ${BUILD_METHOD} \
+            -DCMAKE_SYSTEM_NAME="CYGWIN" \
+            -DCMAKE_BUILD_TYPE="Release" \
+            -DCMAKE_C_COMPILER_LAUNCHER="ccache" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="ccache" \
+            -DCMAKE_C_COMPILER="x86_64-pc-cygwin-clang" \
+            -DCMAKE_CXX_COMPILER="x86_64-pc-cygwin-clang++" \
+            -DCMAKE_C_FLAGS="" \
+            -DCMAKE_CXX_FLAGS="" \
+            -DENABLE_FULL_LTO="OFF" \
+            -DMAX_BLOCK_SIZE="4096"
+    fi
 
-	${MAKE_CMD}
+    ${MAKE_CMD}
 }
 
 build()
 {
-	local TARGET=$1
-	local ABI=$2
-	local PLATFORM=$3
+    local TARGET=$1
+    local ABI=$2
+    local PLATFORM=$3
 
-	rm -r $OUT > /dev/null 2>&1
+    rm -rf $OUT > /dev/null 2>&1
 
-	local NINJA=`which ninja`
-	if [[ -f $NINJA ]]; then
-		local METHOD="Ninja"
-	else
-		local METHOD="make"
-	fi
+    local NINJA=`which ninja`
+    local METHOD=""
+    if [[ -f $NINJA ]]; then
+      METHOD="Ninja"
+    else
+      METHOD="make"
+    fi
 
-	cmake_build "${TARGET}" "${METHOD}" "${ABI}" "${PLATFORM}"
+    cmake_build "${TARGET}" "${METHOD}" "${ABI}" "${PLATFORM}"
 
-	local BUILD="$OUT/erofs-tools"
-	local DUMP_BIN="$BUILD/dump.erofs${EXT}"
-	local FSCK_BIN="$BUILD/fsck.erofs${EXT}"
-	local MKFS_BIN="$BUILD/mkfs.erofs${EXT}"
-	local EXTRACT_BIN="$BUILD/extract.erofs${EXT}"
-	local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
-	local TARGET_DIR_PATH="./target/${TARGET}_${ABI}/${TARGE_DIR_NAME}"
+    local BUILD="$OUT/erofs-tools"
+    local DUMP_BIN="$BUILD/dump.erofs${EXT}"
+    local FSCK_BIN="$BUILD/fsck.erofs${EXT}"
+    local MKFS_BIN="$BUILD/mkfs.erofs${EXT}"
+    local EXTRACT_BIN="$BUILD/extract.erofs${EXT}"
+    local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
+    local TARGET_DIR_PATH="./target/${TARGET}_${ABI}/${TARGE_DIR_NAME}"
 
-	if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$MKFS_BIN" -a -f "$EXTRACT_BIN" ]; then
-		echo "复制文件中..."
-		[[ ! -d "$TARGET_DIR_PATH" ]] && mkdir -p ${TARGET_DIR_PATH}
-		cp -af $BUILD/*.erofs${EXT} ${TARGET_DIR_PATH}
-		cp -af "/usr/x86_64-pc-cygwin/bin/cygwin1.dll" ${TARGET_DIR_PATH}
-		touch -c -d "2009-01-01 00:00:00" ${TARGET_DIR_PATH}/*
-		echo "编译成功: ${TARGE_DIR_NAME}"
-	else
-		echo "error"
-		exit 1
-	fi
+    if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$MKFS_BIN" -a -f "$EXTRACT_BIN" ]; then
+        echo "复制文件中..."
+        [[ ! -d "$TARGET_DIR_PATH" ]] && mkdir -p ${TARGET_DIR_PATH}
+        cp -af $BUILD/*.erofs${EXT} ${TARGET_DIR_PATH}
+        cp -af "/usr/x86_64-pc-cygwin/bin/cygwin1.dll" ${TARGET_DIR_PATH}
+        touch -c -d "2009-01-01 00:00:00" ${TARGET_DIR_PATH}/*
+        echo "编译成功: ${TARGE_DIR_NAME}"
+    else
+        echo "error"
+        exit 1
+    fi
 }
 
 build "Cygwin" "x86_64"
