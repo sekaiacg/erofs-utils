@@ -219,7 +219,7 @@ namespace skkk {
 					fprintf(mkfsOptionFile, "mkfs.erofs options:        "
 										  "-zlz4hc "               // default: lz4hc
 										  "%s"
-										  "-T %" PRIu64 " -U %s "
+										  "-T %" PRIu32 " -U %s "
 										  "--mount-point=/%s "
 										  "--fs-config-file=%s "
 										  "--file-contexts=%s "
