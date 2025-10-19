@@ -1,7 +1,7 @@
 #include <mutex>
 #include <sys/stat.h>
 #include <utime.h>
-#include <erofs/compress.h>
+#include "../lib/liberofs_compress.h"
 #include <erofs/dir.h>
 #include <erofs/fragments.h>
 #include <private/fs_config.h>
