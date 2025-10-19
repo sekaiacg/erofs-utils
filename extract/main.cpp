@@ -5,11 +5,12 @@
 
 #include <getopt.h>
 #include <erofs/io.h>
-#include <erofs/compress.h>
-#include "../lib/compressor.h"
 #include <erofs/config.h>
 #include <erofs/print.h>
 #include <sys/time.h>
+
+#include "../lib/compressor.h"
+#include "../lib/liberofs_compress.h"
 
 #include "ExtractState.h"
 #include "ExtractOperation.h"
