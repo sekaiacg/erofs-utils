@@ -62,6 +62,8 @@ cmake_build()
                 -DCMAKE_C_COMPILER_TARGET="aarch64-linux-gnu" \
                 -DCMAKE_CXX_COMPILER_TARGET="aarch64-linux-gnu" \
                 -DCMAKE_ASM_COMPILER_TARGET="aarch64-linux-gnu" \
+                -DCMAKE_C_FLAGS="" \
+                -DCMAKE_CXX_FLAGS="" \
                 -DENABLE_FULL_LTO="ON" \
                 -DMAX_BLOCK_SIZE="4096"
         elif [[ ${ABI} == "loongarch64" ]]; then
@@ -77,6 +79,8 @@ cmake_build()
                 -DCMAKE_C_COMPILER_TARGET="loongarch64-linux-gnu" \
                 -DCMAKE_CXX_COMPILER_TARGET="loongarch64-linux-gnu" \
                 -DCMAKE_ASM_COMPILER_TARGET="loongarch64-linux-gnu" \
+                -DCMAKE_C_FLAGS="" \
+                -DCMAKE_CXX_FLAGS="" \
                 -DENABLE_FULL_LTO="OFF" \
                 -DMAX_BLOCK_SIZE="4096"
         fi
