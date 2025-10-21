@@ -645,7 +645,7 @@ static int z_erofs_map_blocks_ext(struct erofs_inode *vi,
 static int z_erofs_fill_inode_lazy(struct erofs_inode *vi)
 {
 	struct erofs_sb_info *sbi = vi->sbi;
-	int err, headnr;
+	int err = 0, headnr;
 	erofs_off_t pos;
 	struct erofs_buf buf = __EROFS_BUF_INITIALIZER;
 	struct z_erofs_map_header *h;
@@ -715,7 +715,7 @@ done:
 	erofs_atomic_set_bit(EROFS_I_Z_INITED_BIT, &vi->flags);
 out_put_metabuf:
 	erofs_put_metabuf(&buf);
-	return 0;
+	return err;
 }
 
 int z_erofs_map_blocks_iter(struct erofs_inode *vi,
