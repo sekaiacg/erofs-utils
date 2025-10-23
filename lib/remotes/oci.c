@@ -1506,24 +1506,26 @@ int ocierofs_io_open(struct erofs_vfile *vfile, const struct ocierofs_config *cf
 
 char *ocierofs_encode_userpass(const char *username, const char *password)
 {
-	char *buf, *out;
-	int ret;
+	char *userpw, *out;
 	size_t outlen;
+	int ret;
 
-	ret = asprintf(&buf, "%s:%s", username ?: "", password ?: "");
-	if (ret == -1)
+	ret = asprintf(&userpw, "%s:%s", username ?: "", password ?: "");
+	if (ret < 0)
 		return ERR_PTR(-ENOMEM);
+
 	outlen = 4 * DIV_ROUND_UP(ret, 3);
 	out = malloc(outlen + 1);
 	if (!out) {
 		ret = -ENOMEM;
 	} else {
-		ret = erofs_base64_encode((unsigned char *)buf, ret, out);
+		ret = erofs_base64_encode((u8 *)userpw, ret, out);
 		if (ret < 0)
 			free(out);
-		out[ret] = '\0';
+		else
+			out[ret] = '\0';
 	}
-	free(buf);
+	free(userpw);
 	return ret < 0 ? ERR_PTR(ret) : out;
 }
 
