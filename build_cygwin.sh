@@ -59,7 +59,7 @@ build()
     local FSCK_BIN="$BUILD/fsck.erofs${EXT}"
     local MKFS_BIN="$BUILD/mkfs.erofs${EXT}"
     local EXTRACT_BIN="$BUILD/extract.erofs${EXT}"
-    local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-${TARGET}_${ABI}-$(TZ=UTC-8 date +%y%m%d%H%M)"
+    local TARGE_DIR_NAME="erofs-utils-${EROFS_VERSION}-$(TZ=UTC-8 date +%y%m%d)-${TARGET}_${ABI}"
     local TARGET_DIR_PATH="./target/${TARGET}_${ABI}/${TARGE_DIR_NAME}"
 
     if [ -f "$DUMP_BIN" -a -f "$FSCK_BIN" -a -f "$MKFS_BIN" -a -f "$EXTRACT_BIN" ]; then
