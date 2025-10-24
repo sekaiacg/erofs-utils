@@ -7,6 +7,7 @@
 #include <erofs/io.h>
 #include <erofs/config.h>
 #include <erofs/print.h>
+#include <iostream>
 #include <sys/time.h>
 
 #include "../lib/compressor.h"
@@ -50,14 +51,14 @@ static inline void usage() {
 			 "  " GREEN2_BOLD "-r" COLOR_NONE "                      " BROWN "When using config, recurse directories" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-s" COLOR_NONE "                      " BROWN "Silent mode, Don't show progress" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-f, --overwrite" COLOR_NONE "         " BROWN "[" GREEN2_BOLD "default: skip" COLOR_NONE BROWN "] overwrite files that already exist" COLOR_NONE "\n"
-			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads,  default: -T0, is " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
+			 "  " GREEN2_BOLD "-T#" COLOR_NONE "                     " BROWN "[" GREEN2_BOLD "1-%u" COLOR_NONE BROWN "] Use # threads, default: -T0, is " GREEN2_BOLD "%u" COLOR_NONE COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "--only-cfg" COLOR_NONE "              " BROWN "Only extract fs_config|file_contexts|fs_options" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-o, --outdir=X" COLOR_NONE "          " BROWN "Output dir" COLOR_NONE "\n"
 			 "  " GREEN2_BOLD "-V, --version" COLOR_NONE "           " BROWN "Print the version info" COLOR_NONE "\n",
 			 eo->limitHardwareConcurrency,
 			 eo->hardwareConcurrency
 	);
-	fputs(buf, stderr);
+	std::cerr << buf << std::endl;
 }
 
 static inline void print_version() {
@@ -214,10 +215,45 @@ static inline void printOperationTime(struct timeval *start, struct timeval *end
 	);
 }
 
+#if defined(_WIN32) || defined(CYGWIN)
+static void handleWinTerminal() {
+	HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE);
+	if (hStdin != INVALID_HANDLE_VALUE) {
+		DWORD mode;
+		if (GetConsoleMode(hStdin, &mode)) {
+			mode &= ~ENABLE_QUICK_EDIT_MODE;
+			mode &= ~ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+			mode &= ~ENABLE_MOUSE_INPUT;
+			SetConsoleMode(hStdin, mode);
+		}
+	}
+}
+
+static void enableWinTerminalColor(DWORD handle) {
+	HANDLE nHandle = GetStdHandle(handle);
+	if (nHandle != INVALID_HANDLE_VALUE) {
+		DWORD mode;
+		if (GetConsoleMode(nHandle, &mode)) {
+			mode |= ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+			SetConsoleMode(nHandle, mode);
+		}
+	}
+}
+#endif
+
 int main(int argc, char **argv) {
 	int ret = RET_EXTRACT_DONE, err;
-
 	struct timeval start = {}, end = {};
+
+#if defined(_WIN32) || defined(CYGWIN)
+	handleWinTerminal();
+	enableWinTerminalColor(STD_OUTPUT_HANDLE);
+	enableWinTerminalColor(STD_ERROR_HANDLE);
+#endif
+
+	setbuf(stdout, nullptr);
+	setbuf(stderr, nullptr);
+
 	// Start time
 	gettimeofday(&start, nullptr);
 
