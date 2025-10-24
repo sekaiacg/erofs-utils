@@ -362,7 +362,7 @@ struct erofs_vfile *erofs_gzran_zinfo_open(struct erofs_vfile *vin,
 	for (; i < ios->entries; ++i, ++c) {
 		ios->cp[i].in_bitpos = (le64_to_cpu(c->in) << 3) | c->bits;
 		ios->cp[i].outpos = le64_to_cpu(c->out);
-		memcpy(ios->cp[i].window, c->window, sizeof(*c->window));
+		memcpy(ios->cp[i].window, c->window, sizeof(c->window));
 	}
 	ios->vin = vin;
 	vf->ops = &erofs_gzran_ios_vfops;
