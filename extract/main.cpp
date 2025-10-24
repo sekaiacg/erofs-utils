@@ -61,11 +61,15 @@ static inline void usage() {
 	std::cerr << buf << std::endl;
 }
 
+#ifndef EXTRACT_BUILD_TIME
+#define EXTRACT_BUILD_TIME "-0"
+#endif
+
 static inline void print_version() {
 	string compressors;
 	get_available_compressors(compressors);
 	printf("  " BROWN "erofs-utils:" COLOR_NONE "            " RED2_BOLD "%s" COLOR_NONE "\n", cfg.c_version);
-	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.7" COLOR_NONE "\n");
+	printf("  " BROWN "extract.erofs:" COLOR_NONE "          " RED2_BOLD "1.0.7" EXTRACT_BUILD_TIME COLOR_NONE "\n");
 	printf("  " BROWN "Available compressors:" COLOR_NONE "  " RED2_BOLD "%s" COLOR_NONE "\n", compressors.c_str());
 	printf("  " BROWN "extract author:" COLOR_NONE "         " RED2_BOLD "skkk" COLOR_NONE "\n");
 }
