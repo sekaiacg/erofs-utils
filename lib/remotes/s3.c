@@ -47,6 +47,7 @@ static int s3erofs_prepare_url(struct s3erofs_curl_request *req,
 {
 	static const char https[] = "https://";
 	const char *schema, *host;
+	/* an additional slash is added, which wasn't specified by user inputs */
 	bool slash = false;
 	char *url = req->url;
 	int pos, i;
@@ -82,8 +83,10 @@ static int s3erofs_prepare_url(struct s3erofs_curl_request *req,
 		}
 	}
 	if (key) {
-		slash |= url[pos - 1] != '/';
-		pos -= !slash;
+		if (url[pos - 1] == '/')
+			--pos;
+		else
+			slash = true;
 		pos += snprintf(url + pos, S3EROFS_URL_LEN - pos, "/%s", key);
 	}
 
