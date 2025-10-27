@@ -44,7 +44,9 @@ liberofs_la_SOURCES = config.c io.c cache.c super.c inode.c xattr.c exclude.c \
 		      vmdk.c metabox.c global.c importer.c base64.c
 
 liberofs_la_CFLAGS = -Wall ${libuuid_CFLAGS} -I$(top_srcdir)/include
-liberofs_la_LDFLAGS =
+liberofs_la_LDFLAGS = ${libselinux_LIBS} ${libuuid_LIBS} ${liblz4_LIBS} \
+	${liblzma_LIBS} ${zlib_LIBS} ${libdeflate_LIBS} ${libzstd_LIBS} \
+	${libqpl_LIBS}
 if ENABLE_LZ4
 liberofs_la_CFLAGS += ${liblz4_CFLAGS}
 liberofs_la_SOURCES += compressor_lz4.c
@@ -68,12 +70,15 @@ liberofs_la_SOURCES += compressor_libzstd.c
 endif
 if ENABLE_XXHASH
 liberofs_la_CFLAGS += ${libxxhash_CFLAGS}
+liberofs_la_LDFLAGS += ${libxxhash_LIBS}
 else
 liberofs_la_SOURCES += xxhash.c
 endif
 liberofs_la_CFLAGS += ${libcurl_CFLAGS} ${openssl_CFLAGS} ${libxml2_CFLAGS}
+liberofs_la_LDFLAGS += ${libcurl_LIBS} ${openssl_LIBS}
 if ENABLE_S3
 liberofs_la_SOURCES += remotes/s3.c
+liberofs_la_LDFLAGS += ${libxml2_LIBS}
 endif
 if ENABLE_EROFS_MT
 liberofs_la_LDFLAGS += -lpthread
@@ -81,9 +86,17 @@ liberofs_la_SOURCES += workqueue.c
 endif
 if OS_LINUX
 liberofs_la_CFLAGS += ${libnl3_CFLAGS}
+liberofs_la_LDFLAGS += ${libnl3_LIBS}
 liberofs_la_SOURCES += backends/nbd.c
 endif
 liberofs_la_SOURCES += remotes/oci.c
-liberofs_la_CFLAGS += ${libcurl_CFLAGS} ${json_c_CFLAGS}
-liberofs_la_LDFLAGS += ${libcurl_LIBS} ${json_c_LIBS}
+liberofs_la_CFLAGS += ${json_c_CFLAGS}
+liberofs_la_LDFLAGS += ${json_c_LIBS}
 liberofs_la_SOURCES += gzran.c
+
+if ENABLE_S3
+noinst_PROGRAMS  = s3erofs_test
+s3erofs_test_SOURCES = remotes/s3.c
+s3erofs_test_CFLAGS = -Wall -I$(top_srcdir)/include ${libxml2_CFLAGS} ${openssl_CFLAGS} -DTEST
+s3erofs_test_LDADD = liberofs.la
+endif

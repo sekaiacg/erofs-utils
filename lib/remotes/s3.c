@@ -766,3 +766,196 @@ err_global:
 	s3erofs_curl_easy_exit(s3);
 	return ret;
 }
+
+#ifdef TEST
+struct s3erofs_prepare_utl_testcase {
+	const char *name;
+	const char *endpoint;
+	const char *bucket;
+	const char *key;
+	enum s3erofs_url_style url_style;
+	const char *expected_url;
+	const char *expected_canonical;
+	int expected_ret;
+};
+
+static bool run_s3erofs_prepare_url_test(const struct s3erofs_prepare_utl_testcase *tc)
+{
+	struct s3erofs_curl_request req = { .method = "GET" };
+	struct s3erofs_query_params params = { .num = 0 };
+	int ret;
+
+	printf("Running test: %s\n", tc->name);
+
+	ret = s3erofs_prepare_url(&req, tc->endpoint, tc->bucket, tc->key, &params,
+				  tc->url_style);
+
+	if (ret != tc->expected_ret) {
+		printf("  FAILED: expected return %d, got %d\n", tc->expected_ret, ret);
+		return false;
+	}
+
+	if (ret < 0) {
+		printf("  PASSED (expected error)\n");
+		return true;
+	}
+
+	if (tc->expected_url && strcmp(req.url, tc->expected_url) != 0) {
+		printf("  FAILED: URL mismatch\n");
+		printf("    Expected: %s\n", tc->expected_url);
+		printf("    Got:      %s\n", req.url);
+		return false;
+	}
+
+	if (tc->expected_canonical &&
+	    strcmp(req.canonical_query, tc->expected_canonical) != 0) {
+		printf("  FAILED: Canonical query mismatch\n");
+		printf("    Expected: %s\n", tc->expected_canonical);
+		printf("    Got:      %s\n", req.canonical_query);
+		return false;
+	}
+
+	printf("  PASSED\n");
+	printf("    URL: %s\n", req.url);
+	printf("    Canonical: %s\n", req.canonical_query);
+	return true;
+}
+
+static bool test_s3erofs_prepare_url(void)
+{
+	struct s3erofs_prepare_utl_testcase tests[] = {
+		{
+			.name = "Virtual-hosted style with https",
+			.endpoint = "s3.amazonaws.com",
+			.bucket = "my-bucket",
+			.key = "path/to/object.txt",
+			.url_style = S3EROFS_URL_STYLE_VIRTUAL_HOST,
+			.expected_url =
+				"https://my-bucket.s3.amazonaws.com/path/to/object.txt",
+			.expected_canonical = "/my-bucket/path/to/object.txt",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Path style with https",
+			.endpoint = "s3.amazonaws.com",
+			.bucket = "my-bucket",
+			.key = "path/to/object.txt",
+			.url_style = S3EROFS_URL_STYLE_PATH,
+			.expected_url =
+				"https://s3.amazonaws.com/my-bucket/path/to/object.txt",
+			.expected_canonical = "/my-bucket/path/to/object.txt",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Virtual-hosted with explicit https://",
+			.endpoint = "https://s3.us-west-2.amazonaws.com",
+			.bucket = "test-bucket",
+			.key = "file.bin",
+			.url_style = S3EROFS_URL_STYLE_VIRTUAL_HOST,
+			.expected_url =
+				"https://test-bucket.s3.us-west-2.amazonaws.com/file.bin",
+			.expected_canonical = "/test-bucket/file.bin",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Path style with explicit http://",
+			.endpoint = "http://localhost:9000",
+			.bucket = "local-bucket",
+			.key = "data/file.dat",
+			.url_style = S3EROFS_URL_STYLE_PATH,
+			.expected_url =
+				"http://localhost:9000/local-bucket/data/file.dat",
+			.expected_canonical = "/local-bucket/data/file.dat",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Virtual-hosted style with key ends with slash",
+			.endpoint = "http://localhost:9000",
+			.bucket = "local-bucket",
+			.key = "data/file.dat/",
+			.url_style = S3EROFS_URL_STYLE_VIRTUAL_HOST,
+			.expected_url =
+				"http://local-bucket.localhost:9000/data/file.dat/",
+			.expected_canonical = "/local-bucket/data/file.dat/",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Path style with key ends with slash",
+			.endpoint = "http://localhost:9000",
+			.bucket = "local-bucket",
+			.key = "data/file.dat/",
+			.url_style = S3EROFS_URL_STYLE_PATH,
+			.expected_url =
+				"http://localhost:9000/local-bucket/data/file.dat/",
+			.expected_canonical = "/local-bucket/data/file.dat/",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Virtual-hosted without key",
+			.endpoint = "s3.amazonaws.com",
+			.bucket = "my-bucket",
+			.key = NULL,
+			.url_style = S3EROFS_URL_STYLE_VIRTUAL_HOST,
+			.expected_url = "https://my-bucket.s3.amazonaws.com/",
+			.expected_canonical = "/my-bucket/",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Path style without key",
+			.endpoint = "s3.amazonaws.com",
+			.bucket = "my-bucket",
+			.key = NULL,
+			.url_style = S3EROFS_URL_STYLE_PATH,
+			.expected_url = "https://s3.amazonaws.com/my-bucket",
+			.expected_canonical = "/my-bucket",
+			.expected_ret = 0,
+		},
+		{
+			.name = "Error: NULL endpoint",
+			.endpoint = NULL,
+			.bucket = "my-bucket",
+			.key = "file.txt",
+			.url_style = S3EROFS_URL_STYLE_PATH,
+			.expected_url = NULL,
+			.expected_canonical = NULL,
+			.expected_ret = -EINVAL,
+		},
+		{
+			.name = "Error: NULL bucket",
+			.endpoint = "s3.amazonaws.com",
+			.bucket = NULL,
+			.key = "file.txt",
+			.url_style = S3EROFS_URL_STYLE_PATH,
+			.expected_url = NULL,
+			.expected_canonical = NULL,
+			.expected_ret = -EINVAL,
+		},
+		{
+			.name = "Key with special characters",
+			.endpoint = "s3.amazonaws.com",
+			.bucket = "bucket",
+			.key = "path/to/file-name_v2.0.txt",
+			.url_style = S3EROFS_URL_STYLE_VIRTUAL_HOST,
+			.expected_url =
+				"https://bucket.s3.amazonaws.com/path/to/file-name_v2.0.txt",
+			.expected_canonical = "/bucket/path/to/file-name_v2.0.txt",
+			.expected_ret = 0,
+		}
+	};
+	bool succ = true;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(tests); ++i) {
+		succ &= run_s3erofs_prepare_url_test(&tests[i]);
+		putc('\n', stdout);
+	}
+
+	printf("Run all %d tests\n", i);
+	return succ;
+}
+
+int main(int argc, char *argv[])
+{
+	exit(test_s3erofs_prepare_url() ? EXIT_SUCCESS : EXIT_FAILURE);
+}
+#endif
