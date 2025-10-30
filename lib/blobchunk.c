@@ -8,6 +8,7 @@
 #include "erofs/hashmap.h"
 #include "erofs/blobchunk.h"
 #include "erofs/block_list.h"
+#include "erofs/importer.h"
 #include "liberofs_cache.h"
 #include "liberofs_private.h"
 #include "sha256.h"
@@ -64,19 +65,21 @@ static struct erofs_blobchunk *erofs_blob_getchunk(struct erofs_sb_info *sbi,
 
 	erofs_sha256(buf, chunksize, sha256);
 	hash = memhash(sha256, sizeof(sha256));
-	chunk = hashmap_get_from_hash(&blob_hashmap, hash, sha256);
-	if (chunk) {
-		DBG_BUGON(chunksize != chunk->chunksize);
+	if (cfg.c_dedupe != EROFS_DEDUPE_FORCE_OFF) {
+		chunk = hashmap_get_from_hash(&blob_hashmap, hash, sha256);
+		if (chunk) {
+			DBG_BUGON(chunksize != chunk->chunksize);
 
-		sbi->saved_by_deduplication += chunksize;
-		if (chunk->blkaddr == erofs_holechunk.blkaddr) {
-			chunk = &erofs_holechunk;
-			erofs_dbg("Found duplicated hole chunk");
-		} else {
-			erofs_dbg("Found duplicated chunk at %llu",
-				  chunk->blkaddr | 0ULL);
+			sbi->saved_by_deduplication += chunksize;
+			if (chunk->blkaddr == erofs_holechunk.blkaddr) {
+				chunk = &erofs_holechunk;
+				erofs_dbg("Found duplicated hole chunk");
+			} else {
+				erofs_dbg("Found duplicated chunk at %llu",
+					  chunk->blkaddr | 0ULL);
+			}
+			return chunk;
 		}
-		return chunk;
 	}
 
 	chunk = malloc(sizeof(struct erofs_blobchunk));

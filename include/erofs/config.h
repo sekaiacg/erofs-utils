@@ -41,6 +41,7 @@ struct erofs_configure {
 	bool c_dry_run;
 	char c_timeinherit;
 	char c_chunkbits;
+	char c_dedupe;
 	bool c_showprogress;
 	bool c_extra_ea_name_prefixes;
 	bool c_xattr_name_filter;

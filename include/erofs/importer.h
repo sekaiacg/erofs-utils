@@ -18,6 +18,12 @@ enum {
 };
 
 enum {
+	EROFS_DEDUPE_UNSPECIFIED,
+	EROFS_DEDUPE_FORCE_OFF,
+	EROFS_DEDUPE_FORCE_ON,
+};
+
+enum {
 	EROFS_FRAGDEDUPE_FULL,
 	EROFS_FRAGDEDUPE_INODE,
 	EROFS_FRAGDEDUPE_OFF,
@@ -45,7 +51,7 @@ struct erofs_importer_params {
 	bool no_zcompact;
 	bool no_lz4_0padding;
 	bool ztailpacking;
-	bool dedupe;
+	char dedupe;
 	bool fragments;
 	bool all_fragments;
 	bool compress_dir;

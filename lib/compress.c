@@ -636,7 +636,7 @@ retry_aligned:
 			may_packing = false;
 			e->length = min_t(u32, e->length, ctx->pclustersize);
 nocompression:
-			if (params->dedupe)
+			if (params->dedupe != EROFS_DEDUPE_FORCE_OFF)
 				ret = write_uncompressed_block(ctx, len, dst);
 			else
 				ret = write_uncompressed_extents(ctx, len,
@@ -1381,7 +1381,7 @@ int erofs_commit_compressed_file(struct z_erofs_compress_ictx *ictx,
 
 	if (ptotal)
 		(void)erofs_bh_balloon(bh, ptotal);
-	else if (!params->fragments && !params->dedupe)
+	else if (!params->fragments && params->dedupe == EROFS_DEDUPE_FORCE_OFF)
 		DBG_BUGON(!inode->idata_size);
 
 	erofs_info("compressed %s (%llu bytes) into %llu bytes",
@@ -1743,7 +1743,7 @@ static int z_erofs_mt_global_init(struct erofs_importer *im)
 	if (workers < 1)
 		return 0;
 	/* XXX: `dedupe` is actually not a global option here. */
-	if (workers >= 1 && params->dedupe) {
+	if (workers >= 1 && params->dedupe != EROFS_DEDUPE_FORCE_OFF) {
 		erofs_warn("multi-threaded dedupe is NOT implemented for now");
 		cfg.c_mt_workers = 0;
 	} else {
@@ -1844,7 +1844,8 @@ void *erofs_prepare_compressed_file(struct erofs_importer *im,
 	ictx->data_unaligned = erofs_sb_has_48bit(sbi) &&
 		cfg.c_max_decompressed_extent_bytes <=
 			z_erofs_get_pclustersize(ictx);
-	if (params->fragments && !params->dedupe && !ictx->data_unaligned)
+	if (params->fragments && params->dedupe == EROFS_DEDUPE_FORCE_OFF &&
+	    !ictx->data_unaligned)
 		inode->z_advise |= Z_EROFS_ADVISE_INTERLACED_PCLUSTER;
 
 	init_list_head(&ictx->extents);

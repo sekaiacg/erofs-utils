@@ -376,7 +376,7 @@ static int erofs_mkfs_feat_set_dedupe(struct erofs_importer_params *params,
 {
 	if (vallen)
 		return -EINVAL;
-	params->dedupe = en;
+	params->dedupe = en ? EROFS_DEDUPE_FORCE_ON : EROFS_DEDUPE_FORCE_OFF;
 	return 0;
 }
 
@@ -1826,7 +1826,7 @@ int main(int argc, char **argv)
 	if (err)
 		goto exit;
 
-	if (importer_params.dedupe) {
+	if (importer_params.dedupe == EROFS_DEDUPE_FORCE_ON) {
 		if (!cfg.c_compr_opts[0].alg) {
 			erofs_err("Compression is not enabled.  Turn on chunk-based data deduplication instead.");
 			cfg.c_chunkbits = g_sbi.blkszbits;
@@ -1840,6 +1840,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	cfg.c_dedupe = importer_params.dedupe;
 	if (cfg.c_chunkbits) {
 		err = erofs_blob_init(cfg.c_blobdev_path, 1 << cfg.c_chunkbits);
 		if (err)
