@@ -222,15 +222,24 @@ static ssize_t erofs_gzran_ios_vfpread(struct erofs_vfile *vf, void *buf, size_t
 	struct erofs_gzran_iostream *ios =
 		(struct erofs_gzran_iostream *)vf->payload;
 	struct erofs_gzran_cutpoint *cp = ios->cp;
-	u8 src[1 << 14], discard[EROFS_GZRAN_WINSIZE];
-	unsigned int bits;
+	u8 src[131072], discard[EROFS_GZRAN_WINSIZE];
+	union {
+		unsigned int bits, i;
+	} u;
 	bool skip = true;
-	u64 inpos;
+	u64 inpos, remin;
 	z_stream strm;
 	int ret;
 
-	while (cp < ios->cp + ios->entries - 1 && cp[1].outpos <= offset)
+	if (offset == ~0ULL) {
+		DBG_BUGON(1);
+		return -EIO;
+	}
+
+	while (cp[1].outpos <= offset)
 		++cp;
+	for (u.i = 1; cp[u.i].outpos < offset + len; ++u.i);
+	remin = (cp[u.i].in_bitpos >> 3) + !!(cp[u.i].in_bitpos & 7);
 
 	strm.zalloc = Z_NULL;
 	strm.zfree = Z_NULL;
@@ -241,20 +250,22 @@ static ssize_t erofs_gzran_ios_vfpread(struct erofs_vfile *vf, void *buf, size_t
 	if (ret != Z_OK)
 		return -EFAULT;
 
-	bits = cp->in_bitpos & 7;
-	inpos = (cp->in_bitpos >> 3) - (bits ? 1 : 0);
-	ret = erofs_io_pread(ios->vin, src, sizeof(src), inpos);
+	u.bits = cp->in_bitpos & 7;
+	inpos = (cp->in_bitpos >> 3) - (u.bits ? 1 : 0);
+	remin -= inpos;
+	ret = erofs_io_pread(ios->vin, src,
+			     min(remin, (u64)sizeof(src)), inpos);
 	if (ret < 0)
 		return ret;
-
-	if (bits) {
-		inflatePrime(&strm, bits, src[0] >> (8 - bits));
+	if (u.bits) {
+		inflatePrime(&strm, u.bits, src[0] >> (8 - u.bits));
 		strm.next_in = src + 1;
 		strm.avail_in = ret - 1;
 	} else {
 		strm.next_in = src;
 		strm.avail_in = ret;
 	}
+	remin -= ret;
 	inpos += ret;
 	(void)inflateSetDictionary(&strm, cp->window, sizeof(cp->window));
 
@@ -278,13 +289,15 @@ static ssize_t erofs_gzran_ios_vfpread(struct erofs_vfile *vf, void *buf, size_t
 		/* uncompress until avail_out filled, or end of stream */
 		do {
 			if (!strm.avail_in) {
-				ret = erofs_io_pread(ios->vin, src, sizeof(src),
+				ret = erofs_io_pread(ios->vin, src,
+						     min(remin, (u64)sizeof(src)),
 						     inpos);
 				if (ret < 0)
 					return ret;
 				if (!ret)
 					return -EIO;
 				inpos += ret;
+				remin -= ret;
 				strm.avail_in = ret;
 				strm.next_in = src;
 			}
@@ -343,7 +356,7 @@ struct erofs_vfile *erofs_gzran_zinfo_open(struct erofs_vfile *vin,
 		goto err_ios;
 	}
 
-	ios->cp = malloc(sizeof(*ios->cp) * ios->entries);
+	ios->cp = malloc(sizeof(*ios->cp) * (ios->entries + 1));
 	if (!ios->cp) {
 		ret = -ENOMEM;
 		goto err_ios;
@@ -364,6 +377,8 @@ struct erofs_vfile *erofs_gzran_zinfo_open(struct erofs_vfile *vin,
 		ios->cp[i].outpos = le64_to_cpu(c->out);
 		memcpy(ios->cp[i].window, c->window, sizeof(c->window));
 	}
+	ios->cp[i].in_bitpos = -1;
+	ios->cp[i].outpos = ~0ULL;
 	ios->vin = vin;
 	vf->ops = &erofs_gzran_ios_vfops;
 	return vf;
