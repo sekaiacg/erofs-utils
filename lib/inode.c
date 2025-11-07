@@ -376,18 +376,19 @@ erofs_nid_t erofs_lookupnid(struct erofs_inode *inode)
 {
 	struct erofs_buffer_head *const bh = inode->bh;
 	struct erofs_sb_info *sbi = inode->sbi;
-	erofs_off_t off, meta_offset;
+	erofs_off_t off;
+	s64 meta_offset;
 	erofs_nid_t nid;
 
 	if (bh && inode->nid == EROFS_NID_UNALLOCATED) {
 		erofs_mapbh(NULL, bh->block);
 		off = erofs_btell(bh, false);
 
-		if (!inode->in_metabox) {
-			meta_offset = erofs_pos(sbi, sbi->meta_blkaddr);
-			DBG_BUGON(off < meta_offset);
-		} else {
+		if (inode->in_metabox) {
 			meta_offset = 0;
+		} else {
+			meta_offset = (s64)erofs_pos(sbi, sbi->meta_blkaddr);
+			DBG_BUGON(off < meta_offset && !sbi->m2gr);
 		}
 
 		nid = (off - meta_offset) >> EROFS_ISLOTBITS;
@@ -718,8 +719,8 @@ int erofs_iflush(struct erofs_inode *inode)
 	struct erofs_sb_info *sbi = inode->sbi;
 	struct erofs_buffer_head *bh = inode->bh;
 	erofs_off_t off = erofs_iloc(inode);
-	struct erofs_bufmgr *ibmgr = inode->in_metabox ?
-				erofs_metabox_bmgr(sbi) : sbi->bmgr;
+	struct erofs_bufmgr *ibmgr =
+		erofs_metadata_bmgr(sbi, inode->in_metabox) ?: sbi->bmgr;
 	union {
 		struct erofs_inode_compact dic;
 		struct erofs_inode_extended die;
@@ -903,7 +904,7 @@ static int erofs_prepare_inode_buffer(struct erofs_importer *im,
 {
 	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
-	struct erofs_bufmgr *ibmgr = sbi->bmgr;
+	struct erofs_bufmgr *ibmgr;
 	unsigned int inodesize;
 	struct erofs_buffer_head *bh, *ibh;
 
@@ -921,12 +922,9 @@ static int erofs_prepare_inode_buffer(struct erofs_importer *im,
 	if (inode->extent_isize)
 		inodesize = roundup(inodesize, 8) + inode->extent_isize;
 
-	if (!erofs_is_special_identifier(inode->i_srcpath) &&
-	    erofs_metabox_bmgr(sbi))
+	if (!erofs_is_special_identifier(inode->i_srcpath) && sbi->mxgr)
 		inode->in_metabox = true;
-
-	if (inode->in_metabox)
-		ibmgr = erofs_metabox_bmgr(sbi) ?: sbi->bmgr;
+	ibmgr = erofs_metadata_bmgr(sbi, inode->in_metabox) ?: sbi->bmgr;
 
 	if (inode->datalayout == EROFS_INODE_FLAT_PLAIN)
 		goto noinline;
@@ -1000,8 +998,8 @@ static int erofs_bh_flush_write_inline(struct erofs_buffer_head *bh)
 {
 	struct erofs_inode *const inode = bh->fsprivate;
 	struct erofs_sb_info *sbi = inode->sbi;
-	struct erofs_bufmgr *ibmgr = inode->in_metabox ?
-				erofs_metabox_bmgr(sbi) : sbi->bmgr;
+	struct erofs_bufmgr *ibmgr =
+		erofs_metadata_bmgr(sbi, inode->in_metabox) ?: sbi->bmgr;
 	const erofs_off_t off = erofs_btell(bh, false);
 	int ret;
 
@@ -1360,21 +1358,27 @@ static void erofs_fixup_meta_blkaddr(struct erofs_inode *root)
 	const erofs_off_t rootnid_maxoffset = 0xffff << EROFS_ISLOTBITS;
 	struct erofs_buffer_head *const bh = root->bh;
 	struct erofs_sb_info *sbi = root->sbi;
-	erofs_off_t meta_offset = 0;
+	int bsz = erofs_blksiz(sbi);
+	int meta_offset = 0;
 	erofs_off_t off;
 
 	erofs_mapbh(NULL, bh->block);
 	off = erofs_btell(bh, false);
-	if (!root->in_metabox && off > rootnid_maxoffset)
-		meta_offset = round_up(off - rootnid_maxoffset,
-				       erofs_blksiz(sbi));
-	else if (root->in_metabox && !erofs_sb_has_48bit(sbi)) {
+	if (!root->in_metabox) {
+		if (!off) {
+			DBG_BUGON(!sbi->m2gr);
+			DBG_BUGON(sbi->meta_blkaddr != -1);
+			meta_offset = -bsz;	/* avoid NID 0 */
+		} else if (off > rootnid_maxoffset) {
+			meta_offset = round_up(off - rootnid_maxoffset, bsz);
+			sbi->meta_blkaddr = erofs_blknr(sbi, meta_offset);
+		}
+	} else if (!erofs_sb_has_48bit(sbi)) {
 		sbi->build_time = sbi->epoch;
 		sbi->epoch = max_t(s64, 0, (s64)sbi->build_time - UINT32_MAX);
 		sbi->build_time -= sbi->epoch;
 		erofs_sb_set_48bit(sbi);
 	}
-	sbi->meta_blkaddr = erofs_blknr(sbi, meta_offset);
 	root->nid = ((off - meta_offset) >> EROFS_ISLOTBITS) |
 		((u64)root->in_metabox << EROFS_DIRENT_NID_METABOX_BIT);
 }

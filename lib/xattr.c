@@ -828,7 +828,7 @@ int erofs_xattr_flush_name_prefixes(struct erofs_importer *im, bool plain)
 
 	if (!plain) {
 		if (erofs_sb_has_metabox(sbi)) {
-			bmgr = erofs_metabox_bmgr(sbi);
+			bmgr = erofs_metadata_bmgr(sbi, true);
 			vf = bmgr->vf;
 		} else if (may_fragments) {
 			erofs_sb_set_fragments(sbi);

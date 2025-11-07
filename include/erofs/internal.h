@@ -97,7 +97,7 @@ struct erofs_sb_info {
 	u64 total_blocks;
 	u64 primarydevice_blocks;
 
-	u32 meta_blkaddr;
+	s32 meta_blkaddr;
 	u32 xattr_blkaddr;
 
 	u32 feature_compat;
@@ -150,7 +150,7 @@ struct erofs_sb_info {
 	struct erofs_bufmgr *bmgr;
 	struct erofs_xattrmgr *xamgr;
 	struct z_erofs_mgr *zmgr;
-	struct erofs_metaboxmgr *m2gr;
+	struct erofs_metamgr *m2gr, *mxgr;
 	struct erofs_packed_inode *packedinode;
 	struct erofs_buffer_head *bh_sb;
 	struct erofs_buffer_head *bh_devt;
@@ -309,8 +309,8 @@ static inline bool erofs_inode_in_metabox(struct erofs_inode *inode)
 static inline erofs_off_t erofs_iloc(struct erofs_inode *inode)
 {
 	struct erofs_sb_info *sbi = inode->sbi;
-	erofs_off_t base = erofs_inode_in_metabox(inode) ? 0 :
-			erofs_pos(sbi, sbi->meta_blkaddr);
+	s64 base = erofs_inode_in_metabox(inode) ? 0 :
+		(s64)erofs_pos(sbi, sbi->meta_blkaddr);
 
 	return base + ((inode->nid & EROFS_DIRENT_NID_MASK) << EROFS_ISLOTBITS);
 }
@@ -434,8 +434,8 @@ int erofs_mkfs_init_devices(struct erofs_sb_info *sbi, unsigned int devices);
 int erofs_write_device_table(struct erofs_sb_info *sbi);
 int erofs_enable_sb_chksum(struct erofs_sb_info *sbi, u32 *crc);
 int erofs_superblock_csum_verify(struct erofs_sb_info *sbi);
-int erofs_mkfs_format_fs(struct erofs_sb_info *sbi,
-			 unsigned int blkszbits, unsigned int dsunit);
+int erofs_mkfs_format_fs(struct erofs_sb_info *sbi, unsigned int blkszbits,
+			 unsigned int dsunit, bool metazone);
 int erofs_mkfs_load_fs(struct erofs_sb_info *sbi, unsigned int dsunit);
 
 /* namei.c */

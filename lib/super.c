@@ -8,6 +8,7 @@
 #include "erofs/xattr.h"
 #include "liberofs_cache.h"
 #include "liberofs_compress.h"
+#include "liberofs_metabox.h"
 
 static bool check_layout_compatibility(struct erofs_sb_info *sbi,
 				       struct erofs_super_block *dsb)
@@ -418,8 +419,8 @@ out:
 	return 0;
 }
 
-int erofs_mkfs_format_fs(struct erofs_sb_info *sbi,
-			 unsigned int blkszbits, unsigned int dsunit)
+int erofs_mkfs_format_fs(struct erofs_sb_info *sbi, unsigned int blkszbits,
+			 unsigned int dsunit, bool metazone)
 {
 	struct erofs_buffer_head *bh;
 	struct erofs_bufmgr *bmgr;
@@ -430,7 +431,10 @@ int erofs_mkfs_format_fs(struct erofs_sb_info *sbi,
 		return -ENOMEM;
 	sbi->bmgr = bmgr;
 	bmgr->dsunit = dsunit;
-
+	if (metazone)
+		sbi->meta_blkaddr = EROFS_META_NEW_ADDR;
+	else
+		sbi->meta_blkaddr = 0;
 	bh = erofs_reserve_sb(bmgr);
 	if (IS_ERR(bh))
 		return PTR_ERR(bh);

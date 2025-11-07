@@ -69,8 +69,8 @@ int erofs_importer_init(struct erofs_importer *im)
 			goto out_err;
 	}
 
-	subsys = "metabox";
-	err = erofs_metabox_init(sbi);
+	subsys = "metadata";
+	err = erofs_metadata_init(sbi);
 	if (err)
 		goto out_err;
 
@@ -107,6 +107,10 @@ int erofs_importer_flush_all(struct erofs_importer *im)
 	if (err)
 		return err;
 
+	err = erofs_metazone_flush(sbi);
+	if (err)
+		return err;
+
 	fsalignblks = im->params->fsalignblks ?
 		roundup_pow_of_two(im->params->fsalignblks) : 1;
 	sbi->primarydevice_blocks = roundup(erofs_mapbh(sbi->bmgr, NULL),
@@ -128,6 +132,6 @@ void erofs_importer_exit(struct erofs_importer *im)
 	struct erofs_sb_info *sbi = im->sbi;
 
 	z_erofs_dedupe_ext_exit();
-	erofs_metabox_exit(sbi);
+	erofs_metadata_exit(sbi);
 	erofs_packedfile_exit(sbi);
 }

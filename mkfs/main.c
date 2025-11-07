@@ -101,6 +101,7 @@ static struct option long_options[] = {
 	{"oci", optional_argument, NULL, 534},
 #endif
 	{"zD", optional_argument, NULL, 536},
+	{"ZI", optional_argument, NULL, 537},
 	{0, 0, 0, 0},
 };
 
@@ -176,6 +177,7 @@ static void usage(int argc, char **argv)
 		"    --mkfs-time        the timestamp is applied as build time only\n"
 		" -UX                   use a given filesystem UUID\n"
 		" --zD[=<0|1>]          specify directory compression: 0=disable [default], 1=enable\n"
+		" --ZI[=<0|1>]          specify the separate inode metadata zone availability: 0=disable [default], 1=enable\n"
 		" --all-root            make all files owned by root\n"
 #ifdef EROFS_MT_ENABLED
 		" --async-queue-limit=# specify the maximum number of entries in the multi-threaded job queue\n"
@@ -269,6 +271,7 @@ static void version(void)
 static struct erofsmkfs_cfg {
 	/* < 0, xattr disabled and >= INT_MAX, always use inline xattrs */
 	long inlinexattr_tolerance;
+	bool inode_metazone;
 } mkfscfg = {
 	.inlinexattr_tolerance = 2,
 };
@@ -1412,6 +1415,12 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			else
 				params->compress_dir = false;
 			break;
+		case 537:
+			if (!optarg || strcmp(optarg, "1"))
+				mkfscfg.inode_metazone = true;
+			else
+				mkfscfg.inode_metazone = false;
+			break;
 		case 'V':
 			version();
 			exit(0);
@@ -1787,7 +1796,8 @@ int main(int argc, char **argv)
 	}
 
 	if (!incremental_mode)
-		err = erofs_mkfs_format_fs(&g_sbi, mkfs_blkszbits, dsunit);
+		err = erofs_mkfs_format_fs(&g_sbi, mkfs_blkszbits, dsunit,
+					   mkfscfg.inode_metazone);
 	else
 		err = erofs_mkfs_load_fs(&g_sbi, dsunit);
 	if (err)
