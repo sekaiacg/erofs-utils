@@ -1743,7 +1743,7 @@ static int z_erofs_mt_global_init(struct erofs_importer *im)
 	if (workers < 1)
 		return 0;
 	/* XXX: `dedupe` is actually not a global option here. */
-	if (workers >= 1 && params->dedupe != EROFS_DEDUPE_FORCE_OFF) {
+	if (workers >= 1 && params->dedupe == EROFS_DEDUPE_FORCE_ON) {
 		erofs_warn("multi-threaded dedupe is NOT implemented for now");
 		cfg.c_mt_workers = 0;
 	} else {
