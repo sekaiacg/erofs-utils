@@ -903,8 +903,7 @@ static int erofs_prepare_inode_buffer(struct erofs_importer *im,
 {
 	const struct erofs_importer_params *params = im->params;
 	struct erofs_sb_info *sbi = im->sbi;
-	struct erofs_bufmgr *bmgr = sbi->bmgr;
-	struct erofs_bufmgr *ibmgr = bmgr;
+	struct erofs_bufmgr *ibmgr = sbi->bmgr;
 	unsigned int inodesize;
 	struct erofs_buffer_head *bh, *ibh;
 
@@ -921,6 +920,13 @@ static int erofs_prepare_inode_buffer(struct erofs_importer *im,
 	inodesize = inode->inode_isize + inode->xattr_isize;
 	if (inode->extent_isize)
 		inodesize = roundup(inodesize, 8) + inode->extent_isize;
+
+	if (!erofs_is_special_identifier(inode->i_srcpath) &&
+	    erofs_metabox_bmgr(sbi))
+		inode->in_metabox = true;
+
+	if (inode->in_metabox)
+		ibmgr = erofs_metabox_bmgr(sbi) ?: sbi->bmgr;
 
 	if (inode->datalayout == EROFS_INODE_FLAT_PLAIN)
 		goto noinline;
@@ -942,12 +948,6 @@ static int erofs_prepare_inode_buffer(struct erofs_importer *im,
 			inode->datalayout = EROFS_INODE_FLAT_PLAIN;
 	}
 
-	if (!erofs_is_special_identifier(inode->i_srcpath) &&
-	    erofs_metabox_bmgr(sbi))
-		inode->in_metabox = true;
-
-	if (inode->in_metabox)
-		ibmgr = erofs_metabox_bmgr(sbi) ?: bmgr;
 	bh = erofs_balloc(ibmgr, INODE, inodesize, inode->idata_size);
 	if (bh == ERR_PTR(-ENOSPC)) {
 		int ret;
