@@ -2024,11 +2024,12 @@ exit:
 	if (err) {
 		erofs_err("\tCould not format the device : %s\n",
 			  erofs_strerror(err));
-		return 1;
+		err = 1;
+	} else {
+		erofs_update_progressinfo("Build completed.\n");
+		erofs_mkfs_showsummaries();
 	}
-	erofs_update_progressinfo("Build completed.\n");
-	erofs_mkfs_showsummaries();
 	erofs_put_super(&g_sbi);
 	liberofs_global_exit();
-	return 0;
+	return err;
 }
