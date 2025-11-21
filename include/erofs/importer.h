@@ -44,6 +44,8 @@ struct erofs_importer_params {
 	char force_inodeversion;
 	bool ignore_mtime;
 	bool no_datainline;
+	/* Issue directory data (except inline data) separately from regular inodes */
+	bool grouped_dirdata;
 	bool hard_dereference;
 	bool ovlfs_strip;
 	bool dot_omitted;

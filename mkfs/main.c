@@ -1410,10 +1410,12 @@ static int mkfs_parse_options_cfg(struct erofs_importer_params *params,
 			tarerofs_decoder = EROFS_IOS_DECODER_GZRAN;
 			break;
 		case 536:
-			if (!optarg || strcmp(optarg, "1"))
+			if (!optarg || strcmp(optarg, "1")) {
 				params->compress_dir = true;
-			else
+				params->grouped_dirdata = true;
+			} else {
 				params->compress_dir = false;
+			}
 			break;
 		case 537:
 			if (!optarg || strcmp(optarg, "1"))

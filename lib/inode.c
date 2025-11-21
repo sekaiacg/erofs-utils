@@ -1494,6 +1494,7 @@ enum erofs_mkfs_jobtype {	/* ordered job types */
 
 struct erofs_mkfs_jobitem {
 	enum erofs_mkfs_jobtype type;
+	unsigned int _usize;
 	union {
 		struct erofs_inode *inode;
 		struct erofs_mkfs_job_ndir_ctx ndir;
@@ -1529,6 +1530,11 @@ static int erofs_mkfs_jobfn(struct erofs_importer *im,
 		if (inode->datalayout == EROFS_INODE_FLAT_INLINE)
 			inode->idata_size = inode->i_size & (bsz - 1);
 
+		/*
+		 * Directory on-disk inodes should be close to other inodes
+		 * in the parent directory since parent directories should
+		 * generally be prioritized.
+		 */
 		ret = erofs_prepare_inode_buffer(im, inode);
 		if (ret)
 			return ret;
@@ -1656,6 +1662,48 @@ static void erofs_mkfs_flushjobs(struct erofs_sb_info *sbi)
 {
 }
 #endif
+
+struct erofs_mkfs_pending_jobitem {
+	struct list_head list;
+	struct erofs_mkfs_jobitem item;
+};
+
+int erofs_mkfs_push_pending_job(struct list_head *pending,
+				enum erofs_mkfs_jobtype type,
+				void *elem, int size)
+{
+	struct erofs_mkfs_pending_jobitem *pji;
+
+	pji = malloc(sizeof(*pji));
+	if (!pji)
+		return -ENOMEM;
+
+	pji->item.type = type;
+	if (size)
+		memcpy(&pji->item.u, elem, size);
+	pji->item._usize = size;
+	list_add_tail(&pji->list, pending);
+	return 0;
+}
+
+int erofs_mkfs_flush_pending_jobs(struct erofs_importer *im,
+				  struct list_head *q)
+{
+	struct erofs_mkfs_pending_jobitem *pji, *n;
+	int err2, err;
+
+	err = 0;
+	list_for_each_entry_safe(pji, n, q, list) {
+		list_del(&pji->list);
+
+		err2 = erofs_mkfs_go(im, pji->item.type, &pji->item.u,
+				     pji->item._usize);
+		free(pji);
+		if (!err)
+			err = err2;
+	}
+	return err;
+}
 
 static int erofs_mkfs_import_localdir(struct erofs_importer *im, struct erofs_inode *dir,
 				      u64 *nr_subdirs, unsigned int *i_nlink)
@@ -1943,6 +1991,8 @@ static int erofs_mkfs_dump_tree(struct erofs_importer *im, bool rebuild,
 	struct erofs_inode *root = im->root;
 	struct erofs_sb_info *sbi = root->sbi;
 	struct erofs_inode *dumpdir = erofs_igrab(root);
+	bool grouped_dirdata = im->params->grouped_dirdata;
+	LIST_HEAD(pending_dirs);
 	int err, err2;
 
 	erofs_mark_parent_inode(root, root);	/* rootdir mark */
@@ -2009,13 +2059,19 @@ static int erofs_mkfs_dump_tree(struct erofs_importer *im, bool rebuild,
 		}
 		*last = dumpdir;	/* fixup the last (or the only) one */
 		dumpdir = head;
-		err2 = erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR_BH,
-				     &dir, sizeof(dir));
-		if (err || err2)
-			return err ? err : err2;
+		err2 = grouped_dirdata ?
+			erofs_mkfs_push_pending_job(&pending_dirs,
+				EROFS_MKFS_JOB_DIR_BH, &dir, sizeof(dir)) :
+			erofs_mkfs_go(im, EROFS_MKFS_JOB_DIR_BH,
+				      &dir, sizeof(dir));
+		if (err || err2) {
+			if (!err)
+				err = err2;
+			break;
+		}
 	} while (dumpdir);
-
-	return err;
+	err2 = erofs_mkfs_flush_pending_jobs(im, &pending_dirs);
+	return err ? err : err2;
 }
 
 struct erofs_mkfs_buildtree_ctx {
