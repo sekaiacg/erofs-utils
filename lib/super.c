@@ -133,6 +133,10 @@ int erofs_read_superblock(struct erofs_sb_info *sbi)
 					     metabox_nid))
 			return -EFSCORRUPTED;
 		sbi->metabox_nid = le64_to_cpu(dsb->metabox_nid);
+		if (sbi->metabox_nid & BIT_ULL(EROFS_DIRENT_NID_METABOX_BIT))
+			return -EFSCORRUPTED;	/* self-loop detection */
+	} else {
+		sbi->metabox_nid = 0;
 	}
 	sbi->inos = le64_to_cpu(dsb->inos);
 	sbi->checksum = le32_to_cpu(dsb->checksum);

@@ -30,6 +30,9 @@ void *erofs_bread(struct erofs_buf *buf, erofs_off_t offset, bool need_kmap)
 		 *       cache to improve userspace metadata performance.
 		 */
 		if (!vf) {
+			if (!erofs_sb_has_metabox(sbi))
+				return ERR_PTR(-EFSCORRUPTED);
+
 			vi = (struct erofs_inode) { .sbi = sbi,
 						    .nid = sbi->metabox_nid };
 			err = erofs_read_inode_from_disk(&vi);
