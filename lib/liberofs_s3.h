@@ -27,6 +27,7 @@ enum s3erofs_signature_version {
 struct erofs_s3 {
 	void *easy_curl;
 	const char *endpoint;
+	const char *region;
 	char access_key[S3_ACCESS_KEY_LEN + 1];
 	char secret_key[S3_SECRET_KEY_LEN + 1];
 

@@ -214,6 +214,7 @@ static void usage(int argc, char **argv)
 		"   [,passwd_file=Y]    X=endpoint, Y=s3fs-compatible password file\n"
 		"   [,urlstyle=Z]       S3 API calling style (Z = vhost|path) (default: vhost)\n"
 		"   [,sig=<2,4>]        S3 API signature version (default: 2)\n"
+		"   [,region=W]         W=region code in which endpoint belongs to (required for sig=4)\n"
 #endif
 #ifdef OCIEROFS_ENABLED
 		" --oci=[f|i]           generate a full (f) or index-only (i) image from OCI remote source\n"
@@ -706,19 +707,28 @@ static int mkfs_parse_s3_cfg(char *cfg_str)
 		} else if ((p = strstr(opt, "sig="))) {
 			p += strlen("sig=");
 			if (strncmp(p, "4", 1) == 0) {
-				erofs_warn("AWS Signature Version 4 is not supported yet, using Version 2");
+				s3cfg.sig = S3EROFS_SIGNATURE_VERSION_4;
 			} else if (strncmp(p, "2", 1) == 0) {
 				s3cfg.sig = S3EROFS_SIGNATURE_VERSION_2;
 			} else {
-				erofs_err("Invalid AWS Signature Version %s", p);
+				erofs_err("invalid AWS signature version %s", p);
 				return -EINVAL;
 			}
+		} else if ((p = strstr(opt, "region="))) {
+			p += strlen("region=");
+			opt = strchr(cfg_str, ',');
+			s3cfg.region = opt ? strndup(p, opt - p) : strdup(p);
 		} else {
 			erofs_err("invalid --s3 option %s", opt);
 			return -EINVAL;
 		}
 
 		opt = q ? q + 1 : NULL;
+	}
+
+	if (s3cfg.sig == S3EROFS_SIGNATURE_VERSION_4 && !s3cfg.region) {
+		erofs_err("invalid --s3: using sig=4 requires region provided");
+		return -EINVAL;
 	}
 
 	return 0;
