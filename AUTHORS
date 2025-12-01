@@ -2,6 +2,7 @@ EROFS USERSPACE UTILITIES
 M: Li Guifu <bluce.lee@aliyun.com>
 M: Gao Xiang <xiang@kernel.org>
 M: Huang Jianan <jnhuang95@gmail.com>
+M: Chengyu Zhu <hudsonzhu@tencent.com>
 R: Chao Yu <chao@kernel.org>
 R: Miao Xie <miaoxie@huawei.com>
 R: Fang Wei <fangwei1@huawei.com>
