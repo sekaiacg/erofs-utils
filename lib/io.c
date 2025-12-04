@@ -592,7 +592,7 @@ ssize_t erofs_io_sendfile(struct erofs_vfile *vout, struct erofs_vfile *vin,
 	}
 #if defined(HAVE_SYS_SENDFILE_H) && defined(HAVE_SENDFILE)
 	else do {
-		written = sendfile(vout->fd, vin->fd, pos, count);
+		written = sendfile(vout->fd, vin->fd, pos, rem);
 		if (written <= 0) {
 			if (written < 0) {
 				written = -errno;
