@@ -18,9 +18,9 @@
 #define LOG_COLOR_BLUE2     "94"
 #define LOG_COLOR_PURPLE    "35"
 
-#define LOG_COLOR(COLOR)    "\033[0;" COLOR "m"
-#define LOG_BOLD(COLOR)     "\033[1;" COLOR "m"
-#define LOG_RESET_COLOR     "\033[0m"
+#define LOG_COLOR(COLOR)    ""
+#define LOG_BOLD(COLOR)     ""
+#define LOG_RESET_COLOR     ""
 
 #define RED                 LOG_COLOR(LOG_COLOR_RED)
 #define RED_BOLD            LOG_BOLD(LOG_COLOR_RED)
