@@ -49,6 +49,7 @@ set(libselinux_srcs
 	#"${TARGET_SRC_DIR}/getenforce.c"
 	#"${TARGET_SRC_DIR}/getfilecon.c"
 	#"${TARGET_SRC_DIR}/getpeercon.c"
+	"${TARGET_SRC_DIR}/hashtab.c"
 	"${TARGET_SRC_DIR}/init.c"
 	"${TARGET_SRC_DIR}/label.c"
 	"${TARGET_SRC_DIR}/label_backends_android.c"
@@ -77,13 +78,6 @@ string(REGEX REPLACE "\n$" "" PATH_TARGET_FILE "${PATH_TARGET_FILE}")
 execute_process(COMMAND patch -N -f -s --no-backup-if-mismatch -r "/dev/null"
 	"${PATH_TARGET_FILE}"
 	"${CMAKE_CURRENT_SOURCE_DIR}/patch/libselinux_init.c.patch"
-)
-
-execute_process(COMMAND readlink -f "${TARGET_SRC_DIR}/label_support.c" OUTPUT_VARIABLE PATH_TARGET_FILE)
-string(REGEX REPLACE "\n$" "" PATH_TARGET_FILE "${PATH_TARGET_FILE}")
-execute_process(COMMAND patch -N -f -s --no-backup-if-mismatch -r "/dev/null"
-	"${PATH_TARGET_FILE}"
-	"${CMAKE_CURRENT_SOURCE_DIR}/patch/libselinux_label_support.c.patch"
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")

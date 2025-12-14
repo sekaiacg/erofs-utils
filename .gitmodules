@@ -19,7 +19,8 @@
 	url = https://android.googlesource.com/platform/system/core.git
 [submodule "src/selinux"]
 	path = src/selinux
-	url = https://android.googlesource.com/platform/external/selinux
+	url = https://github.com/sekaiacg/selinux_aosp
+	branch = main
 [submodule "src/xz"]
 	path = src/xz
 	url = https://github.com/tukaani-project/xz
