@@ -1,0 +1,3 @@
+#pragma once
+
+#define PACKAGE_VERSION "@PROJECT_VERSION@"

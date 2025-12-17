@@ -1,0 +1,44 @@
+[submodule "src/lib/erofs-utils"]
+	path = src/lib/erofs-utils
+	url = https://github.com/erofs/erofs-utils.git
+	branch = dev
+[submodule "src/lib/libcxx"]
+	path = src/lib/libcxx
+	url = https://github.com/topjohnwu/libcxx
+	branch = master
+[submodule "src/lib/e2fsprogs"]
+	path = src/lib/e2fsprogs
+	url = https://android.googlesource.com/platform/external/e2fsprogs.git
+	branch = main
+[submodule "src/lib/pcre"]
+	path = src/lib/pcre
+	url = https://android.googlesource.com/platform/external/pcre.git
+	branch = main
+[submodule "src/lib/selinux"]
+	path = src/lib/selinux
+	url = https://github.com/sekaiacg/selinux_aosp
+	branch = main
+[submodule "src/lib/xz"]
+	path = src/lib/xz
+	url = https://github.com/tukaani-project/xz
+	branch = master
+[submodule "src/lib/zlib"]
+	path = src/lib/zlib
+	url = https://android.googlesource.com/platform/external/zlib
+	branch = main
+[submodule "src/lib/zstd"]
+	path = src/lib/zstd
+	url = https://github.com/facebook/zstd
+	branch = dev
+[submodule "src/lib/lz4"]
+	path = src/lib/lz4
+	url = https://github.com/lz4/lz4
+	branch = dev
+[submodule "src/lib/xxHash"]
+	path = src/lib/xxHash
+	url = https://github.com/Cyan4973/xxHash.git
+	branch = dev
+[submodule "src/lib/libfuse"]
+	path = src/lib/libfuse
+	url = https://github.com/sekaiacg/libfuse
+	branch = main
