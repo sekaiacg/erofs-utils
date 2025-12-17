@@ -1,0 +1,65 @@
+#ifndef __LIB_EROFS_CONFIG_H
+#define __LIB_EROFS_CONFIG_H
+
+#define HAVE_LIBSELINUX 1
+#define LZ4_ENABLED 1
+#define LZ4HC_ENABLED 1
+#define HAVE_ZLIB 1
+#define HAVE_LIBLZMA 1
+#define HAVE_LIBZSTD 1
+#define WITH_ANDROID 1
+#define EROFS_MT_ENABLED 1
+#define HAVE_XXHASH 1
+#define HAVE_XXHASH_H 1
+
+#if defined(__APPLE__)
+#define HAVE_LIBUUID 1
+#endif
+
+#if defined(__CYGWIN__)
+#define HAVE_MEMRCHR 1
+#define HAVE_SYS_RANDOM_H 1
+#endif // __CYGWIN__
+
+// Includes
+#cmakedefine HAVE_EXECINFO_H 1
+#cmakedefine HAVE_ENDIAN_H 1
+#cmakedefine HAVE_LINUX_FALLOC_H 1
+#cmakedefine HAVE_LINUX_FS_H 1
+#cmakedefine HAVE_LINUX_TYPES_H 1
+#cmakedefine HAVE_LINUX_XATTR_H 1
+#cmakedefine HAVE_PTHREAD_H 1
+#cmakedefine HAVE_SYS_IOCTL_H 1
+#cmakedefine HAVE_SYS_RESOURCE_H 1
+#cmakedefine HAVE_SYS_SYSMACROS_H 1
+#cmakedefine HAVE_SYS_UIO_H 1
+#cmakedefine HAVE_SYS_RANDOM_H 1
+#cmakedefine HAVE_SYS_SENDFILE_H 1
+#cmakedefine HAVE_UNISTD_H 1
+
+// Functions
+#cmakedefine HAVE_BACKTRACE 1
+#cmakedefine HAVE_COPY_FILE_RANGE 1
+#cmakedefine HAVE_FALLOCATE 1
+#cmakedefine HAVE_FTELLO64 1
+#cmakedefine HAVE_GETRLIMIT 1
+#cmakedefine HAVE_LGETXATTR 1
+#cmakedefine HAVE_LLISTXATTR 1
+#cmakedefine HAVE_LSEEK64 1
+#cmakedefine HAVE_MEMRCHR 1
+#cmakedefine HAVE_PREAD64 1
+#cmakedefine HAVE_PWRITE64 1
+#cmakedefine HAVE_PWRITEV 1
+#cmakedefine HAVE_POSIX_FADVISE 1
+#cmakedefine HAVE_GETRANDOM 1
+#cmakedefine HAVE_SENDFILE 1
+#cmakedefine HAVE_SYSCONF 1
+#cmakedefine HAVE_UTIMENSAT 1
+
+// Symbols
+#cmakedefine GWINSZ_IN_SYS_IOCTL 1
+#cmakedefine HAVE_LSEEK64_PROTOTYPE 1
+#cmakedefine HAVE_STRUCT_STAT_ST_ATIM 1
+#cmakedefine HAVE_STRUCT_STAT_ST_ATIMESPEC 1
+
+#endif //__LIB_EROFS_CONFIG_H
