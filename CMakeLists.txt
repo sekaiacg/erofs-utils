@@ -11,6 +11,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_COLOR_DIAGNOSTICS ON)
 
 option(USE_LIBCXX "Use libcxx. default: ON" ON)
+option(USE_LIBZ_STABLE_VERSION "Similarly, we don't want optimizations. default: OFF" OFF)
 option(ENABLE_FULL_LTO "Enable full lto. default: OFF" OFF)
 
 # File options
@@ -82,6 +83,10 @@ if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin|CYGWIN")
             message(STATUS "[erofs-tools] Use libcxx")
         endif ()
     endif ()
+endif ()
+
+if (USE_LIBZ_STABLE_VERSION)
+    message(STATUS "[erofs-tools] Use libz stable")
 endif ()
 
 if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")

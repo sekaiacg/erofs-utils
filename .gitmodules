@@ -25,7 +25,7 @@
 [submodule "src/lib/zlib"]
 	path = src/lib/zlib
 	url = https://android.googlesource.com/platform/external/zlib
-	branch = main
+	branch = main-kernel
 [submodule "src/lib/zstd"]
 	path = src/lib/zstd
 	url = https://github.com/facebook/zstd
