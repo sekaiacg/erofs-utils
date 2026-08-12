@@ -12,6 +12,7 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 
 option(USE_LIBCXX "Use libcxx. default: ON" ON)
 option(USE_LIBZ_STABLE_VERSION "Similarly, we don't want optimizations. default: OFF" OFF)
+option(LOG_ENABLE_COLOR "Add color when outputting logs" ON)
 option(ENABLE_FULL_LTO "Enable full lto. default: OFF" OFF)
 
 # File options
@@ -89,6 +90,10 @@ if (USE_LIBZ_STABLE_VERSION)
     message(STATUS "[erofs-tools] Use libz stable")
 endif ()
 
+if (LOG_ENABLE_COLOR)
+    list(APPEND GLOBAL_CFLAGS "-DLOG_ENABLE_COLOR")
+endif ()
+
 if (NOT CMAKE_SYSTEM_NAME MATCHES "Darwin")
     list(APPEND GLOBAL_CFLAGS "-static")
     list(APPEND GLOBAL_LDFLAGS "-static")
@@ -108,7 +113,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     list(APPEND GLOBAL_LDFLAGS ${GLOBAL_LDFLAGS_RELEASE})
     add_definitions("-DNDEBUG" "-UDEBUG")
 elseif (CMAKE_BUILD_TYPE MATCHES "Debug|RelWithDebInfo")
-    list(APPEND GLOBAL_CFLAGS "-O0" "-g")
+    list(APPEND GLOBAL_CFLAGS "-O0" "-g" "-DLOG_DEBUG")
 endif ()
 
 add_compile_options(

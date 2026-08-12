@@ -10,6 +10,7 @@ include(libz.cmake)
 include(libuuid.cmake)
 add_subdirectory(android)
 include(liberofs_utils.cmake)
+add_subdirectory(liberofs_tool)
 
 # xxHash
 set(BUILD_SHARED_LIBS OFF)

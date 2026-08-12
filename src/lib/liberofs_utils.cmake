@@ -66,15 +66,17 @@ check_struct_has_member("struct stat" "st_atim" "sys/stat.h" HAVE_STRUCT_STAT_ST
 check_struct_has_member("struct stat" "st_atimespec" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIMESPEC)
 
 execute_process(COMMAND sh -c
-    "cd ${TARGET_SRC_DIR} && scripts/get-version-number"
+    "scripts/get-version-number"
+    WORKING_DIRECTORY "${TARGET_SRC_DIR}"
     OUTPUT_VARIABLE PROJECT_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-string(REGEX REPLACE "\n$" "" PROJECT_VERSION "${PROJECT_VERSION}")
-
+string(REGEX REPLACE "-dirty$" "" PROJECT_VERSION "${PROJECT_VERSION}")
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/liberofs_utils_version.h.in"
     "${LIBEROFS_BINARY_DIR}/liberofs_utils_version.h"
 )
+
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/liberofs_utils_config.h.in"
     "${LIBEROFS_BINARY_DIR}/config.h"
