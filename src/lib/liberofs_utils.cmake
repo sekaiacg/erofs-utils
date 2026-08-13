@@ -65,6 +65,11 @@ check_symbol_exists(TIOCGWINSZ "sys/ioctl.h" GWINSZ_IN_SYS_IOCTL)
 check_struct_has_member("struct stat" "st_atim" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIM)
 check_struct_has_member("struct stat" "st_atimespec" "sys/stat.h" HAVE_STRUCT_STAT_ST_ATIMESPEC)
 
+patch_files(
+    "${TARGET_SRC_DIR}/lib"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patch/erofs-utils/0001-skip_dir.patch"
+)
+
 execute_process(COMMAND sh -c
     "scripts/get-version-number"
     WORKING_DIRECTORY "${TARGET_SRC_DIR}"

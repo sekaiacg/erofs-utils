@@ -1,0 +1,32 @@
+--- inode.c	2025-12-17 20:33:46.215053241 +0800
++++ inode.c	2026-08-13 09:53:39.322342907 +0800
+@@ -1742,7 +1742,12 @@
+ 			goto err_closedir;
+ 		}
+ 
++#ifndef __APPLE__
+ 		if (is_dot_dotdot(dp->d_name))
++#else
++		if (is_dot_dotdot(dp->d_name) ||
++			!strncmp(dp->d_name, ".DS_Store", 9))
++#endif
+ 			continue;
+ 
+ 		/* skip if it's a exclude file */
+--- xattr.c	2025-12-28 13:16:59.077308659 +0800
++++ xattr.c	2026-08-13 09:54:41.586839657 +0800
+@@ -732,7 +732,13 @@
+ 		if (!dp)
+ 			break;
+ 
+-		if (is_dot_dotdot(dp->d_name))
++		if (is_dot_dotdot(dp->d_name) ||
++		    !strncmp(dp->d_name, "lost+found", strlen("lost+found"))
++#ifdef __APPLE__
++		    || !strncmp(dp->d_name, ".DS_Store", 9))
++#else
++				)
++#endif
+ 			continue;
+ 
+ 		ret = snprintf(buf, PATH_MAX, "%s/%s", path, dp->d_name);

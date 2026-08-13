@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.26...4.4.2)
 include(cmake/check.cmake)
+include(cmake/patch.cmake)
 project(erofs-tools LANGUAGES C CXX ASM)
 
 set(CMAKE_C_STANDARD 11)
