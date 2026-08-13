@@ -4,8 +4,9 @@
 #include <cstring>
 #include <functional>
 #include <format>
-#include <print>
 #include <source_location>
+
+#include "print.hpp"
 
 /**
  * Reference：https://github.com/archibate/minilog

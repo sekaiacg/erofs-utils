@@ -5,7 +5,6 @@
 
 #include <getopt.h>
 #include <memory>
-#include <print>
 #include <string>
 #include <sys/time.h>
 
@@ -15,6 +14,7 @@
 #include <erofs/ExtractConfig.h>
 #include <erofs/internal.h>
 #include <LogBase.h>
+#include <print.hpp>
 
 #include "ExtractOperation.h"
 
