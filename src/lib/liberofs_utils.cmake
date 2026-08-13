@@ -97,6 +97,16 @@ set(LIBEROFS_STATIC_DEFAULTS_CFLAGS
     ${DARWIN_CFLAGS}
 )
 
+if (NOT DEFINED MAX_BLOCK_SIZE)
+    set(MAX_BLOCK_SIZE 4096)
+endif ()
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    if (MAX_BLOCK_SIZE LESS 16384)
+        set(MAX_BLOCK_SIZE 16384)
+    endif ()
+endif ()
+list(APPEND LIBEROFS_STATIC_DEFAULTS_CFLAGS "-DEROFS_MAX_BLOCK_SIZE=${MAX_BLOCK_SIZE}")
+
 set(liberofs_utils_srcs
     "config.c"
     "io.c"
