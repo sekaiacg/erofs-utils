@@ -38,6 +38,8 @@ namespace skkk::erofs {
 			bool superuser = geteuid() == 0;
 			bool preserve_owner = superuser;
 			bool preserve_perms = superuser;
+			bool verifyXattrDigests = false;
+			mutable std::string digestXattrName;
 
 		public:
 #if !defined(_WIN32)

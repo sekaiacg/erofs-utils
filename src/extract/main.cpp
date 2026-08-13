@@ -20,6 +20,8 @@
 
 using namespace skkk::erofs;
 
+static char erofsfsck_nullstr[] = "";
+
 static void get_available_compressors(std::string &ret) {
 	int i = 0;
 	bool comma = false;
@@ -41,6 +43,7 @@ static void usage(const ExtractConfig &eo) {
 			 "  " GREEN2_BOLD("-h, --help") "              " BROWN("Display this help and exit") "\n"
 			 "  " GREEN2_BOLD("-i, --image=[FILE]") "      " BROWN("Image file") "\n"
 			 "  " GREEN2_BOLD("--offset=#") "              " BROWN("skip # bytes at the beginning of IMAGE") "\n"
+			 "  " GREEN2_BOLD("--xattr-inode-digest") "    " BROWN("verify per-inode digests recorded as extended attributes") "\n"
 			 "  " GREEN2_BOLD("-p") "                      " BROWN("Print all entrys") "\n"
 			 "  " GREEN2_BOLD("-P, --print=X") "           " BROWN("Print the target of path X") "\n"
 			 "  " GREEN2_BOLD("-x") "                      " BROWN("Extract all items" ) "\n"
@@ -81,6 +84,7 @@ static option arg_options[] = {
 	{"version", no_argument, nullptr, 'V'},
 	{"image", required_argument, nullptr, 'i'},
 	{"offset", required_argument, nullptr, 2},
+	{"xattr-inode-digest", no_argument, 0, 3},
 	{"outdir", required_argument, nullptr, 'o'},
 	{"print", required_argument, nullptr, 'P'},
 	{"overwrite", no_argument, nullptr, 'f'},
@@ -173,6 +177,12 @@ static int parseExtractConfig(int argc, char **argv, ExtractOperation &eo) {
 						LOGCD("offset={}", eo.getOffset());
 					}
 				}
+				break;
+			case 3:
+				eo.digestXattrName = "";
+				eo.verifyXattrDigests = true;
+				eo.check_decomp = true;
+				LOGCD("verifyXattrDigests={} digestXattrName='{}' ", eo.verifyXattrDigests, eo.digestXattrName);
 				break;
 			default:
 				usage(eo);

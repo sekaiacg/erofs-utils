@@ -1,4 +1,5 @@
 #include <erofs/internal.h>
+#include <erofs/xattr.h>
 
 #include "LogBase.h"
 #include "erofs/ErofsInfo.h"
@@ -45,6 +46,10 @@ namespace skkk::erofs {
 		return uuid;
 	}
 
+	bool ErofsInfo::isXattrInodeDigest() const {
+		return xattrInodeDigest;
+	}
+
 	void uuid_unparse_lower(const unsigned char *buf, std::string &uuid) {
 		uuid.resize(36);
 		sprintf(uuid.data(), "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
@@ -58,8 +63,36 @@ namespace skkk::erofs {
 		        (buf[14] << 8) | buf[15]);
 	}
 
+	bool ErofsInfo::initVerifyXattrDigests() {
+		char *ishare = erofs_xattr_get_ishare_prefix(&erofsSbi);
+		if (IS_ERR(ishare)) {
+			int err = PTR_ERR(ishare);
+			if (config.verifyXattrDigests)
+				LOGCE("failed to get ishare prefix: {}", strerror(err));
+			goto out;
+		}
+
+		if (!ishare) {
+			if (config.verifyXattrDigests) {
+				LOGCE("image has no inode digest xattrs (was --xattr-inode-digest used during mkfs?)");
+				return false;
+			}
+			goto out;
+		}
+
+		xattrInodeDigest = true;
+		if (config.verifyXattrDigests) {
+			config.digestXattrName = ishare;
+		}
+		free(ishare);
+
+	out:
+		return true;
+	}
+
 	bool ErofsInfo::initErofsFile() {
-		int ret = 0;
+		int ret = 0, err = 0;
+
 		erofsSbi.bdev.offset = config.getOffset();
 		ret = erofs_dev_open(&erofsSbi, path.c_str(), O_RDONLY);
 		if (ret) {
@@ -79,6 +112,9 @@ namespace skkk::erofs {
 		buildTimeStr = ctime(&buildTime);
 		uuid_unparse_lower(erofsSbi.uuid, uuid);
 
+		if (!initVerifyXattrDigests()) {
+			goto exit_dev_close;
+		}
 		return true;
 
 	exit_dev_close:

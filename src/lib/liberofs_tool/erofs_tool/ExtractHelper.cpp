@@ -1,7 +1,9 @@
 #include <cstdlib>
 #include <utime.h>
 
+#include <liberofs_sha256.h>
 #include <erofs/internal.h>
+#include <erofs/xattr.h>
 
 #include "LogBase.h"
 #include "Utils.h"
@@ -21,9 +23,11 @@ namespace skkk::erofs {
 	 * @param config
 	 * @param inode
 	 * @param outfd
+	 * @param digest
 	 * @return
 	 */
-	static int erofs_verify_inode_data(const ExtractConfig &config, erofs_inode *inode, int outfd) {
+	static int erofs_verify_inode_data(const ExtractConfig &config, erofs_inode *inode, int outfd,
+	                                   sha256_state *digest) {
 		struct erofs_map_blocks map = {
 			.buf = __EROFS_BUF_INITIALIZER,
 		};
@@ -31,7 +35,7 @@ namespace skkk::erofs {
 		int ret = 0;
 		bool compressed;
 		erofs_off_t pos = 0;
-		unsigned int raw_size = 0, buffer_size = 0;
+		uint64_t raw_size = 0, buffer_size = 0;
 		char *raw = nullptr, *buffer = nullptr;
 
 		compressed = erofs_inode_is_data_compressed(inode->datalayout);
@@ -58,11 +62,22 @@ namespace skkk::erofs {
 			if (map.m_la >= inode->i_size || !needdecode)
 				continue;
 
-			if (outfd >= 0 && !(map.m_flags & EROFS_MAP_MAPPED)) {
-				ret = lseek(outfd, map.m_llen, SEEK_CUR);
-				if (ret < 0) {
-					ret = -errno;
-					goto out;
+			if (!(map.m_flags & EROFS_MAP_MAPPED)) {
+				if (digest) [[unlikely]] {
+					static constexpr uint8_t zeros[4096] = {};
+					uint64_t remain = map.m_llen;
+
+					while (remain > 0) {
+						uint64_t chunk = remain > sizeof(zeros) ? sizeof(zeros) : remain;
+						erofs_sha256_process(digest, zeros, chunk);
+						remain -= chunk;
+					}
+				} else if (outfd >= 0) {
+					ret = lseek(outfd, map.m_llen, SEEK_CUR);
+					if (ret < 0) {
+						ret = -errno;
+						goto out;
+					}
 				}
 				continue;
 			}
@@ -104,6 +119,8 @@ namespace skkk::erofs {
 				if (ret)
 					goto out;
 
+				if (digest) [[unlikely]]
+						erofs_sha256_process(digest, reinterpret_cast<uint8_t *>(buffer), map.m_llen);
 				if (outfd >= 0 && write(outfd, buffer, map.m_llen) < 0)
 					goto fail_eio;
 			} else {
@@ -117,6 +134,8 @@ namespace skkk::erofs {
 					if (ret)
 						goto out;
 
+					if (digest) [[unlikely]]
+							erofs_sha256_process(digest, reinterpret_cast<uint8_t *>(raw), count);
 					if (outfd >= 0 && write(outfd, raw, count) < 0)
 						goto fail_eio;
 					map.m_llen -= count;
@@ -135,6 +154,69 @@ namespace skkk::erofs {
 		ret = -EIO;
 		goto out;
 	}
+
+
+	/**
+	 * Copy from fsck.erofs
+	 * Modified
+	 *
+	 * @param config
+	 * @param inode
+	 * @param digest
+	 * @return
+	 */
+	static int verify_file_digest(const ExtractConfig &config, erofs_inode *inode,
+	                              const uint8_t *digest) {
+		uint8_t stored[32 + sizeof("sha256:") - 1];
+		int ret = 0;
+
+		ret = __erofs_getxattr(inode, config.digestXattrName.c_str(),
+		                       reinterpret_cast<char *>(stored), sizeof(stored), true);
+		if (ret == -ENODATA) {
+			return 0;
+		}
+		if (ret < 0)
+			return ret;
+
+		if (ret != sizeof(stored) ||
+		    memcmp(stored, "sha256:", sizeof("sha256:") - 1) != 0) {
+			return -EFSCORRUPTED;
+		}
+
+		if (memcmp(digest, stored + sizeof("sha256:") - 1, 32) != 0) {
+			return -EFSCORRUPTED;
+		}
+		return 0;
+	}
+
+	/**
+	 * Copy from fsck.erofs
+	 * Modified
+	 *
+	 * @param config
+	 * @param inode
+	 * @param outfd
+	 * @return
+	 */
+	static int calc_inode_data(const ExtractConfig &config, erofs_inode *inode, int outfd) {
+		int ret = 0;
+
+		if (!config.digestXattrName.empty() &&
+		    S_ISREG(inode->i_mode) && inode->i_size > 0) [[unlikely]] {
+			sha256_state md = {};
+			uint8_t out[32] = {};
+
+			erofs_sha256_init(&md);
+			ret = erofs_verify_inode_data(config, inode, outfd, &md);
+			erofs_sha256_done(&md, out);
+
+			if (ret)
+				return ret;
+			return verify_file_digest(config, inode, out);
+		}
+		return erofs_verify_inode_data(config, inode, outfd, nullptr);
+	}
+
 
 	/**
 	 * Copy from fsck.erofs
@@ -207,8 +289,7 @@ namespace skkk::erofs {
 			return -errno;
 		}
 
-		/* verify data chunk layout */
-		ret = erofs_verify_inode_data(config, inode, fd);
+		ret = calc_inode_data(config, inode, fd);
 		close(fd);
 		return ret;
 	}
@@ -255,10 +336,12 @@ namespace skkk::erofs {
 	int ExtractHelper::erofs_extract_symlink(const ExtractConfig &config, erofs_inode *inode, const char *filePath) {
 		erofs_vfile vf = {};
 		bool tryagain = true;
+		char *buf = nullptr;
 		int ret;
+		erofs_off_t bufsz;
 
-		char *buf = static_cast<char *>(malloc(inode->i_size + 1));
-		if (!buf) {
+		if (check_add_overflow(inode->i_size, static_cast<erofs_off_t>(1), &bufsz) ||
+		    !((buf = static_cast<char *>(malloc(bufsz))))) {
 			ret = -ENOMEM;
 			goto out;
 		}

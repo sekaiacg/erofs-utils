@@ -12,6 +12,7 @@ namespace skkk::erofs {
 		std::string uuid;
 		uint32_t featureCompat = 0;
 		uint32_t featureIncompat = 0;
+		bool xattrInodeDigest = false;
 
 		public:
 			explicit ErofsInfo(const ExtractConfig &config);
@@ -33,6 +34,10 @@ namespace skkk::erofs {
 			const std::string &getBuildTimeStr() const;
 
 			const std::string &getUuid() const;
+
+			bool isXattrInodeDigest() const;
+
+			virtual bool initVerifyXattrDigests();
 
 			virtual bool initErofsFile();
 

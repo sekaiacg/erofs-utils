@@ -1,0 +1,21 @@
+--- liberofs_sha256.h	2026-08-13 21:59:00.028347807 +0800
++++ liberofs_sha2561.h	2026-08-13 18:43:30.027377560 +0800
+@@ -18,6 +18,9 @@
+ };
+ #endif
+
++#ifdef __cplusplus
++extern "C" {
++#endif
+ void erofs_sha256_init(struct sha256_state *md);
+ int erofs_sha256_process(struct sha256_state *md,
+ 		const unsigned char *in, unsigned long inlen);
+@@ -25,5 +28,7 @@
+
+ void erofs_sha256(const unsigned char *in, unsigned long in_size,
+ 		  unsigned char out[32]);
+-
++#ifdef __cplusplus
++}
++#endif
+ #endif

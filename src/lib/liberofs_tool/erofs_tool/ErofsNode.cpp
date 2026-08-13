@@ -166,7 +166,8 @@ namespace skkk::erofs {
 			case EROFS_FT_SOCK:
 				err = ExtractHelper::erofs_extract_special(config, in, filePath);
 				break;
-			default: break;
+			default:
+				err = -EOPNOTSUPP;
 		}
 		if (!err) ExtractHelper::set_attributes(config, in, filePath);
 		return err;

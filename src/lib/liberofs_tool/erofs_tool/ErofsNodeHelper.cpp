@@ -18,7 +18,7 @@ namespace skkk::erofs {
 		size_t prev_pos = pathCtx->pos;
 		size_t curr_pos = prev_pos;
 
-		if (prev_pos + ctx->de_namelen >= PATH_MAX) {
+		if (prev_pos + ctx->de_namelen + 1 >= PATH_MAX) {
 			return -EOPNOTSUPP;
 		}
 

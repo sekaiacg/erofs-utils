@@ -68,6 +68,10 @@ patch_files(
     "${TARGET_SRC_DIR}/lib"
     "${CMAKE_CURRENT_SOURCE_DIR}/patch/erofs-utils/0001-skip_dir.patch"
 )
+patch_file(
+    "${TARGET_SRC_DIR}/lib/liberofs_sha256.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/patch/erofs-utils/liberofs_sha256.h.patch"
+)
 
 execute_process(COMMAND sh -c
     "scripts/get-version-number"

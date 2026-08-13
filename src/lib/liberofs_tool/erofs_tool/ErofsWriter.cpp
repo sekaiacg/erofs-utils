@@ -121,12 +121,14 @@ namespace skkk::erofs {
 						"-zlz4hc " // default: lz4hc
 						"{}"
 					 	"-T {} -U {} "
+					 	"{}"
 					 	"--fs-config-file={} "
 					 	"--file-contexts={} "
 					 	"{} " // output image file
 					 	"{}\n", // input dir
 					 	isBigPcluster ? "-C 16384 " : "", // default 16K
 					 	time, uuid,
+					 	erofsInfo->isXattrInodeDigest() ? "--xattr-inode-digest " : "",
 					 	fsConfigPath, selinuxLabelsPath,
 					 	config.getImageBaseName() + "_repack.img",
 					 	config.getOutDir());
