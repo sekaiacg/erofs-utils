@@ -19,12 +19,12 @@ set(liberofs_include_list
     "sys/sendfile.h"
     "sys/sysmacros.h"
     "sys/uio.h"
+    "sys/xattr.h"
 )
 
 set(liberofs_function_list
     "backtrace"
     "fallocate"
-    "ftello64"
     "getrlimit"
     "pwritev"
     "sysconf"
@@ -33,7 +33,6 @@ set(liberofs_function_list
 if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
     list(APPEND liberofs_function_list
         "copy_file_range"
-        "lseek64"
         "memrchr"
         "pread64"
         "pwrite64"
