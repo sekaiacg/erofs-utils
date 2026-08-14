@@ -73,13 +73,14 @@ patch_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/patch/erofs-utils/liberofs_sha256.h.patch"
 )
 
-execute_process(COMMAND sh -c
-    "scripts/get-version-number"
+execute_process(
+    COMMAND sh -c
+    "tag=$(git describe --exact-match 2>/dev/null);
+     head=$(git rev-parse --verify HEAD 2>/dev/null); printf '%s-g%.8s' $tag $head"
     WORKING_DIRECTORY "${TARGET_SRC_DIR}"
     OUTPUT_VARIABLE PROJECT_VERSION
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-string(REGEX REPLACE "-dirty$" "" PROJECT_VERSION "${PROJECT_VERSION}")
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/liberofs_utils_version.h.in"
     "${LIBEROFS_BINARY_DIR}/liberofs_utils_version.h"
