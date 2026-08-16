@@ -59,7 +59,7 @@ message(STATUS "[erofs-tools] Build type is ${CMAKE_BUILD_TYPE}")
 
 # OS link flags
 if (CMAKE_SYSTEM_NAME MATCHES "CYGWIN")
-    list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-s,-x,--gc-sections")
+    list(APPEND GLOBAL_LDFLAGS_RELEASE "-Wl,-s,--gc-sections")
 elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
     set(ENABLE_LIBFUSE ON)
     list(APPEND GLOBAL_CFLAGS "-fno-semantic-interposition")
