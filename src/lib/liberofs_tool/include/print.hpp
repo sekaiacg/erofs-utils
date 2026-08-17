@@ -6,26 +6,56 @@
 #include <ranges>
 #include <string>
 #include <sstream>
-#include <utility>
 #include <type_traits>
+#include <utility>
 
 #if !defined(__cpp_lib_format_ranges)
 namespace std {
-	template<typename T1, typename T2, typename CharT>
-	struct formatter<std::pair<T1, T2>, CharT> : formatter<std::string, CharT> {
-		template<typename FormatContext>
-		auto format(const std::pair<T1, T2> &p, FormatContext &ctx) const {
-			std::basic_ostringstream<CharT> oss;
-			oss << "(" << std::format("{}", p.first) << ", " << std::format("{}", p.second) << ")";
-			return formatter<std::string, CharT>::format(oss.str(), ctx);
-		}
-	};
+	template<typename T>
+	concept is_string_element =
+			std::same_as<std::remove_cvref_t<T>, std::string> ||
+			std::same_as<std::remove_cvref_t<T>, std::string_view> ||
+			(std::is_array_v<std::remove_reference_t<T> > && std::same_as<std::remove_cvref_t<std::decay_t<T> >, char
+				 *>) ||
+			std::same_as<std::remove_cvref_t<T>, const char *> ||
+			std::same_as<std::remove_cvref_t<T>, char *>;
+
+	template<typename T>
+	concept is_char_element = std::same_as<std::remove_cvref_t<T>, char>;
 
 	template<typename T>
 	concept is_map_like = requires(T t)
 	{
 		typename std::remove_cvref_t<T>::key_type;
 		typename std::remove_cvref_t<T>::mapped_type;
+	};
+
+	template<typename T1, typename T2, typename CharT>
+	struct formatter<std::pair<T1, T2>, CharT>;
+
+	template<typename CharT, typename T>
+	void format_element_to_stream(std::basic_ostringstream<CharT> &oss, const T &val) {
+		if constexpr (is_string_element<T>) {
+			oss << "\"" << val << "\"";
+		} else if constexpr (is_char_element<T>) {
+			oss << "'" << val << "'";
+		} else {
+			oss << std::format("{}", val);
+		}
+	}
+
+	template<typename T1, typename T2, typename CharT>
+	struct formatter<std::pair<T1, T2>, CharT> : formatter<std::string, CharT> {
+		template<typename FormatContext>
+		auto format(const std::pair<T1, T2> &p, FormatContext &ctx) const {
+			std::basic_ostringstream<CharT> oss;
+			oss << "(";
+			format_element_to_stream(oss, p.first);
+			oss << ", ";
+			format_element_to_stream(oss, p.second);
+			oss << ")";
+			return formatter<std::string, CharT>::format(oss.str(), ctx);
+		}
 	};
 
 	template<typename R, typename CharT>
@@ -39,14 +69,16 @@ namespace std {
 			if constexpr (is_map_like<R>) {
 				oss << "{";
 				for (auto it = std::ranges::begin(range); it != std::ranges::end(range); ++it) {
-					oss << std::format("{}", it->first) << ": " << std::format("{}", it->second);
+					format_element_to_stream(oss, it->first);
+					oss << ": ";
+					format_element_to_stream(oss, it->second);
 					if (std::next(it) != std::ranges::end(range)) oss << ", ";
 				}
 				oss << "}";
 			} else {
 				oss << "[";
 				for (auto it = std::ranges::begin(range); it != std::ranges::end(range); ++it) {
-					oss << std::format("{}", *it);
+					format_element_to_stream(oss, *it);
 					if (std::next(it) != std::ranges::end(range)) oss << ", ";
 				}
 				oss << "]";
